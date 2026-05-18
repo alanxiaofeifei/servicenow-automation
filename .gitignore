@@ -17,6 +17,10 @@ browser-profiles/
 screenshots/
 logs/
 drafts/
+private/
+field-test-results/
+field-test-notes/
+*.har
 *.db
 *.sqlite
 *.sqlite3
