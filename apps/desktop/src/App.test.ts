@@ -44,4 +44,14 @@ describe("App", () => {
     expect(output).toContain("VPN connection issue after password or MFA change");
     expect(output).toContain("Submit disabled in demo mode");
   });
+
+  it("renders risk controls for no auto-submit/close and fill confirmation", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Risk Control Gate");
+    expect(output).toContain("The app does not submit, close, or update real tickets automatically.");
+    expect(output).toContain("Confirm human review before fill");
+    expect(output).toContain("Fill action locked until review confirmation");
+    expect(output).toContain("Final submit is always manual.");
+  });
 });

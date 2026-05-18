@@ -22,6 +22,7 @@ export function App() {
 
   const initialDraft = useMemo(() => buildDraftForScenario(selectedScenario), [selectedScenario]);
   const [fieldOverrides, setFieldOverrides] = useState<Record<string, string>>({});
+  const [fillConfirmed, setFillConfirmed] = useState(false);
 
   const draft = applyOverrides(initialDraft, fieldOverrides);
   const context = manualPasteAdapter.capture({ title: selectedScenario.title, rawText: selectedScenario.rawText });
@@ -29,6 +30,7 @@ export function App() {
   function selectScenario(id: ManualPasteScenario["id"]) {
     setSelectedScenarioId(id);
     setFieldOverrides({});
+    setFillConfirmed(false);
   }
 
   function updateField(fieldName: keyof TicketDraft, value: string) {
@@ -75,6 +77,8 @@ export function App() {
             </button>
           ))}
         </div>
+
+        <RiskControlGate fillConfirmed={fillConfirmed} onFillConfirmedChange={setFillConfirmed} />
 
         <div className="workspace-grid">
           <section className="panel input-panel" aria-labelledby="captured-context-title">
@@ -141,7 +145,7 @@ export function App() {
           </section>
         </div>
 
-        <MockServiceNowForm draft={draft} />
+        <MockServiceNowForm draft={draft} fillConfirmed={fillConfirmed} />
       </section>
     </main>
   );
@@ -203,7 +207,38 @@ function ReadOnlyField({ field, label }: { field?: FieldDraft; label: string }) 
 }
 
 
-function MockServiceNowForm({ draft }: { draft: TicketDraft }) {
+function RiskControlGate({
+  fillConfirmed,
+  onFillConfirmedChange
+}: {
+  fillConfirmed: boolean;
+  onFillConfirmedChange: (value: boolean) => void;
+}) {
+  return (
+    <section className="risk-control-gate" aria-labelledby="risk-control-title">
+      <div>
+        <p className="eyebrow">Risk Control Gate</p>
+        <h3 id="risk-control-title">Automate drafting, not accountability.</h3>
+        <p>The app does not submit, close, or update real tickets automatically.</p>
+      </div>
+      <ul>
+        <li>Confirm human review before fill</li>
+        <li>Fill action locked until review confirmation</li>
+        <li>Final submit is always manual.</li>
+      </ul>
+      <label className="review-confirmation">
+        <input
+          checked={fillConfirmed}
+          type="checkbox"
+          onChange={(event) => onFillConfirmedChange(event.currentTarget.checked)}
+        />
+        <span>Confirm human review before fill</span>
+      </label>
+    </section>
+  );
+}
+
+function MockServiceNowForm({ draft, fillConfirmed }: { draft: TicketDraft; fillConfirmed: boolean }) {
   return (
     <section className="mock-form-panel" aria-labelledby="mock-form-title">
       <header className="mock-form-header">
@@ -214,7 +249,7 @@ function MockServiceNowForm({ draft }: { draft: TicketDraft }) {
             This panel shows how the editable draft would map into a ServiceNow-style Incident form before QA/dev testing.
           </p>
         </div>
-        <button className="fill-button" type="button">
+        <button className="fill-button" disabled={!fillConfirmed} type="button">
           Fill Mock ServiceNow Form
         </button>
       </header>
@@ -222,6 +257,7 @@ function MockServiceNowForm({ draft }: { draft: TicketDraft }) {
       <div className="servicenow-frame" aria-label="Mock ServiceNow form fields">
         <div className="servicenow-toolbar">
           <strong>Incident</strong>
+          <span>{fillConfirmed ? "Ready for mock fill" : "Fill action locked until review confirmation"}</span>
           <span>Submit disabled in demo mode</span>
         </div>
 

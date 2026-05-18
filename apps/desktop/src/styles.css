@@ -300,6 +300,58 @@ textarea:focus {
 }
 
 
+
+.risk-control-gate {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.2fr) minmax(260px, 1fr) minmax(260px, 0.9fr);
+  gap: 16px;
+  align-items: center;
+  margin: 0 0 18px;
+  border: 1px solid #d09231;
+  border-radius: 22px;
+  padding: 16px;
+  background: #fff4dc;
+  box-shadow: 0 14px 34px rgba(122, 78, 20, 0.12);
+}
+
+.risk-control-gate h3 {
+  margin-top: 2px;
+}
+
+.risk-control-gate p {
+  margin: 8px 0 0;
+  color: #694512;
+  line-height: 1.45;
+  font-weight: 750;
+}
+
+.risk-control-gate ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+  color: #5c3b0e;
+  font-weight: 760;
+}
+
+.review-confirmation {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #c78428;
+  border-radius: 16px;
+  padding: 12px;
+  background: #fffaf0;
+  color: #4f3209;
+  font-weight: 900;
+}
+
+.review-confirmation input {
+  width: 18px;
+  height: 18px;
+  accent-color: #2f756c;
+}
+
 .mock-form-panel {
   margin-top: 18px;
   border: 1px solid rgba(79, 101, 123, 0.24);
@@ -333,6 +385,14 @@ textarea:focus {
   background: #2f756c;
   box-shadow: 0 12px 28px rgba(47, 117, 108, 0.22);
   font-weight: 900;
+}
+
+.fill-button:disabled {
+  border-color: #b88b4b;
+  color: #61420f;
+  background: #f8dfb4;
+  cursor: not-allowed;
+  opacity: 0.92;
 }
 
 .servicenow-frame {
@@ -417,7 +477,8 @@ textarea:focus {
 }
 
 @media (max-width: 1180px) {
-  .workspace-grid {
+  .workspace-grid,
+  .risk-control-gate {
     grid-template-columns: 1fr;
   }
 
