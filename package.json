@@ -11,6 +11,7 @@
     "test": "pnpm -r --if-present test"
   },
   "devDependencies": {
+    "@types/node": "^22.15.29",
     "typescript": "^5.8.3",
     "vitest": "^3.1.4"
   }

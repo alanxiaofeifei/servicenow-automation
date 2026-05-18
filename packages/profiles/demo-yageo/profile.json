@@ -1,0 +1,22 @@
+{
+  "id": "yageo-demo",
+  "displayName": "YAGEO Demo Service Desk",
+  "companyLabel": "YAGEO Demo",
+  "serviceNowBaseUrl": "https://example.invalid/servicenow-demo",
+  "defaultAssignmentGroup": "Demo Service Desk",
+  "categoryMappings": [],
+  "assignmentMappings": [],
+  "kbSources": [
+    {
+      "id": "demo-kb",
+      "label": "Demo Knowledge Base",
+      "path": "packages/kb/demo-articles"
+    },
+    {
+      "id": "local-notebooklm-yageo-cn",
+      "label": "Optional local NoteBookLLM YAGEO CN archive",
+      "path": "G:\\My Drive\\90_Archive_历史归档\\NoteBookLLM_Yageo_CN"
+    }
+  ],
+  "demoMode": true
+}

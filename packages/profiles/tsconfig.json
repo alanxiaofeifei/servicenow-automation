@@ -6,7 +6,9 @@
     "strict": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "noEmit": true
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "types": ["vitest"]
   },
   "include": ["src"]
 }

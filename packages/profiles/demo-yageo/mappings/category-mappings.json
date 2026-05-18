@@ -1,0 +1,17 @@
+[
+  {
+    "keywords": ["vpn", "globalprotect", "forticlient", "remote access", "tunnel", "certificate"],
+    "category": "Network",
+    "subcategory": "VPN"
+  },
+  {
+    "keywords": ["windows", "laptop", "blue screen", "bsod", "slow", "startup", "update"],
+    "category": "Endpoint",
+    "subcategory": "Windows"
+  },
+  {
+    "keywords": ["account", "login", "password", "locked", "mfa", "authentication", "lan id"],
+    "category": "Access Management",
+    "subcategory": "Account/Login"
+  }
+]

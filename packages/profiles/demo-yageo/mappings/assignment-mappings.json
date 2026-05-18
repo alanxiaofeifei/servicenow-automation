@@ -1,0 +1,14 @@
+[
+  {
+    "keywords": ["vpn", "remote access", "tunnel", "certificate"],
+    "assignmentGroup": "Demo Network Support"
+  },
+  {
+    "keywords": ["windows", "laptop", "blue screen", "bsod", "startup"],
+    "assignmentGroup": "Demo Endpoint Support"
+  },
+  {
+    "keywords": ["account", "login", "password", "locked", "mfa", "authentication"],
+    "assignmentGroup": "Demo IAM Support"
+  }
+]
