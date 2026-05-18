@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+release/
+out/
+coverage/
+*.tsbuildinfo
+
+# Local runtime data - never commit sessions, cookies, screenshots, logs, DBs
+.local/
+.local*/
+browser-profiles/
+screenshots/
+logs/
+drafts/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Secrets / environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/settings.json
+.idea/
+
+# Legacy/private/customer artifacts - must stay out of this rebuild repo
+legacy/
+raw-archive/
+*.exe
+*.dll
+*.pdb
+*.config
+*.deps.json
+*.runtimeconfig.json
+*.mp3
+*.wav
+*.m4a
+*.mp4
+*.mov
+*.zip
+*.7z
+*.rar
