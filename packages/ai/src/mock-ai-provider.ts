@@ -23,32 +23,40 @@ export class MockAIProvider implements AIProvider {
   }
 
   async generateTicketDraft(input: GenerateTicketDraftInput): Promise<TicketDraft> {
-    const scenario = detectScenario(input.context.rawText);
-    const category = selectCategory(input.profile, input.context.rawText, scenario);
-    const assignmentGroup = selectAssignmentGroup(input.profile, input.context.rawText, scenario);
-    const draft = {
-      id: this.idFactory(),
-      sourceContextId: input.context.id,
-      ticketType: "incident",
-      shortDescription: field(shortDescriptionFor(scenario, input.context.rawText), 0.86, "Generated from manual pasted issue context."),
-      description: field(descriptionFor(scenario, input.context.rawText), 0.82, "Summarized from the captured context."),
-      workNotes: field(workNotesFor(scenario, input.kbMatches), 0.78, "Combines deterministic scenario routing with KB matches."),
-      category: category ? field(category.category, 0.9, `Matched keywords: ${category.keywords.join(", ")}`) : undefined,
-      subcategory: category?.subcategory ? field(category.subcategory, 0.88, `Matched keywords: ${category.keywords.join(", ")}`) : undefined,
-      assignmentGroup: field(assignmentGroup, 0.84, "Selected from project profile mappings or default assignment group."),
-      impact: field("3 - Low", 0.7, "Default demo incident impact; human review required."),
-      urgency: field("3 - Low", 0.7, "Default demo incident urgency; human review required."),
-      priority: field("4 - Low", 0.7, "Derived from demo impact/urgency defaults."),
-      kbMatches: input.kbMatches,
-      riskFlags: [
-        "Human review required before any ServiceNow action.",
-        "Demo draft only; do not auto-submit or auto-close production tickets."
-      ],
-      missingInfoQuestions: missingInfoFor(scenario)
-    } satisfies TicketDraft;
-
-    return TicketDraftSchema.parse(draft);
+    return generateMockTicketDraft(input, { idFactory: this.idFactory });
   }
+}
+
+export function generateMockTicketDraft(
+  input: GenerateTicketDraftInput,
+  options: MockAIProviderOptions = {}
+): TicketDraft {
+  const idFactory = options.idFactory ?? createDraftId;
+  const scenario = detectScenario(input.context.rawText);
+  const category = selectCategory(input.profile, input.context.rawText, scenario);
+  const assignmentGroup = selectAssignmentGroup(input.profile, input.context.rawText, scenario);
+  const draft = {
+    id: idFactory(),
+    sourceContextId: input.context.id,
+    ticketType: "incident",
+    shortDescription: field(shortDescriptionFor(scenario, input.context.rawText), 0.86, "Generated from manual pasted issue context."),
+    description: field(descriptionFor(scenario, input.context.rawText), 0.82, "Summarized from the captured context."),
+    workNotes: field(workNotesFor(scenario, input.kbMatches), 0.78, "Combines deterministic scenario routing with KB matches."),
+    category: category ? field(category.category, 0.9, `Matched keywords: ${category.keywords.join(", ")}`) : undefined,
+    subcategory: category?.subcategory ? field(category.subcategory, 0.88, `Matched keywords: ${category.keywords.join(", ")}`) : undefined,
+    assignmentGroup: field(assignmentGroup, 0.84, "Selected from project profile mappings or default assignment group."),
+    impact: field("3 - Low", 0.7, "Default demo incident impact; human review required."),
+    urgency: field("3 - Low", 0.7, "Default demo incident urgency; human review required."),
+    priority: field("4 - Low", 0.7, "Derived from demo impact/urgency defaults."),
+    kbMatches: input.kbMatches,
+    riskFlags: [
+      "Human review required before any ServiceNow action.",
+      "Demo draft only; do not auto-submit or auto-close production tickets."
+    ],
+    missingInfoQuestions: missingInfoFor(scenario)
+  } satisfies TicketDraft;
+
+  return TicketDraftSchema.parse(draft);
 }
 
 function detectScenario(text: string): ScenarioKind {

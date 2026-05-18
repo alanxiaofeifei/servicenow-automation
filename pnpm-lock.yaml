@@ -20,6 +20,21 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@servicenow-automation/adapters':
+        specifier: workspace:*
+        version: link:../../packages/adapters
+      '@servicenow-automation/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
+      '@servicenow-automation/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@servicenow-automation/kb':
+        specifier: workspace:*
+        version: link:../../packages/kb
+      '@servicenow-automation/profiles':
+        specifier: workspace:*
+        version: link:../../packages/profiles
       react:
         specifier: ^19.1.0
         version: 19.2.6

@@ -11,6 +11,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@servicenow-automation/adapters": "workspace:*",
+    "@servicenow-automation/ai": "workspace:*",
+    "@servicenow-automation/core": "workspace:*",
+    "@servicenow-automation/kb": "workspace:*",
+    "@servicenow-automation/profiles": "workspace:*",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
