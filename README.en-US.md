@@ -1,28 +1,51 @@
-# ServiceNow Automation English Overview
+# ServiceNow Automation — English Overview
 
-ServiceNow Automation is a private rebuild project for a human-in-the-loop ServiceNow Automation Workbench for service desk agents.
+ServiceNow Automation is a private, portfolio-grade prototype of a **human-in-the-loop ServiceNow Automation Workbench** for service desk agents.
 
-It converts support context into structured ServiceNow-ready ticket drafts, knowledge-backed troubleshooting steps, and safe form-fill workflows while preserving human review and final submission.
+It turns pasted support context into structured Incident drafts, local knowledge-base matches, editable ticket fields, and a safe mock ServiceNow form while keeping final accountability with the human agent.
 
-## Demo acceptance target
+## What it does
 
-By 2026-06-05, the project should demonstrate three safe scenarios:
+- Accepts manual-paste issue context for a stable P0 workflow.
+- Creates a `CapturedContext` from the pasted issue text.
+- Uses a deterministic `MockAIProvider` to generate a structured `TicketDraft`.
+- Matches local demo knowledge articles for VPN, Windows endpoint, and account/login scenarios.
+- Displays editable Short Description, Description, Work Notes, Category, Subcategory, Assignment Group, Impact, Urgency, and Priority.
+- Fills a **mock** ServiceNow Incident form for demo and QA/dev rehearsal.
+- Shows visible risk controls before any fill action.
 
-1. VPN issue
-2. Windows performance issue
-3. Account/login issue
+## What it does not do
 
-Each scenario must show:
+- It does not auto-submit tickets.
+- It does not auto-close tickets.
+- It does not update production ServiceNow records automatically.
+- It does not store passwords, browser cookies, or real ticket data in Git.
+- It does not send unredacted customer data to external AI providers.
+
+## Demo scenarios
+
+1. VPN connection issue after password or MFA change.
+2. Windows endpoint performance issue after update.
+3. Account/login issue requiring access troubleshooting.
+
+Each scenario follows this flow:
 
 ```text
-Issue input
-→ structured extraction
-→ KB/rule match
-→ editable TicketDraft
-→ mock ServiceNow form fill
-→ manual final submit only
+Manual Paste
+→ CapturedContext
+→ MockAIProvider
+→ TicketDraft
+→ KB Matches
+→ Human Review
+→ Mock ServiceNow Incident Form
+→ Manual final submit only
 ```
 
-## Non-negotiable safety rule
+## Documents
 
-The product is not an auto-submit or auto-close bot. It is an agent workbench that reduces repetitive ticket-writing work while keeping ITSM controls intact.
+- Chinese user guide: `docs/zh-CN/user-guide.md`
+- English user guide: `docs/en-US/user-guide.md`
+- Chinese demo script: `docs/zh-CN/demo-script.md`
+- English demo script: `docs/en-US/demo-script.md`
+- Chinese safety statement: `docs/zh-CN/security-and-compliance.md`
+- English safety statement: `docs/en-US/security-and-compliance.md`
