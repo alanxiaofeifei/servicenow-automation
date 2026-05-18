@@ -140,6 +140,8 @@ export function App() {
             </ul>
           </section>
         </div>
+
+        <MockServiceNowForm draft={draft} />
       </section>
     </main>
   );
@@ -198,6 +200,78 @@ function ReadOnlyField({ field, label }: { field?: FieldDraft; label: string }) 
       {field?.evidence ? <small>{field.evidence}</small> : null}
     </div>
   );
+}
+
+
+function MockServiceNowForm({ draft }: { draft: TicketDraft }) {
+  return (
+    <section className="mock-form-panel" aria-labelledby="mock-form-title">
+      <header className="mock-form-header">
+        <div>
+          <p className="eyebrow">Incident · QA/Dev rehearsal</p>
+          <h2 id="mock-form-title">Mock ServiceNow Incident Form</h2>
+          <p>
+            This panel shows how the editable draft would map into a ServiceNow-style Incident form before QA/dev testing.
+          </p>
+        </div>
+        <button className="fill-button" type="button">
+          Fill Mock ServiceNow Form
+        </button>
+      </header>
+
+      <div className="servicenow-frame" aria-label="Mock ServiceNow form fields">
+        <div className="servicenow-toolbar">
+          <strong>Incident</strong>
+          <span>Submit disabled in demo mode</span>
+        </div>
+
+        <div className="mock-form-grid">
+          <MockFormField label="Caller" value="Demo User" />
+          <MockFormField label="Contact Type" value="Self-service / manual paste" />
+          <MockFormField label="Category" value={draft.category?.value ?? "Not set"} />
+          <MockFormField label="Subcategory" value={draft.subcategory?.value ?? "Not set"} />
+          <MockFormField label="Assignment Group" value={fieldValue(draft.assignmentGroup)} />
+          <MockFormField label="Priority" value={fieldValue(draft.priority)} />
+          <MockFormField label="Impact" value={fieldValue(draft.impact)} />
+          <MockFormField label="Urgency" value={fieldValue(draft.urgency)} />
+        </div>
+
+        <MockFormField label="Short Description" value={draft.shortDescription.value} wide />
+        <MockFormField label="Description" value={draft.description.value} wide multiline />
+        <MockFormField label="Work Notes" value={draft.workNotes.value} wide multiline />
+
+        <div className="mock-submit-row">
+          <button disabled type="button">
+            Submit disabled in demo mode
+          </button>
+          <span>Final ServiceNow submit must remain a deliberate human action.</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MockFormField({
+  label,
+  multiline = false,
+  value,
+  wide = false
+}: {
+  label: string;
+  multiline?: boolean;
+  value: string;
+  wide?: boolean;
+}) {
+  return (
+    <label className={wide ? "mock-form-field wide" : "mock-form-field"}>
+      <span>{label}</span>
+      {multiline ? <textarea readOnly rows={4} value={value} /> : <input readOnly value={value} />}
+    </label>
+  );
+}
+
+function fieldValue(field: FieldDraft | undefined): string {
+  return field?.value ?? "Not set";
 }
 
 function buttonLabelForScenario(id: ManualPasteScenario["id"]): string {
