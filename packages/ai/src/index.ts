@@ -1,1 +1,1 @@
-export const aiPackageName = "@service-now-automation/ai";
+export const aiPackageName = "@servicenow-automation/ai";

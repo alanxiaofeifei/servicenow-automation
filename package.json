@@ -1,12 +1,12 @@
 {
-  "name": "service-now-automation",
+  "name": "servicenow-automation",
   "version": "0.1.0",
   "private": true,
-  "description": "Desktop scaffold for Service Now Automation.",
+  "description": "Desktop scaffold for ServiceNow Automation.",
   "packageManager": "pnpm@9.15.4",
   "scripts": {
-    "dev": "pnpm --filter @service-now-automation/desktop dev",
-    "build": "pnpm --filter @service-now-automation/desktop build",
+    "dev": "pnpm --filter @servicenow-automation/desktop dev",
+    "build": "pnpm --filter @servicenow-automation/desktop build",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test"
   },

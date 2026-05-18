@@ -1,6 +1,6 @@
-# Service Now Automation
+# ServiceNow Automation
 
-**Service Now Automation** is a private, portfolio-grade rebuild project for a human-in-the-loop **ServiceNow Automation Workbench** for service desk agents.
+**ServiceNow Automation** is a private, portfolio-grade rebuild project for a human-in-the-loop **ServiceNow Automation Workbench** for service desk agents.
 
 The project goal is to turn support context from manual input, Teams/Web, Outlook/Web, or future adapters into structured ServiceNow-ready ticket drafts, KB-backed troubleshooting steps, and safe form-fill workflows where the human agent remains responsible for final submission.
 

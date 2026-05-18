@@ -1,5 +1,5 @@
 {
-  "name": "@service-now-automation/adapters",
+  "name": "@servicenow-automation/adapters",
   "version": "0.1.0",
   "private": true,
   "type": "module",

@@ -1,1 +1,1 @@
-export const profilesPackageName = "@service-now-automation/profiles";
+export const profilesPackageName = "@servicenow-automation/profiles";

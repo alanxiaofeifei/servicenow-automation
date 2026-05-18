@@ -1,9 +1,9 @@
-# Service Now Automation Architecture
+# ServiceNow Automation Architecture
 
 ## Recommended structure
 
 ```text
-service-now-automation/
+servicenow-automation/
 ├── apps/
 │   └── desktop/
 │       ├── electron/

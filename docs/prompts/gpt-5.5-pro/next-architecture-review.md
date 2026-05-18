@@ -4,12 +4,12 @@ Use this when asking GPT-5.5 Pro for the next high-level review after the initia
 
 ## Prompt
 
-You are the strategic architecture reviewer for my private project **Service Now Automation**.
+You are the strategic architecture reviewer for my private project **ServiceNow Automation**.
 
 Project context:
 - I am rebuilding from scratch, not refactoring the old SD tool.
 - The old `service-desk-automation` repo has been archived as a legacy requirements source.
-- The new private repo is `alanxiaofeifei/service-now-automation`.
+- The new private repo is `alanxiaofeifei/servicenow-automation`.
 - Target demo date: 2026-06-05.
 - Product positioning: ServiceNow Automation Workbench for Service Desk Agents.
 - P0 flow: Manual Paste input → structured TicketDraft → KB/rules match → editable human review → mock/safe ServiceNow form fill → manual final submit.

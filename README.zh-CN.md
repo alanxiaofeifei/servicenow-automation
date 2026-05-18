@@ -1,4 +1,4 @@
-# Service Now Automation 中文说明
+# ServiceNow Automation 中文说明
 
 这是一个从零重建的 ServiceNow 服务台自动化工作台项目。它不是旧 SD 工具的源码修补项目，而是把旧工具文档中验证过的服务台流程，重新设计成一个更通用、更安全、更适合作品展示的 MVP。
 

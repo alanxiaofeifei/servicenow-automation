@@ -8,7 +8,7 @@ export function App() {
 
         <div className="content">
           <p className="eyebrow">P0 Desktop Scaffold</p>
-          <h1 id="app-title">Service Now Automation</h1>
+          <h1 id="app-title">ServiceNow Automation</h1>
           <p className="summary">
             A local workbench shell for the manual-paste-to-review demo flow.
           </p>

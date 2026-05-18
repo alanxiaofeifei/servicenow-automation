@@ -1,1 +1,1 @@
-export const adaptersPackageName = "@service-now-automation/adapters";
+export const adaptersPackageName = "@servicenow-automation/adapters";

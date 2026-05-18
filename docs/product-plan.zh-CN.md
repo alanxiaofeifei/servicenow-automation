@@ -1,4 +1,4 @@
-# Service Now Automation 产品计划（中文）
+# ServiceNow Automation 产品计划（中文）
 
 ## 背景
 

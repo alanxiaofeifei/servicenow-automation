@@ -1,4 +1,4 @@
-# Service Now Automation Product Plan
+# ServiceNow Automation Product Plan
 
 ## Background
 

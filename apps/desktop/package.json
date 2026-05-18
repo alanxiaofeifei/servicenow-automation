@@ -1,5 +1,5 @@
 {
-  "name": "@service-now-automation/desktop",
+  "name": "@servicenow-automation/desktop",
   "version": "0.1.0",
   "private": true,
   "type": "module",

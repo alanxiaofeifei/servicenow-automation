@@ -6,7 +6,7 @@ describe("App", () => {
   it("exposes the required safety copy", () => {
     const rendered = App();
 
-    expect(JSON.stringify(rendered)).toContain("Service Now Automation");
+    expect(JSON.stringify(rendered)).toContain("ServiceNow Automation");
     expect(JSON.stringify(rendered)).toContain(
       "AI drafts only. Human review and manual submit required."
     );

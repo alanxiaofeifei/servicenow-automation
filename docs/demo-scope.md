@@ -1,4 +1,4 @@
-# Service Now Automation Demo Scope
+# ServiceNow Automation Demo Scope
 
 ## P0 — must be done before 2026-06-05
 

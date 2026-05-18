@@ -10,7 +10,7 @@ function createMainWindow(): void {
     height: 760,
     minWidth: 860,
     minHeight: 560,
-    title: "Service Now Automation",
+    title: "ServiceNow Automation",
     webPreferences: {
       preload: join(__dirname, "../preload/preload.js"),
       contextIsolation: true,

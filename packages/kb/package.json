@@ -1,5 +1,5 @@
 {
-  "name": "@service-now-automation/kb",
+  "name": "@servicenow-automation/kb",
   "version": "0.1.0",
   "private": true,
   "type": "module",

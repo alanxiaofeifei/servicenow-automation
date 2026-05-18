@@ -1,5 +1,5 @@
 {
-  "name": "@service-now-automation/profiles",
+  "name": "@servicenow-automation/profiles",
   "version": "0.1.0",
   "private": true,
   "type": "module",

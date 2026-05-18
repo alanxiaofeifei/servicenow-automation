@@ -8,7 +8,7 @@ codex exec --full-auto '<paste prompt below>'
 
 ## Prompt
 
-You are helping build **Service Now Automation**, a private portfolio-grade ServiceNow Automation Workbench for service desk agents.
+You are helping build **ServiceNow Automation**, a private portfolio-grade ServiceNow Automation Workbench for service desk agents.
 
 Current goal: create only the initial runnable technical scaffold and keep the scope small.
 
@@ -24,7 +24,7 @@ Tech stack requirements:
 - Prepare package folders under `packages/core`, `packages/ai`, `packages/kb`, `packages/profiles`, and `packages/adapters`.
 - Add TypeScript project references or workspace scripts if practical, but do not over-engineer.
 - Add `pnpm typecheck`, `pnpm test`, and `pnpm dev` scripts.
-- Add a minimal visible app shell with the title `Service Now Automation` and a safety banner: `AI drafts only. Human review and manual submit required.`
+- Add a minimal visible app shell with the title `ServiceNow Automation` and a safety banner: `AI drafts only. Human review and manual submit required.`
 - Do not implement real ServiceNow, Teams, Outlook, Graph, or OpenAI integration yet.
 - Do not add any real customer data.
 

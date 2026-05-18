@@ -23,7 +23,7 @@
 
 | Date | Decision | Reason |
 | --- | --- | --- |
-| 2026-05-18 | Rebuild as `Service Now Automation` | Legacy repo is requirements source, not complete source code |
+| 2026-05-18 | Rebuild as `ServiceNow Automation` | Legacy repo is requirements source, not complete source code |
 | 2026-05-18 | Archive legacy repos | Prevent accidental old-code refactor path and accidental public exposure |
 | 2026-05-18 | P0 = manual paste + KB + TicketDraft + mock ServiceNow | Fastest safe demo path before 2026-06-05 |
 | 2026-05-18 | JSON profiles first | Faster and easier to debug than SQLite for MVP |
@@ -31,7 +31,7 @@
 
 ## GitHub repositories
 
-- New private main repo: `alanxiaofeifei/service-now-automation`
+- New private main repo: `alanxiaofeifei/servicenow-automation`
 - Archived legacy repo: `alanxiaofeifei/service-desk-automation`
 - Archived temporary analysis mirror: `alanxiaofeifei/service-desk-automation-public-analysis`
 

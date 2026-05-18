@@ -1,6 +1,6 @@
-# Service Now Automation English Overview
+# ServiceNow Automation English Overview
 
-Service Now Automation is a private rebuild project for a human-in-the-loop ServiceNow Automation Workbench for service desk agents.
+ServiceNow Automation is a private rebuild project for a human-in-the-loop ServiceNow Automation Workbench for service desk agents.
 
 It converts support context into structured ServiceNow-ready ticket drafts, knowledge-backed troubleshooting steps, and safe form-fill workflows while preserving human review and final submission.
 

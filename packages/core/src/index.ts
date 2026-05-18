@@ -1,4 +1,4 @@
-export const corePackageName = "@service-now-automation/core";
+export const corePackageName = "@servicenow-automation/core";
 
 export * from "./models";
 export * from "./schemas";
