@@ -8,6 +8,7 @@ export type ServiceNowTargetValidationReason =
   | "invalid-url"
   | "https-required"
   | "credentials-in-url-denied"
+  | "sensitive-url-component-denied"
   | "host-not-allowlisted";
 
 export type ServiceNowTargetValidationResult = {
@@ -67,6 +68,15 @@ export function validateServiceNowTargetUrl(
     };
   }
 
+  if (parsedTarget.search || parsedTarget.hash || hasSensitiveUrlPayload(parsedTarget)) {
+    return {
+      allowed: false,
+      reason: "sensitive-url-component-denied",
+      host,
+      allowedHost
+    };
+  }
+
   if (!allowedHost) {
     return {
       allowed: false,
@@ -93,6 +103,15 @@ export function validateServiceNowTargetUrl(
   };
 }
 
+const SENSITIVE_PATH_PATTERNS = [
+  /(?:^|[/?#&;=])sys_id(?:$|[/?#&;=])/i,
+  /(?:^|[/?#&;=])access_token(?:$|[/?#&;=])/i,
+  /(?:^|[/?#&;=])id_token(?:$|[/?#&;=])/i,
+  /(?:^|[/?#&;=])token(?:$|[/?#&;=])/i,
+  /(?:^|[/?#&;=])session(?:$|[/?#&;=])/i,
+  /(?:^|[/?#&;=])cookie(?:$|[/?#&;=])/i
+];
+
 function getConfiguredHost(configuredUrl: string | undefined): string | undefined {
   if (!configuredUrl) {
     return undefined;
@@ -100,6 +119,36 @@ function getConfiguredHost(configuredUrl: string | undefined): string | undefine
 
   const parsed = parseUrl(configuredUrl);
   return parsed?.host.toLowerCase();
+}
+
+function hasSensitiveUrlPayload(parsed: URL): boolean {
+  let currentPath = parsed.pathname;
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    if (currentPath.includes("?") || currentPath.includes("#")) {
+      return true;
+    }
+
+    if (SENSITIVE_PATH_PATTERNS.some((pattern) => pattern.test(currentPath))) {
+      return true;
+    }
+
+    if (!currentPath.includes("%")) {
+      return false;
+    }
+
+    try {
+      const decodedPath = decodeURIComponent(currentPath);
+      if (decodedPath === currentPath) {
+        return currentPath.includes("%");
+      }
+      currentPath = decodedPath;
+    } catch {
+      return true;
+    }
+  }
+
+  return true;
 }
 
 function parseUrl(url: string): URL | undefined {

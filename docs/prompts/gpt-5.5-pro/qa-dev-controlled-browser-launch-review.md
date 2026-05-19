@@ -42,6 +42,24 @@ Review only after all are true:
 - DeepSeek / external AI is still blocked until redaction gate `#17` is complete.
 - Production shadow mode is still blocked until checklist `#19` is complete.
 
+## Implemented no-write command surface
+
+Dry-run only:
+
+```bash
+pnpm --silent --filter @servicenow-automation/cli sda browser launch --mode qa --json
+```
+
+Optional real browser open after this review and Alan approval:
+
+```bash
+SDA_BROWSER_EXECUTABLE=/path/to/chromium \
+  pnpm --silent --filter @servicenow-automation/cli sda \
+  browser launch --mode qa --execute --confirm-no-write-launch --json
+```
+
+The command must remain no-write: manual login only, no DOM automation, no field fill, no submit/update/save/close.
+
 ## Files to inspect
 
 Please inspect these if GitHub access is available:
@@ -56,7 +74,8 @@ Please inspect these if GitHub access is available:
 8. `apps/desktop/src/App.tsx`
 9. `.gitignore`
 10. `docs/field-trial/shadow-mode-runbook.md`
-11. The implementation files for issue `#24` once available.
+11. `docs/field-trial/qa-dev-no-write-browser-launch.md`
+12. The implementation files for issue `#24` once available.
 
 ## Questions to answer
 

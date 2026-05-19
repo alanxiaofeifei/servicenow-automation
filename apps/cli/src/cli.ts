@@ -24,6 +24,8 @@ export type RunCliOptions = {
 type ParsedFlags = {
   json: boolean;
   dryRun: boolean;
+  execute: boolean;
+  confirmNoWriteLaunch: boolean;
   flags: Record<string, string>;
   positionals: string[];
 };
@@ -117,6 +119,28 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
       }, formatBrowserPlan(plan.status, plan.browserProfileDirectory));
     }
 
+    if (namespace === "browser" && action === "launch") {
+      const mode = parseEnvironmentMode(requiredFlag(parsed, "mode", "browser launch"));
+      const environment = getServiceNowEnvironmentConfig(mode);
+      const service = createBrowserSessionService({ projectRoot: cwd });
+      const launch = await service.launchNoWriteBrowser(environment, {
+        targetUrlOverride: parsed.flags["target-url"],
+        execute: parsed.execute,
+        confirmNoWriteLaunch: parsed.confirmNoWriteLaunch,
+        browserExecutablePath: parsed.flags["browser-executable"]
+      });
+
+      return output(parsed, {
+        command: "browser launch",
+        mode,
+        launch,
+        safety: safetyEnvelope({
+          noExternalActionPerformed: launch.status !== "launched",
+          browserProcessLaunched: launch.status === "launched"
+        })
+      }, formatBrowserLaunch(launch.status, launch.blockedReason));
+    }
+
     if (namespace === "browser" && action === "reset") {
       const mode = parseEnvironmentMode(requiredFlag(parsed, "mode", "browser reset"));
       const environment = getServiceNowEnvironmentConfig(mode);
@@ -191,6 +215,8 @@ function parseArgs(argv: string[]): ParsedFlags {
   const positionals: string[] = [];
   let json = false;
   let dryRun = false;
+  let execute = false;
+  let confirmNoWriteLaunch = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
@@ -206,6 +232,14 @@ function parseArgs(argv: string[]): ParsedFlags {
       dryRun = true;
       continue;
     }
+    if (token === "--execute") {
+      execute = true;
+      continue;
+    }
+    if (token === "--confirm-no-write-launch") {
+      confirmNoWriteLaunch = true;
+      continue;
+    }
     if (token.startsWith("--")) {
       const name = token.slice(2);
       const value = argv[index + 1];
@@ -219,7 +253,7 @@ function parseArgs(argv: string[]): ParsedFlags {
     positionals.push(token);
   }
 
-  return { json, dryRun, flags, positionals };
+  return { json, dryRun, execute, confirmNoWriteLaunch, flags, positionals };
 }
 
 function requiredFlag(parsed: ParsedFlags, name: string, command: string): string {
@@ -253,13 +287,21 @@ function fail(stderr: string): CliResult {
   return { exitCode: 1, stdout: "", stderr: `${stderr}\n` };
 }
 
-function safetyEnvelope() {
+function safetyEnvelope(overrides: Partial<ReturnType<typeof baseSafetyEnvelope>> = {}) {
+  return {
+    ...baseSafetyEnvelope(),
+    ...overrides
+  };
+}
+
+function baseSafetyEnvelope() {
   return {
     noExternalActionPerformed: true,
     realServiceNowApiCalled: false,
     browserAutomationCalled: false,
+    browserProcessLaunched: false,
     productionWriteAllowed: false,
-    message: "Draft/preview only. The CLI does not submit, close, or update real ServiceNow records."
+    message: "Draft/preview only. The CLI does not submit, save, close, or update real ServiceNow records."
   };
 }
 
@@ -283,7 +325,14 @@ function formatBrowserPlan(status: string, browserProfileDirectory: string): str
   return [
     `Browser session plan: ${status}`,
     `Profile directory: ${browserProfileDirectory}`,
-    "Safety: skeleton only; no browser is launched and no ServiceNow record is modified."
+    "Safety: no-write planning only; no ServiceNow record is modified."
+  ].join("\n");
+}
+
+function formatBrowserLaunch(status: string, blockedReason?: string): string {
+  return [
+    `Browser no-write launch: ${status}`,
+    blockedReason ? `Blocked reason: ${blockedReason}` : "Safety: manual login only; no field fill, submit, update, save, or close."
   ].join("\n");
 }
 
@@ -297,10 +346,11 @@ Commands:
   sda ticket draft --template <template> --user <user> --summary <summary> [--json]
   sda notes generate --template <template> --input <json_file> [--json]
   sda browser plan --mode <mock|qa|dev|production-shadow> [--target-url <url>] [--json]
+  sda browser launch --mode <qa|dev> [--target-url <url>] [--browser-executable <path>] [--execute --confirm-no-write-launch] [--json]
   sda browser reset --mode <mock|qa|dev|production-shadow> [--json]
   sda run --workflow <workflow_name> --input <json_file> --dry-run [--json]
 
 Safety:
-  Draft/preview only by default. No real ServiceNow API calls, browser automation, submit, close, or update actions are performed.
+  Draft/preview only by default. No real ServiceNow API calls, browser DOM automation, submit, update, save, close, upload, or email actions are performed.
 `;
 }

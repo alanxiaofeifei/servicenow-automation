@@ -24,7 +24,7 @@ describe("BrowserSessionService", () => {
     expect(plan.safety.realSubmitAllowed).toBe(false);
     expect(plan.safety.requiresAlanApprovalBeforeAnyRealSubmit).toBe(true);
     expect(plan.safety.browserAutomationImplemented).toBe(false);
-    expect(plan.auditNotes).toContain("Browser automation is a skeleton plan only; no browser is launched by this service yet.");
+    expect(plan.auditNotes).toContain("Browser launch is no-write only; no DOM automation, field fill, submit, update, save, close, upload, or email action is performed.");
   });
 
   it("creates and resets only the ignored browser profile directory", async () => {
@@ -135,6 +135,136 @@ describe("BrowserSessionService", () => {
     expect(plan.safety.realSubmitAllowed).toBe(false);
     expect(plan.safety.writeOperationsAllowed).toBe(false);
     expect(plan.actions).toEqual([]);
-    expect(plan.auditNotes).toContain("Production shadow mode remains read-only; submit, close, and update remain blocked.");
+    expect(plan.auditNotes).toContain("Production shadow mode remains read-only; submit, close, update, and save remain blocked.");
+  });
+
+  it("prepares a no-write QA launch command without executing a browser by default", async () => {
+    const launchedCommands: unknown[] = [];
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-launch-dry-run-"));
+    const service = createBrowserSessionService({
+      projectRoot,
+      browserExecutablePath: "/usr/bin/chromium",
+      browserLauncher: async (command) => {
+        launchedCommands.push(command);
+        return { pid: 12345 };
+      }
+    });
+
+    const result = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("qa"));
+
+    expect(result.status).toBe("dry-run");
+    expect(launchedCommands).toEqual([]);
+    expect(result.plan.status).toBe("ready");
+    const qaTargetPath = new URL(getServiceNowEnvironmentConfig("qa").url ?? "").pathname;
+    expect(result.commandPreview).toMatchObject({
+      executable: "/usr/bin/chromium",
+      targetHost: new URL(getServiceNowEnvironmentConfig("qa").url ?? "").host,
+      targetPath: qaTargetPath
+    });
+    expect(result.commandPreview?.args).toContain("--new-window");
+    expect(result.safety).toMatchObject({
+      noWriteMode: true,
+      formAutomationAllowed: false,
+      writeOperationsAllowed: false,
+      realServiceNowApiCalled: false,
+      realActionGateRequiredForWrites: true
+    });
+    expect(JSON.stringify(result)).not.toContain("save_incident allowed");
+  });
+
+  it("executes a no-write QA launch only with explicit confirmation", async () => {
+    const launchedCommands: unknown[] = [];
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-launch-confirm-"));
+    const service = createBrowserSessionService({
+      projectRoot,
+      browserExecutablePath: "/usr/bin/chromium",
+      browserLauncher: async (command) => {
+        launchedCommands.push(command);
+        return { pid: 67890 };
+      }
+    });
+
+    const blocked = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("qa"), {
+      execute: true
+    });
+    const launched = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("qa"), {
+      execute: true,
+      confirmNoWriteLaunch: true
+    });
+
+    expect(blocked.status).toBe("blocked");
+    expect(blocked.blockedReason).toBe("Explicit --confirm-no-write-launch is required before opening a real QA/dev browser window.");
+    expect(launched.status).toBe("launched");
+    expect(launched.process).toEqual({ pid: 67890 });
+    expect(launchedCommands).toHaveLength(1);
+    expect(JSON.stringify(launchedCommands[0])).toContain("--user-data-dir=");
+  });
+
+  it("returns a sanitized blocked result when the browser executable cannot start", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-launch-missing-executable-"));
+    const service = createBrowserSessionService({
+      projectRoot,
+      browserExecutablePath: "/definitely/missing/sda-browser"
+    });
+
+    const result = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("qa"), {
+      execute: true,
+      confirmNoWriteLaunch: true
+    });
+    const serialized = JSON.stringify(result);
+
+    expect(result.status).toBe("blocked");
+    expect(result.blockedReason).toBe("Browser process could not be started. Check the configured browser executable.");
+    expect(result.process).toBeUndefined();
+    expect(serialized).not.toContain("sys_id");
+    expect(serialized).not.toContain("token");
+    expect(serialized).not.toContain("user:");
+  });
+
+  it("refuses no-write launch for mock, production-shadow, and sensitive target URLs without echoing secrets", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-launch-blocked-"));
+    const service = createBrowserSessionService({ projectRoot, browserExecutablePath: "/usr/bin/chromium" });
+    const qaHost = new URL(getServiceNowEnvironmentConfig("qa").url ?? "").host;
+
+    const mock = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("mock"));
+    const productionShadow = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("production-shadow"), {
+      targetUrlOverride: "https://prod-example.service-now.com/"
+    });
+    const userinfo = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("qa"), {
+      targetUrlOverride: `https://user:***@${qaHost}/nav_to.do`
+    });
+    const query = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("qa"), {
+      targetUrlOverride: `https://${qaHost}/nav_to.do?sys_id=abc123`
+    });
+    let repeatedEncodedPayload = "?sys_id=abc123";
+    for (let index = 0; index < 4; index += 1) {
+      repeatedEncodedPayload = encodeURIComponent(repeatedEncodedPayload);
+    }
+    const repeatedEncoded = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("qa"), {
+      targetUrlOverride: `https://${qaHost}/nav_to.do${repeatedEncodedPayload}`
+    });
+    const encodedCustomerData = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("qa"), {
+      targetUrlOverride: `https://${qaHost}/nav_to.do%253Fshort_description%253Dcustomer-data`
+    });
+
+    expect(mock.status).toBe("not-required");
+    expect(productionShadow.status).toBe("blocked");
+    expect(productionShadow.blockedReason).toBe("Production shadow browser launch remains blocked until #19 is complete.");
+    expect(userinfo.status).toBe("blocked");
+    expect(query.status).toBe("blocked");
+    expect(repeatedEncoded.status).toBe("blocked");
+    expect(encodedCustomerData.status).toBe("blocked");
+    expect(query.plan.targetValidation?.reason).toBe("sensitive-url-component-denied");
+    expect(repeatedEncoded.plan.targetValidation?.reason).toBe("sensitive-url-component-denied");
+    expect(encodedCustomerData.plan.targetValidation?.reason).toBe("sensitive-url-component-denied");
+
+    for (const result of [userinfo, query, repeatedEncoded, encodedCustomerData]) {
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain("user:");
+      expect(serialized).not.toContain("@");
+      expect(serialized).not.toContain("sys_id");
+      expect(serialized).not.toContain("token");
+      expect(serialized).not.toContain("placeholder");
+    }
   });
 });

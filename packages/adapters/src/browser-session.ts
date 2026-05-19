@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { mkdir, rm } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 
@@ -44,12 +45,63 @@ export type BrowserSessionResetResult = {
   safetyNotes: string[];
 };
 
+export type BrowserLaunchCommand = {
+  executable: string;
+  args: string[];
+  targetUrl: string;
+  profileDirectory: string;
+};
+
+export type BrowserLaunchProcess = {
+  pid: number | undefined;
+};
+
+export type BrowserLauncher = (command: BrowserLaunchCommand) => BrowserLaunchProcess | Promise<BrowserLaunchProcess>;
+
+export type BrowserNoWriteLaunchStatus = "dry-run" | "launched" | "blocked" | "not-required";
+
+export type BrowserNoWriteLaunchSafety = {
+  noWriteMode: true;
+  formAutomationAllowed: false;
+  fieldFillAllowed: false;
+  realServiceNowApiCalled: false;
+  realSubmitAllowed: false;
+  writeOperationsAllowed: false;
+  realActionGateRequiredForWrites: true;
+};
+
+export type BrowserNoWriteLaunchCommandPreview = {
+  executable: string;
+  args: string[];
+  targetHost: string;
+  targetPath: string;
+  profileDirectory: string;
+};
+
+export type BrowserNoWriteLaunchResult = {
+  status: BrowserNoWriteLaunchStatus;
+  plan: BrowserSessionLaunchPlan;
+  commandPreview?: BrowserNoWriteLaunchCommandPreview;
+  process?: BrowserLaunchProcess;
+  blockedReason?: string;
+  safety: BrowserNoWriteLaunchSafety;
+  auditNotes: string[];
+};
+
 export type BrowserSessionServiceOptions = {
   projectRoot: string;
+  browserExecutablePath?: string;
+  browserLauncher?: BrowserLauncher;
 };
 
 export type CreateLaunchPlanOptions = {
   targetUrlOverride?: string;
+};
+
+export type LaunchNoWriteBrowserOptions = CreateLaunchPlanOptions & {
+  execute?: boolean;
+  confirmNoWriteLaunch?: boolean;
+  browserExecutablePath?: string;
 };
 
 export type BrowserSessionService = {
@@ -57,12 +109,17 @@ export type BrowserSessionService = {
     environment: ServiceNowEnvironmentConfig,
     options?: CreateLaunchPlanOptions
   ) => BrowserSessionLaunchPlan;
+  launchNoWriteBrowser: (
+    environment: ServiceNowEnvironmentConfig,
+    options?: LaunchNoWriteBrowserOptions
+  ) => Promise<BrowserNoWriteLaunchResult>;
   ensureBrowserProfileDirectory: (environment: ServiceNowEnvironmentConfig) => Promise<string>;
   resetSession: (environment: ServiceNowEnvironmentConfig) => Promise<BrowserSessionResetResult>;
 };
 
 export function createBrowserSessionService(options: BrowserSessionServiceOptions): BrowserSessionService {
   const projectRoot = resolve(options.projectRoot);
+  const launcher = options.browserLauncher ?? defaultBrowserLauncher;
 
   function getBrowserProfileDirectory(environment: ServiceNowEnvironmentConfig): string {
     const profileDirectory = resolve(projectRoot, environment.localRuntimeDirectory);
@@ -70,92 +127,199 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
     return profileDirectory;
   }
 
-  return {
-    createLaunchPlan(environment, planOptions = {}) {
-      const targetUrl = planOptions.targetUrlOverride ?? environment.url;
-      const targetValidation = validateServiceNowTargetUrl(environment, targetUrl);
-      const browserProfileDirectory = getBrowserProfileDirectory(environment);
-      const basePlan: BrowserSessionLaunchPlan = {
-        status: "ready",
-        mode: environment.mode,
-        environmentLabel: environment.label,
-        targetUrl: targetValidation.allowed ? targetValidation.targetUrl : undefined,
-        targetValidation,
-        browserProfileDirectory,
-        actions: ["open-controlled-browser", "wait-for-manual-login", "capture-page-context-only"],
-        sessionStoragePolicy: "ignored-local-runtime-directory",
-        gitIgnorePattern: ".local/",
+  function createLaunchPlan(
+    environment: ServiceNowEnvironmentConfig,
+    planOptions: CreateLaunchPlanOptions = {}
+  ): BrowserSessionLaunchPlan {
+    const targetUrl = planOptions.targetUrlOverride ?? environment.url;
+    const targetValidation = validateServiceNowTargetUrl(environment, targetUrl);
+    const browserProfileDirectory = getBrowserProfileDirectory(environment);
+    const basePlan: BrowserSessionLaunchPlan = {
+      status: "ready",
+      mode: environment.mode,
+      environmentLabel: environment.label,
+      targetUrl: targetValidation.allowed ? targetValidation.targetUrl : undefined,
+      targetValidation,
+      browserProfileDirectory,
+      actions: ["open-controlled-browser", "wait-for-manual-login", "capture-page-context-only"],
+      sessionStoragePolicy: "ignored-local-runtime-directory",
+      gitIgnorePattern: ".local/",
+      safety: {
+        manualLoginRequired: environment.credentialPolicy === "manual-login-only",
+        credentialsStoredInSource: false,
+        realSubmitAllowed: false,
+        requiresAlanApprovalBeforeAnyRealSubmit: environment.requiresExplicitApprovalBeforeRealSubmit,
+        browserAutomationImplemented: false,
+        shadowOnly: environment.shadowOnly,
+        writeOperationsAllowed: false
+      },
+      auditNotes: [
+        "Browser launch is no-write only; no DOM automation, field fill, submit, update, save, close, upload, or email action is performed.",
+        "Credentials must be entered manually in the controlled browser session and never stored in source code.",
+        "Browser profile data must stay under the ignored .local runtime directory."
+      ]
+    };
+
+    if (environment.mode === "mock") {
+      return {
+        ...basePlan,
+        status: "not-required" as const,
+        targetUrl: undefined,
+        actions: [],
         safety: {
-          manualLoginRequired: environment.credentialPolicy === "manual-login-only",
-          credentialsStoredInSource: false,
+          ...basePlan.safety,
+          manualLoginRequired: false
+        },
+        auditNotes: [
+          "Mock mode uses offline demo data and does not need a browser session.",
+          "No external ServiceNow system is opened in mock mode."
+        ]
+      };
+    }
+
+    if (!targetValidation.allowed) {
+      const blockedReason =
+        targetValidation.reason === "no-allowlisted-host" && !planOptions.targetUrlOverride
+          ? "No allowlisted ServiceNow host configured for this environment."
+          : "Target URL is not allowlisted for this environment.";
+
+      return {
+        ...basePlan,
+        status: "blocked" as const,
+        targetUrl: undefined,
+        actions: [],
+        blockedReason,
+        auditNotes: [
+          blockedReason,
+          environment.mode === "production-shadow"
+            ? "Production shadow mode remains read-only; submit, close, update, and save remain blocked."
+            : "Configure an allowlisted HTTPS ServiceNow host before creating a controlled browser launch plan."
+        ]
+      };
+    }
+
+    if (environment.mode === "production-shadow") {
+      return {
+        ...basePlan,
+        safety: {
+          ...basePlan.safety,
+          shadowOnly: true,
           realSubmitAllowed: false,
-          requiresAlanApprovalBeforeAnyRealSubmit: environment.requiresExplicitApprovalBeforeRealSubmit,
-          browserAutomationImplemented: false,
-          shadowOnly: environment.shadowOnly,
           writeOperationsAllowed: false
         },
         auditNotes: [
-          "Browser automation is a skeleton plan only; no browser is launched by this service yet.",
-          "Credentials must be entered manually in the controlled browser session and never stored in source code.",
-          "Browser profile data must stay under the ignored .local runtime directory."
+          ...basePlan.auditNotes,
+          "Production shadow mode may capture context for comparison only; submit, close, update, and save remain blocked."
         ]
       };
+    }
 
-      if (environment.mode === "mock") {
+    return basePlan;
+  }
+
+  async function launchNoWriteBrowser(
+    environment: ServiceNowEnvironmentConfig,
+    launchOptions: LaunchNoWriteBrowserOptions = {}
+  ): Promise<BrowserNoWriteLaunchResult> {
+    const plan = createLaunchPlan(environment, launchOptions);
+    const baseResult = createBaseNoWriteLaunchResult(plan);
+
+    if (plan.status === "not-required") {
+      return {
+        ...baseResult,
+        status: "not-required",
+        blockedReason: "Mock mode uses offline demo data and does not open ServiceNow."
+      };
+    }
+
+    if (environment.mode === "production-shadow") {
+      return {
+        ...baseResult,
+        status: "blocked",
+        blockedReason: "Production shadow browser launch remains blocked until #19 is complete.",
+        auditNotes: [
+          ...baseResult.auditNotes,
+          "Production shadow browser launch remains blocked until #19 is complete."
+        ]
+      };
+    }
+
+    if (plan.status !== "ready" || !plan.targetUrl) {
+      return {
+        ...baseResult,
+        status: "blocked",
+        blockedReason: plan.blockedReason ?? "Browser launch plan is blocked."
+      };
+    }
+
+    const command = buildBrowserLaunchCommand(plan, launchOptions.browserExecutablePath ?? options.browserExecutablePath);
+    const commandPreview = sanitizeCommandPreview(command);
+
+    if (!launchOptions.execute) {
+      return {
+        ...baseResult,
+        status: "dry-run",
+        commandPreview,
+        auditNotes: [
+          ...baseResult.auditNotes,
+          "Dry-run only: command preview generated, browser process was not started."
+        ]
+      };
+    }
+
+    if (!launchOptions.confirmNoWriteLaunch) {
+      return {
+        ...baseResult,
+        status: "blocked",
+        commandPreview,
+        blockedReason: "Explicit --confirm-no-write-launch is required before opening a real QA/dev browser window."
+      };
+    }
+
+    await mkdir(plan.browserProfileDirectory, { recursive: true });
+
+    try {
+      const process = await launcher(command);
+      if (!process.pid) {
         return {
-          ...basePlan,
-          status: "not-required",
-          targetUrl: undefined,
-          actions: [],
-          safety: {
-            ...basePlan.safety,
-            manualLoginRequired: false
-          },
-          auditNotes: [
-            "Mock mode uses offline demo data and does not need a browser session.",
-            "No external ServiceNow system is opened in mock mode."
-          ]
-        };
-      }
-
-      if (!targetValidation.allowed) {
-        const blockedReason =
-          targetValidation.reason === "no-allowlisted-host" && !planOptions.targetUrlOverride
-            ? "No allowlisted ServiceNow host configured for this environment."
-            : "Target URL is not allowlisted for this environment.";
-
-        return {
-          ...basePlan,
+          ...baseResult,
           status: "blocked",
-          actions: [],
-          blockedReason,
+          commandPreview,
+          blockedReason: "Browser process could not be started. Check the configured browser executable.",
           auditNotes: [
-            blockedReason,
-            environment.mode === "production-shadow"
-              ? "Production shadow mode remains read-only; submit, close, and update remain blocked."
-              : "Configure an allowlisted HTTPS ServiceNow host before creating a controlled browser launch plan."
+            ...baseResult.auditNotes,
+            "Browser executable did not report a process id; launch was treated as blocked."
           ]
         };
       }
 
-      if (environment.mode === "production-shadow") {
-        return {
-          ...basePlan,
-          safety: {
-            ...basePlan.safety,
-            shadowOnly: true,
-            realSubmitAllowed: false,
-            writeOperationsAllowed: false
-          },
-          auditNotes: [
-            ...basePlan.auditNotes,
-            "Production shadow mode may capture context for comparison only; submit, close, and update remain blocked."
-          ]
-        };
-      }
+      return {
+        ...baseResult,
+        status: "launched",
+        commandPreview,
+        process,
+        auditNotes: [
+          ...baseResult.auditNotes,
+          "Controlled browser process launched in no-write mode. Manual login only; no page automation was executed."
+        ]
+      };
+    } catch {
+      return {
+        ...baseResult,
+        status: "blocked",
+        commandPreview,
+        blockedReason: "Browser process could not be started. Check the configured browser executable.",
+        auditNotes: [
+          ...baseResult.auditNotes,
+          "Browser launch failed before a controlled session could start; raw spawn arguments were not exposed."
+        ]
+      };
+    }
+  }
 
-      return basePlan;
-    },
+  return {
+    createLaunchPlan,
+    launchNoWriteBrowser,
 
     async ensureBrowserProfileDirectory(environment) {
       const profileDirectory = getBrowserProfileDirectory(environment);
@@ -179,6 +343,89 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
       };
     }
   };
+}
+
+function createBaseNoWriteLaunchResult(plan: BrowserSessionLaunchPlan): BrowserNoWriteLaunchResult {
+  return {
+    status: "blocked",
+    plan,
+    safety: {
+      noWriteMode: true,
+      formAutomationAllowed: false,
+      fieldFillAllowed: false,
+      realServiceNowApiCalled: false,
+      realSubmitAllowed: false,
+      writeOperationsAllowed: false,
+      realActionGateRequiredForWrites: true
+    },
+    auditNotes: [
+      "No-write launch result: browser opening is separated from all ServiceNow write actions.",
+      "Any future submit, update, save, close, create-change, upload, or email action must pass RealActionGate."
+    ]
+  };
+}
+
+function buildBrowserLaunchCommand(plan: BrowserSessionLaunchPlan, browserExecutablePath: string | undefined): BrowserLaunchCommand {
+  if (!plan.targetUrl) {
+    throw new Error("Cannot build browser launch command without an allowlisted target URL.");
+  }
+
+  const executable = browserExecutablePath ?? process.env.SDA_BROWSER_EXECUTABLE ?? "chromium";
+  const args = [
+    `--user-data-dir=${plan.browserProfileDirectory}`,
+    "--no-first-run",
+    "--new-window",
+    plan.targetUrl
+  ];
+
+  return {
+    executable,
+    args,
+    targetUrl: plan.targetUrl,
+    profileDirectory: plan.browserProfileDirectory
+  };
+}
+
+function sanitizeCommandPreview(command: BrowserLaunchCommand): BrowserNoWriteLaunchCommandPreview {
+  const target = new URL(command.targetUrl);
+  return {
+    executable: command.executable,
+    args: command.args.map((arg) => {
+      if (arg === command.targetUrl) {
+        return `${target.protocol}//${target.host}${target.pathname}`;
+      }
+      return arg;
+    }),
+    targetHost: target.host,
+    targetPath: target.pathname,
+    profileDirectory: command.profileDirectory
+  };
+}
+
+function defaultBrowserLauncher(command: BrowserLaunchCommand): Promise<BrowserLaunchProcess> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command.executable, command.args, {
+      detached: true,
+      stdio: "ignore"
+    });
+    let settled = false;
+
+    child.once("error", () => {
+      if (!settled) {
+        settled = true;
+        reject(new Error("browser-spawn-failed"));
+      }
+    });
+
+    setImmediate(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      child.unref();
+      resolve({ pid: child.pid });
+    });
+  });
 }
 
 function assertSafeRuntimeDirectory(profileDirectory: string, projectRoot: string): void {

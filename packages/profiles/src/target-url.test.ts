@@ -39,6 +39,84 @@ describe("validateServiceNowTargetUrl", () => {
     expect(result.targetUrl).toBeUndefined();
   });
 
+  it("blocks query strings and hash fragments before launch output can leak ticket/session data", () => {
+    const queryResult = validateServiceNowTargetUrl(qaConfig, `https://${qaHost}/nav_to.do?example=blocked`);
+    const hashResult = validateServiceNowTargetUrl(qaConfig, `https://${qaHost}/nav_to.do#fragment`);
+
+    for (const result of [queryResult, hashResult]) {
+      expect(result).toMatchObject({
+        allowed: false,
+        reason: "sensitive-url-component-denied",
+        host: qaHost,
+        allowedHost: qaHost
+      });
+      expect(result.targetUrl).toBeUndefined();
+    }
+  });
+
+  it("blocks percent-encoded sensitive path payloads before launch output can leak ticket/session data", () => {
+    const encodedQueryResult = validateServiceNowTargetUrl(
+      qaConfig,
+      `https://${qaHost}/nav_to.do%3Fsys_id%3Dabc123`
+    );
+    const encodedHashResult = validateServiceNowTargetUrl(
+      qaConfig,
+      `https://${qaHost}/nav_to.do%23access_token`
+    );
+
+    for (const result of [encodedQueryResult, encodedHashResult]) {
+      expect(result).toMatchObject({
+        allowed: false,
+        reason: "sensitive-url-component-denied",
+        host: qaHost,
+        allowedHost: qaHost
+      });
+      expect(result.targetUrl).toBeUndefined();
+    }
+  });
+
+  it("blocks encoded query or hash delimiters even when parameter names are not allowlisted as sensitive", () => {
+    const encodedQueryResult = validateServiceNowTargetUrl(
+      qaConfig,
+      `https://${qaHost}/nav_to.do%3Fshort_description%3Dcustomer-data`
+    );
+    const repeatedEncodedQueryResult = validateServiceNowTargetUrl(
+      qaConfig,
+      `https://${qaHost}/nav_to.do%253Fshort_description%253Dcustomer-data`
+    );
+    const encodedHashResult = validateServiceNowTargetUrl(qaConfig, `https://${qaHost}/nav_to.do%23customer-data`);
+
+    for (const result of [encodedQueryResult, repeatedEncodedQueryResult, encodedHashResult]) {
+      expect(result).toMatchObject({
+        allowed: false,
+        reason: "sensitive-url-component-denied",
+        host: qaHost,
+        allowedHost: qaHost
+      });
+      expect(result.targetUrl).toBeUndefined();
+    }
+  });
+
+  it("blocks repeated-encoded or malformed sensitive path payloads fail-closed", () => {
+    let repeatedEncodedPayload = "?sys_id=abc123";
+    for (let index = 0; index < 4; index += 1) {
+      repeatedEncodedPayload = encodeURIComponent(repeatedEncodedPayload);
+    }
+
+    const repeatedResult = validateServiceNowTargetUrl(qaConfig, `https://${qaHost}/nav_to.do${repeatedEncodedPayload}`);
+    const malformedResult = validateServiceNowTargetUrl(qaConfig, `https://${qaHost}/nav_to.do%ZZsys_id%3Dabc123`);
+
+    for (const result of [repeatedResult, malformedResult]) {
+      expect(result).toMatchObject({
+        allowed: false,
+        reason: "sensitive-url-component-denied",
+        host: qaHost,
+        allowedHost: qaHost
+      });
+      expect(result.targetUrl).toBeUndefined();
+    }
+  });
+
   it("blocks QA target overrides outside the configured host", () => {
     const result = validateServiceNowTargetUrl(qaConfig, "https://evil-example.service-now.com/nav_to.do");
 
