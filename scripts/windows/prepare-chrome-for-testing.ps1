@@ -184,8 +184,8 @@ finally {
 $profile = Join-Path $env:LOCALAPPDATA 'ServiceNowAutomation\Profiles\smoke\session-smoke-001'
 $dryRunCommand = @(
   'pnpm --silent --filter @servicenow-automation/cli sda browser smoke `',
-  '  --browser-executable "' + $runtimeExe + '" `',
-  '  --profile-root "' + $profile + '" `',
+  ('  --browser-executable "{0}" `' -f $runtimeExe),
+  ('  --profile-root "{0}" `' -f $profile),
   '  --target about:blank `',
   '  --json'
 ) -join [Environment]::NewLine
