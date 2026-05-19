@@ -22,64 +22,79 @@ const profile = loadDemoYageoProfile();
 
 type DemoQueueStatus = "New" | "Reviewed" | "Drafted" | "Done" | "Skipped";
 
+type SourceChannel = "Teams message" | "Self-service ticket" | "ServiceNow Chat transcript" | "Shared mailbox item";
+
 type DemoQueueItem = {
   id: string;
   scenarioId: ManualPasteScenario["id"];
-  senderLabel: string;
+  requesterLabel: string;
   receivedAt: string;
   subject: string;
   bodyPreview: string;
   sourceBody: string;
-  sourceType: string;
+  sourceChannel: SourceChannel;
   status: DemoQueueStatus;
 };
 
-const demoMailQueue: DemoQueueItem[] = [
+const demoIntakeQueue: DemoQueueItem[] = [
   {
-    id: "demo-mail-vpn",
+    id: "demo-teams-vpn",
     scenarioId: "vpn-issue",
-    senderLabel: "Demo requester A",
+    requesterLabel: "Demo requester A",
     receivedAt: "2026-05-18 08:15",
-    subject: "VPN connection issue after password reset",
+    subject: "Teams note: VPN connection issue after password reset",
     bodyPreview:
-      "User reports VPN cannot connect after a recent password reset. The VPN client loops at the MFA prompt.",
+      "A demo teammate reports VPN cannot connect after a recent password reset. The VPN client loops at the MFA prompt.",
     sourceBody:
-      "Hello support,\n\nA demo user reports that VPN cannot connect after a recent password reset. The VPN client keeps looping at the MFA prompt. Internet works without VPN, but remote access is unavailable.\n\nThis is sanitized demo queue data only.",
-    sourceType: "Demo mail paste",
+      "Teams-style demo message:\n\nA demo requester reports that VPN cannot connect after a recent password reset. The VPN client keeps looping at the MFA prompt. Internet works without VPN, but remote access is unavailable.\n\nThis is fake sanitized intake data only. No Teams tenant, channel, chat, user profile, or message link is connected.",
+    sourceChannel: "Teams message",
     status: "New"
   },
   {
-    id: "demo-mail-windows",
+    id: "demo-self-service-windows",
     scenarioId: "windows-issue",
-    senderLabel: "Demo requester B",
+    requesterLabel: "Demo requester B",
     receivedAt: "2026-05-18 08:40",
-    subject: "Windows laptop slow after update",
+    subject: "Self-service request: Windows laptop slow after update",
     bodyPreview:
-      "User reports a Windows laptop became very slow after the latest update. Reboot was attempted once.",
+      "A fake portal submission says a Windows laptop became very slow after the latest update. Reboot was attempted once.",
     sourceBody:
-      "Hello support,\n\nA demo user reports that a Windows laptop became very slow after the latest update. Reboot was attempted once, but startup and application launch remain slow.\n\nThis is sanitized demo queue data only.",
-    sourceType: "Demo mail paste",
+      "Self-service-style demo submission:\n\nA demo requester reports that a Windows laptop became very slow after the latest update. Reboot was attempted once, but startup and application launch remain slow.\n\nThis is fake sanitized intake data only. No portal polling, ticket number, requester profile, or live self-service record is connected.",
+    sourceChannel: "Self-service ticket",
     status: "New"
   },
   {
-    id: "demo-mail-account",
+    id: "demo-chat-account",
     scenarioId: "account-login-issue",
-    senderLabel: "Demo requester C",
+    requesterLabel: "Demo requester C",
     receivedAt: "2026-05-18 09:05",
-    subject: "Account login issue after password change",
+    subject: "Chat transcript: account login issue after password change",
     bodyPreview:
-      "User cannot login after changing password. MFA prompt appears but authentication fails repeatedly.",
+      "A sanitized chat transcript says login fails after password change. MFA appears but authentication fails repeatedly.",
     sourceBody:
-      "Hello support,\n\nA demo user cannot login after changing password. MFA prompt appears but authentication fails repeatedly. The user can access some services but not the required application.\n\nThis is sanitized demo queue data only.",
-    sourceType: "Demo mail paste",
+      "ServiceNow Chat-style demo transcript:\n\nDemo requester: I cannot login after changing password.\nDemo support: Does the MFA prompt appear?\nDemo requester: Yes, but authentication fails repeatedly. I can access some services but not the required application.\n\nThis is fake sanitized intake data only. No ServiceNow Chat, ServiceNow API, transcript ID, or live conversation is connected.",
+    sourceChannel: "ServiceNow Chat transcript",
+    status: "New"
+  },
+  {
+    id: "demo-shared-mailbox-vpn",
+    scenarioId: "vpn-issue",
+    requesterLabel: "Demo requester D",
+    receivedAt: "2026-05-18 09:30",
+    subject: "Shared mailbox item: remote access unavailable",
+    bodyPreview:
+      "A shared mailbox style item reports remote access is unavailable while normal internet access still works.",
+    sourceBody:
+      "Shared mailbox-style demo item:\n\nA demo requester reports that remote access is unavailable. Normal internet access works, but VPN fails after a password reset and MFA keeps repeating.\n\nThis is fake sanitized intake data only. No mailbox, email address, message header, attachment, .msg file, or .eml file is connected.",
+    sourceChannel: "Shared mailbox item",
     status: "New"
   }
 ];
 
 export function App() {
   const [selectedScenarioId, setSelectedScenarioId] = useState<ManualPasteScenario["id"]>("vpn-issue");
-  const [selectedQueueItemId, setSelectedQueueItemId] = useState(demoMailQueue[0].id);
-  const [queueItems, setQueueItems] = useState<DemoQueueItem[]>(demoMailQueue);
+  const [selectedQueueItemId, setSelectedQueueItemId] = useState(demoIntakeQueue[0].id);
+  const [queueItems, setQueueItems] = useState<DemoQueueItem[]>(demoIntakeQueue);
   const selectedScenario = useMemo(
     () => demoManualPasteScenarios.find((scenario) => scenario.id === selectedScenarioId) ?? demoManualPasteScenarios[0],
     [selectedScenarioId]
@@ -165,10 +180,10 @@ export function App() {
       <section className="workspace" aria-labelledby="workspace-title">
         <header className="workspace-header">
           <div>
-            <p className="eyebrow">Queue → Mail Review → TicketDraft</p>
+            <p className="eyebrow">Queue → Source Review → TicketDraft</p>
             <h2 id="workspace-title">Ticket Draft Workspace</h2>
             <p>
-              Demo mode is deterministic. QA/Dev ServiceNow testing will be added after this mock workflow is stable.
+              Demo mode is deterministic. Fake sanitized intake only; no Teams, mailbox, ServiceNow Chat/API, or self-service polling connection is used. No attachments, .msg/.eml parsing, live channel content, or external AI with real content is used.
             </p>
           </div>
           <div className="mode-pill">{selectedEnvironment.label} · MockAIProvider</div>
@@ -181,7 +196,7 @@ export function App() {
 
         <div className="queue-review-grid">
           <DemoQueuePanel items={queueItems} selectedItemId={selectedQueueItem.id} onSelectItem={selectQueueItem} />
-          <MailReviewPanel
+          <SourceReviewPanel
             item={selectedQueueItem}
             onCreateIncidentDraft={createIncidentDraft}
             onMarkDone={(itemId) => updateQueueItemStatus(itemId, "Done")}
@@ -289,8 +304,8 @@ function DemoQueuePanel({
   return (
     <section className="queue-panel" aria-labelledby="demo-queue-title">
       <header>
-        <p className="eyebrow">Mail Review Queue</p>
-        <h3 id="demo-queue-title">Demo queue — fake sanitized data only</h3>
+        <p className="eyebrow">Intake Queue</p>
+        <h3 id="demo-queue-title">Intake Queue — fake sanitized data only</h3>
       </header>
 
       <div className="queue-list" role="list">
@@ -303,8 +318,8 @@ function DemoQueuePanel({
           >
             <span className="queue-time">{item.receivedAt}</span>
             <strong>{item.subject}</strong>
-            <span>{item.senderLabel}</span>
-            <span>{item.sourceType}</span>
+            <span>{item.requesterLabel}</span>
+            <span className="source-channel-badge">{item.sourceChannel}</span>
             <span className={`status-badge ${statusClassName(item.status)}`}>{item.status}</span>
           </button>
         ))}
@@ -313,7 +328,7 @@ function DemoQueuePanel({
   );
 }
 
-function MailReviewPanel({
+function SourceReviewPanel({
   item,
   onCreateIncidentDraft,
   onMarkDone,
@@ -325,10 +340,10 @@ function MailReviewPanel({
   onSkip: (itemId: string) => void;
 }) {
   return (
-    <section className="mail-review-panel" aria-labelledby="mail-review-title">
+    <section className="source-review-panel" aria-labelledby="source-review-title">
       <header>
-        <p className="eyebrow">Mail Review</p>
-        <h3 id="mail-review-title">Parsed Sanitized Source</h3>
+        <p className="eyebrow">Source Review</p>
+        <h3 id="source-review-title">Parsed Sanitized Source</h3>
       </header>
 
       <dl className="meta-list review-meta">
@@ -337,16 +352,18 @@ function MailReviewPanel({
           <dd>{item.subject}</dd>
         </div>
         <div>
-          <dt>Sender</dt>
-          <dd>{item.senderLabel}</dd>
+          <dt>Requester</dt>
+          <dd>{item.requesterLabel}</dd>
         </div>
         <div>
           <dt>Received</dt>
           <dd>{item.receivedAt}</dd>
         </div>
         <div>
-          <dt>Source Type</dt>
-          <dd>{item.sourceType}</dd>
+          <dt>Source Channel</dt>
+          <dd>
+            <span className="source-channel-badge">{item.sourceChannel}</span>
+          </dd>
         </div>
         <div>
           <dt>Status</dt>
@@ -364,7 +381,7 @@ function MailReviewPanel({
         <textarea readOnly rows={5} value={item.sourceBody} />
       </label>
 
-      <div className="review-actions" aria-label="Mail review actions">
+      <div className="review-actions" aria-label="Source review actions">
         <button type="button" onClick={() => onCreateIncidentDraft(item.id)}>
           Create Incident Draft
         </button>

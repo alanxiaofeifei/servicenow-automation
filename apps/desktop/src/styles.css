@@ -309,7 +309,7 @@ h3 {
 }
 
 .queue-panel,
-.mail-review-panel {
+.source-review-panel {
   border: 1px solid rgba(116, 96, 68, 0.22);
   border-radius: 22px;
   padding: 18px;
@@ -318,7 +318,7 @@ h3 {
 }
 
 .queue-panel header,
-.mail-review-panel header {
+.source-review-panel header {
   margin-bottom: 14px;
 }
 
@@ -360,6 +360,18 @@ h3 {
 
 .queue-time {
   font-weight: 850;
+}
+
+.source-channel-badge {
+  width: fit-content;
+  border: 1px solid #c8d8d2;
+  border-radius: 999px;
+  padding: 4px 9px;
+  color: #285c54;
+  background: #eef8f4;
+  font-size: 0.8rem;
+  font-weight: 900;
+  line-height: 1.2;
 }
 
 .status-badge {
