@@ -3,6 +3,7 @@ export type RealActionMode = "mock" | "qa" | "dev" | "production-shadow";
 export const realActionTypes = [
   "submit_incident",
   "update_incident",
+  "save_incident",
   "close_incident",
   "create_change",
   "upload_attachment",
@@ -71,6 +72,7 @@ export type RealActionDecision = {
 const actionPhraseLabels: Record<RealActionType, string> = {
   submit_incident: "SUBMIT",
   update_incident: "UPDATE",
+  save_incident: "SAVE",
   close_incident: "CLOSE",
   create_change: "CREATE CHANGE",
   upload_attachment: "UPLOAD ATTACHMENT",

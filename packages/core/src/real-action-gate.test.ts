@@ -50,6 +50,7 @@ describe("RealActionGate", () => {
     expect(realActionTypes).toEqual([
       "submit_incident",
       "update_incident",
+      "save_incident",
       "close_incident",
       "create_change",
       "upload_attachment",
@@ -203,6 +204,52 @@ describe("RealActionGate", () => {
 
     expect(decision.allowed).toBe(false);
     expect(decision.reason).toBe("approval-target-host-mismatch");
+  });
+
+  it("allows QA save only with the same explicit write gate used for submit/update/close", () => {
+    const decision = authorizeRealAction({
+      environment: qaEnvironment,
+      action: "save_incident",
+      targetUrl: "https://qa-example.service-now.com/nav_to.do",
+      targetValidation: allowlisted("qa-example.service-now.com"),
+      approval: {
+        operator: "Alan",
+        mode: "qa",
+        action: "save_incident",
+        targetHost: "qa-example.service-now.com",
+        phrase: "I APPROVE QA SAVE ONLY"
+      }
+    });
+
+    expect(getRequiredRealActionApprovalPhrase("qa", "save_incident")).toBe("I APPROVE QA SAVE ONLY");
+    expect(decision).toMatchObject({
+      allowed: true,
+      reason: "approved-for-qa-dev-write",
+      requiresApproval: true,
+      writeActionAttempted: true
+    });
+  });
+
+  it("denies production-shadow save even when approval is supplied", () => {
+    const decision = authorizeRealAction({
+      environment: productionShadowEnvironment,
+      action: "save_incident",
+      targetUrl: "https://prod-example.service-now.com/nav_to.do",
+      targetValidation: allowlisted("prod-example.service-now.com"),
+      approval: {
+        operator: "Alan",
+        mode: "production-shadow",
+        action: "save_incident",
+        targetHost: "prod-example.service-now.com",
+        phrase: "I APPROVE PRODUCTION-SHADOW SAVE ONLY"
+      }
+    });
+
+    expect(decision).toMatchObject({
+      allowed: false,
+      reason: "production-shadow-write-denied",
+      productionWriteAllowed: false
+    });
   });
 
   it("denies production-shadow writes even when approval is supplied", () => {
