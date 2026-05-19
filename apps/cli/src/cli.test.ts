@@ -137,6 +137,67 @@ describe("sda CLI", () => {
     expect(payload.safety.browserProcessLaunched).toBe(false);
   });
 
+  it("blocks Windows browser executable dry-run from WSL/Linux without exposing a launchable command", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-browser-windows-exe-blocked-"));
+
+    const result = await runCli([
+      "browser",
+      "launch",
+      "--mode",
+      "qa",
+      "--browser-executable",
+      "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe",
+      "--json"
+    ], { cwd: projectRoot });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.launch.status).toBe("blocked");
+    expect(payload.launch.plan.status).toBe("blocked");
+    expect(payload.launch.blockedReason).toBe("Windows browser executable requires a verified Windows-compatible isolated profile path before launch.");
+    expect(payload.launch.commandPreview).toBeUndefined();
+    expect(payload.launch.profileIsolation).toMatchObject({
+      status: "blocked",
+      reason: "Windows browser executable requires a verified Windows-compatible isolated profile path before launch."
+    });
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(serialized).not.toContain("sys_id");
+    expect(serialized).not.toContain("token");
+    expect(serialized).not.toContain("user:");
+  });
+
+  it("blocks Windows browser executable configured through SDA_BROWSER_EXECUTABLE", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-browser-env-exe-blocked-"));
+    const previousExecutable = process.env.SDA_BROWSER_EXECUTABLE;
+    process.env.SDA_BROWSER_EXECUTABLE = "/mnt/./c/Program Files (x86)/Microsoft/Edge/Application/msedge.EXE  ";
+
+    try {
+      const result = await runCli([
+        "browser",
+        "launch",
+        "--mode",
+        "qa",
+        "--execute",
+        "--confirm-no-write-launch",
+        "--json"
+      ], { cwd: projectRoot });
+      const payload = JSON.parse(result.stdout);
+
+      expect(result.exitCode).toBe(0);
+      expect(payload.launch.status).toBe("blocked");
+      expect(payload.launch.commandPreview).toBeUndefined();
+      expect(payload.launch.profileIsolation).toMatchObject({ status: "blocked" });
+      expect(payload.safety.browserProcessLaunched).toBe(false);
+    } finally {
+      if (previousExecutable === undefined) {
+        delete process.env.SDA_BROWSER_EXECUTABLE;
+      } else {
+        process.env.SDA_BROWSER_EXECUTABLE = previousExecutable;
+      }
+    }
+  });
+
   it("blocks browser launch output for credential-bearing, query, or encoded sensitive URLs without leaking details", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-browser-launch-blocked-"));
     const qaHost = new URL(getServiceNowEnvironmentConfig("qa").url ?? "").host;

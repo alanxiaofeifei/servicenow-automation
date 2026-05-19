@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { mkdir, rm } from "node:fs/promises";
-import { isAbsolute, relative, resolve } from "node:path";
+import { isAbsolute, normalize, relative, resolve } from "node:path";
 
 import {
   validateServiceNowTargetUrl,
@@ -78,12 +78,18 @@ export type BrowserNoWriteLaunchCommandPreview = {
   profileDirectory: string;
 };
 
+export type BrowserProfileIsolation = {
+  status: "verified" | "blocked";
+  reason?: string;
+};
+
 export type BrowserNoWriteLaunchResult = {
   status: BrowserNoWriteLaunchStatus;
   plan: BrowserSessionLaunchPlan;
   commandPreview?: BrowserNoWriteLaunchCommandPreview;
   process?: BrowserLaunchProcess;
   blockedReason?: string;
+  profileIsolation?: BrowserProfileIsolation;
   safety: BrowserNoWriteLaunchSafety;
   auditNotes: string[];
 };
@@ -116,6 +122,11 @@ export type BrowserSessionService = {
   ensureBrowserProfileDirectory: (environment: ServiceNowEnvironmentConfig) => Promise<string>;
   resetSession: (environment: ServiceNowEnvironmentConfig) => Promise<BrowserSessionResetResult>;
 };
+
+const WINDOWS_BROWSER_PROFILE_ISOLATION_BLOCKED_REASON =
+  "Windows browser executable requires a verified Windows-compatible isolated profile path before launch.";
+const WINDOWS_BROWSER_PROFILE_ISOLATION_AUDIT_NOTE =
+  "Profile isolation strategy must be implemented before launching a Windows browser executable from WSL.";
 
 export function createBrowserSessionService(options: BrowserSessionServiceOptions): BrowserSessionService {
   const projectRoot = resolve(options.projectRoot);
@@ -252,7 +263,35 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
       };
     }
 
-    const command = buildBrowserLaunchCommand(plan, launchOptions.browserExecutablePath ?? options.browserExecutablePath);
+    const browserExecutablePath = resolveBrowserExecutablePath(launchOptions.browserExecutablePath ?? options.browserExecutablePath);
+    const profileIsolation = validateBrowserProfileIsolation(browserExecutablePath);
+
+    if (profileIsolation.status === "blocked") {
+      const blockedPlan: BrowserSessionLaunchPlan = {
+        ...plan,
+        status: "blocked",
+        blockedReason: profileIsolation.reason,
+        actions: [],
+        auditNotes: [
+          ...plan.auditNotes,
+          WINDOWS_BROWSER_PROFILE_ISOLATION_AUDIT_NOTE
+        ]
+      };
+
+      return {
+        ...baseResult,
+        plan: blockedPlan,
+        status: "blocked",
+        blockedReason: profileIsolation.reason,
+        profileIsolation,
+        auditNotes: [
+          ...baseResult.auditNotes,
+          WINDOWS_BROWSER_PROFILE_ISOLATION_AUDIT_NOTE
+        ]
+      };
+    }
+
+    const command = buildBrowserLaunchCommand(plan, browserExecutablePath);
     const commandPreview = sanitizeCommandPreview(command);
 
     if (!launchOptions.execute) {
@@ -365,12 +404,36 @@ function createBaseNoWriteLaunchResult(plan: BrowserSessionLaunchPlan): BrowserN
   };
 }
 
-function buildBrowserLaunchCommand(plan: BrowserSessionLaunchPlan, browserExecutablePath: string | undefined): BrowserLaunchCommand {
+function resolveBrowserExecutablePath(browserExecutablePath: string | undefined): string {
+  return browserExecutablePath ?? process.env.SDA_BROWSER_EXECUTABLE ?? "chromium";
+}
+
+function validateBrowserProfileIsolation(browserExecutablePath: string): BrowserProfileIsolation {
+  if (isWindowsBrowserExecutableFromLinux(browserExecutablePath)) {
+    return {
+      status: "blocked",
+      reason: WINDOWS_BROWSER_PROFILE_ISOLATION_BLOCKED_REASON
+    };
+  }
+
+  return { status: "verified" };
+}
+
+function isWindowsBrowserExecutableFromLinux(browserExecutablePath: string): boolean {
+  if (process.platform !== "linux") {
+    return false;
+  }
+
+  const normalizedExecutablePath = normalize(browserExecutablePath.trim()).replace(/\\\\/g, "/").toLowerCase();
+  return normalizedExecutablePath.endsWith(".exe") || /^\/mnt\/[a-z]\//.test(normalizedExecutablePath);
+}
+
+function buildBrowserLaunchCommand(plan: BrowserSessionLaunchPlan, browserExecutablePath: string): BrowserLaunchCommand {
   if (!plan.targetUrl) {
     throw new Error("Cannot build browser launch command without an allowlisted target URL.");
   }
 
-  const executable = browserExecutablePath ?? process.env.SDA_BROWSER_EXECUTABLE ?? "chromium";
+  const executable = browserExecutablePath;
   const args = [
     `--user-data-dir=${plan.browserProfileDirectory}`,
     "--no-first-run",

@@ -35,6 +35,8 @@ Forbidden:
 
 ## Commands
 
+WSL-launched Windows Chrome/Edge executables and Windows drive paths such as `/mnt/c/...` are blocked until the project implements and verifies a Windows-compatible isolated profile path. Do not use Alan's default Windows browser profile for QA/dev launch validation.
+
 Dry-run preview only:
 
 ```bash

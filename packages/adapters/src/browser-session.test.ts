@@ -172,6 +172,49 @@ describe("BrowserSessionService", () => {
     expect(JSON.stringify(result)).not.toContain("save_incident allowed");
   });
 
+  it("blocks Windows browser executables from WSL/Linux until profile isolation is verified", async () => {
+    const launchedCommands: unknown[] = [];
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-windows-exe-blocked-"));
+    const windowsBrowserPaths = [
+      "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe",
+      "/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.EXE  ",
+      "/mnt/c/tools/chrome-wrapper",
+      "/mnt//c/tools/chrome-wrapper",
+      "//mnt/c/tools/chrome-wrapper",
+      "/mnt/./c/tools/chrome-wrapper"
+    ];
+
+    for (const browserExecutablePath of windowsBrowserPaths) {
+      const service = createBrowserSessionService({
+        projectRoot,
+        browserExecutablePath,
+        browserLauncher: async (command) => {
+          launchedCommands.push(command);
+          return { pid: 24680 };
+        }
+      });
+
+      const dryRun = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("qa"));
+      const execute = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("qa"), {
+        execute: true,
+        confirmNoWriteLaunch: true
+      });
+
+      for (const result of [dryRun, execute]) {
+        expect(result.status).toBe("blocked");
+        expect(result.plan.status).toBe("blocked");
+        expect(result.blockedReason).toBe("Windows browser executable requires a verified Windows-compatible isolated profile path before launch.");
+        expect(result.commandPreview).toBeUndefined();
+        expect(result.profileIsolation).toMatchObject({
+          status: "blocked",
+          reason: "Windows browser executable requires a verified Windows-compatible isolated profile path before launch."
+        });
+        expect(result.auditNotes).toContain("Profile isolation strategy must be implemented before launching a Windows browser executable from WSL.");
+      }
+    }
+    expect(launchedCommands).toEqual([]);
+  });
+
   it("executes a no-write QA launch only with explicit confirmation", async () => {
     const launchedCommands: unknown[] = [];
     const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-launch-confirm-"));
