@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { demoManualPasteScenarios, ManualPasteAdapter, type ManualPasteScenario } from "@servicenow-automation/adapters/browser";
+import { demoManualPasteScenarios, type ManualPasteScenario } from "@servicenow-automation/adapters/browser";
 import { generateMockTicketDraft } from "@servicenow-automation/ai";
 import { demoKnowledgeArticles, searchKnowledgeArticles } from "@servicenow-automation/kb/browser";
 import {
@@ -11,12 +11,14 @@ import {
   type ServiceNowEnvironmentConfig,
   type ServiceNowEnvironmentMode
 } from "@servicenow-automation/profiles";
-import type { FieldDraft, TicketDraft } from "@servicenow-automation/core";
-
-const manualPasteAdapter = new ManualPasteAdapter({
-  idFactory: () => "desktop-demo-context",
-  now: () => new Date("2026-05-18T12:00:00.000Z")
-});
+import {
+  CapturedContextSchema,
+  normalizeSourceContextText,
+  type CapturedContext,
+  type FieldDraft,
+  type SourceType,
+  type TicketDraft
+} from "@servicenow-automation/core";
 
 const profile = loadDemoYageoProfile();
 
@@ -46,7 +48,7 @@ const demoIntakeQueue: DemoQueueItem[] = [
     bodyPreview:
       "A demo teammate reports VPN cannot connect after a recent password reset. The VPN client loops at the MFA prompt.",
     sourceBody:
-      "Teams-style demo message:\n\nA demo requester reports that VPN cannot connect after a recent password reset. The VPN client keeps looping at the MFA prompt. Internet works without VPN, but remote access is unavailable.\n\nThis is fake sanitized intake data only. No Teams tenant, channel, chat, user profile, or message link is connected.",
+      "Teams-style demo message:\n\n[08:15] Demo requester: Hi team,\n[08:16] Demo requester: RE: [EXTERNAL] VPN cannot connect after a recent password reset. The VPN client keeps looping at the MFA prompt.\n[08:18] Demo requester: Impact: Internet works without VPN, but remote access is unavailable.\n\nThanks,\nDemo requester A\n\nThis is fake sanitized intake data only. No Teams tenant, channel, chat, user profile, or message link is connected.",
     sourceChannel: "Teams message",
     status: "New"
   },
@@ -59,7 +61,7 @@ const demoIntakeQueue: DemoQueueItem[] = [
     bodyPreview:
       "A fake portal submission says a Windows laptop became very slow after the latest update. Reboot was attempted once.",
     sourceBody:
-      "Self-service-style demo submission:\n\nA demo requester reports that a Windows laptop became very slow after the latest update. Reboot was attempted once, but startup and application launch remain slow.\n\nThis is fake sanitized intake data only. No portal polling, ticket number, requester profile, or live self-service record is connected.",
+      "Self-service-style demo submission:\n\nRequest ID: DEMO-PORTAL-002\nDescription: A demo requester reports that a Windows laptop became very slow after the latest update.\nImpact: Reboot was attempted once, but startup and application launch remain slow for the user.\n\nThis is fake sanitized intake data only. No portal polling, ticket number, requester profile, or live self-service record is connected.",
     sourceChannel: "Self-service ticket",
     status: "New"
   },
@@ -72,7 +74,7 @@ const demoIntakeQueue: DemoQueueItem[] = [
     bodyPreview:
       "A sanitized chat transcript says login fails after password change. MFA appears but authentication fails repeatedly.",
     sourceBody:
-      "ServiceNow Chat-style demo transcript:\n\nDemo requester: I cannot login after changing password.\nDemo support: Does the MFA prompt appear?\nDemo requester: Yes, but authentication fails repeatedly. I can access some services but not the required application.\n\nThis is fake sanitized intake data only. No ServiceNow Chat, ServiceNow API, transcript ID, or live conversation is connected.",
+      "ServiceNow Chat-style demo transcript:\n\nTranscript ID: DEMO-CHAT-003\n[09:05] Demo requester: I cannot login after changing password.\n[09:06] Demo support: Does the MFA prompt appear?\n[09:07] Demo requester: Yes, but authentication fails repeatedly. I can access some services but not the required application.\n\nThis is fake sanitized intake data only. No ServiceNow Chat, ServiceNow API, transcript ID, or live conversation is connected.",
     sourceChannel: "ServiceNow Chat transcript",
     status: "New"
   },
@@ -85,7 +87,7 @@ const demoIntakeQueue: DemoQueueItem[] = [
     bodyPreview:
       "A shared mailbox style item reports remote access is unavailable while normal internet access still works.",
     sourceBody:
-      "Shared mailbox-style demo item:\n\nA demo requester reports that remote access is unavailable. Normal internet access works, but VPN fails after a password reset and MFA keeps repeating.\n\nThis is fake sanitized intake data only. No mailbox, email address, message header, attachment, .msg file, or .eml file is connected.",
+      "Shared mailbox-style demo item:\n\nFrom: Demo requester D\nTo: Demo service desk\nSubject: RE: [EXTERNAL] FW: remote access unavailable\n\nHello support,\nRemote access is unavailable after password reset at 09:30. Normal internet access works, but VPN fails and MFA keeps repeating.\n\nRegards,\nDemo requester D\n\nThis is fake sanitized intake data only. No mailbox, email address, message header, attachment, .msg file, or .eml file is connected.",
     sourceChannel: "Shared mailbox item",
     status: "New"
   }
@@ -95,16 +97,12 @@ export function App() {
   const [selectedScenarioId, setSelectedScenarioId] = useState<ManualPasteScenario["id"]>("vpn-issue");
   const [selectedQueueItemId, setSelectedQueueItemId] = useState(demoIntakeQueue[0].id);
   const [queueItems, setQueueItems] = useState<DemoQueueItem[]>(demoIntakeQueue);
-  const selectedScenario = useMemo(
-    () => demoManualPasteScenarios.find((scenario) => scenario.id === selectedScenarioId) ?? demoManualPasteScenarios[0],
-    [selectedScenarioId]
-  );
   const selectedQueueItem =
     queueItems.find((item) => item.id === selectedQueueItemId) ??
     queueItems.find((item) => item.scenarioId === selectedScenarioId) ??
     queueItems[0];
 
-  const initialDraft = useMemo(() => buildDraftForScenario(selectedScenario), [selectedScenario]);
+  const initialDraft = useMemo(() => buildDraftForQueueItem(selectedQueueItem), [selectedQueueItem]);
   const [fieldOverrides, setFieldOverrides] = useState<Record<string, string>>({});
   const [fillConfirmed, setFillConfirmed] = useState(false);
   const [selectedEnvironmentMode, setSelectedEnvironmentMode] = useState<ServiceNowEnvironmentMode>(
@@ -113,7 +111,11 @@ export function App() {
 
   const selectedEnvironment = getServiceNowEnvironmentConfig(selectedEnvironmentMode);
   const draft = applyOverrides(initialDraft, fieldOverrides);
-  const context = manualPasteAdapter.capture({ title: selectedScenario.title, rawText: selectedScenario.rawText });
+  const context = buildContextForQueueItem(selectedQueueItem);
+  const sourceCleanup = normalizeSourceContextText({
+    sourceType: context.sourceType,
+    rawText: context.rawText
+  });
 
   function selectScenario(id: ManualPasteScenario["id"]) {
     const queueItem = queueItems.find((item) => item.scenarioId === id);
@@ -240,6 +242,10 @@ export function App() {
               <span>Raw Text</span>
               <textarea readOnly rows={8} value={context.rawText} />
             </label>
+            <label className="field-block">
+              <span>Cleaned / Normalized Text</span>
+              <textarea readOnly rows={8} value={sourceCleanup.normalizedText} />
+            </label>
           </section>
 
           <section className="panel draft-panel" aria-labelledby="draft-title">
@@ -339,11 +345,16 @@ function SourceReviewPanel({
   onMarkDone: (itemId: string) => void;
   onSkip: (itemId: string) => void;
 }) {
+  const sourceCleanup = normalizeSourceContextText({
+    sourceType: sourceTypeForQueueItem(item),
+    rawText: item.sourceBody
+  });
+
   return (
     <section className="source-review-panel" aria-labelledby="source-review-title">
       <header>
         <p className="eyebrow">Source Review</p>
-        <h3 id="source-review-title">Parsed Sanitized Source</h3>
+        <h3 id="source-review-title">Raw vs Cleaned Source</h3>
       </header>
 
       <dl className="meta-list review-meta">
@@ -381,6 +392,11 @@ function SourceReviewPanel({
         <textarea readOnly rows={5} value={item.sourceBody} />
       </label>
 
+      <label className="field-block">
+        <span>Cleaned / Normalized Body</span>
+        <textarea readOnly rows={5} value={sourceCleanup.normalizedText} />
+      </label>
+
       <div className="review-actions" aria-label="Source review actions">
         <button type="button" onClick={() => onCreateIncidentDraft(item.id)}>
           Create Incident Draft
@@ -396,10 +412,37 @@ function SourceReviewPanel({
   );
 }
 
-function buildDraftForScenario(scenario: ManualPasteScenario): TicketDraft {
-  const context = manualPasteAdapter.capture({ title: scenario.title, rawText: scenario.rawText });
-  const kbMatches = searchKnowledgeArticles(context.rawText, demoKnowledgeArticles, { limit: 3 });
+function buildDraftForQueueItem(item: DemoQueueItem): TicketDraft {
+  const context = buildContextForQueueItem(item);
+  const sourceCleanup = normalizeSourceContextText({
+    sourceType: context.sourceType,
+    rawText: context.rawText
+  });
+  const kbMatches = searchKnowledgeArticles(sourceCleanup.normalizedText, demoKnowledgeArticles, { limit: 3 });
   return generateMockTicketDraft({ context, profile, kbMatches }, { idFactory: () => "desktop-demo-draft" });
+}
+
+function buildContextForQueueItem(item: DemoQueueItem): CapturedContext {
+  return CapturedContextSchema.parse({
+    id: "desktop-demo-context",
+    sourceType: sourceTypeForQueueItem(item),
+    capturedAt: new Date("2026-05-18T12:00:00.000Z").toISOString(),
+    title: item.subject,
+    rawText: item.sourceBody
+  });
+}
+
+function sourceTypeForQueueItem(item: DemoQueueItem): SourceType {
+  switch (item.sourceChannel) {
+    case "Teams message":
+      return "teams_web";
+    case "Self-service ticket":
+      return "servicenow_self_service";
+    case "ServiceNow Chat transcript":
+      return "servicenow_chat";
+    case "Shared mailbox item":
+      return "outlook_web";
+  }
 }
 
 function applyOverrides(draft: TicketDraft, overrides: Record<string, string>): TicketDraft {

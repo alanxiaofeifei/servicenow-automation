@@ -89,4 +89,35 @@ describe("MockAIProvider", () => {
     expect(accountDraft.category?.value).toBe("Access Management");
     expect(accountDraft.assignmentGroup?.value).toBe("Demo IAM Support");
   });
+
+  it("uses cleaned multi-channel source context for generated draft text", async () => {
+    const provider = new MockAIProvider({ idFactory: () => "draft-cleaned-source" });
+    const rawText = [
+      "Shared mailbox-style demo item:",
+      "From: Demo User",
+      "Subject: RE: [EXTERNAL] FW: remote access unavailable",
+      "",
+      "Hello support,",
+      "Remote access is unavailable after password reset at 09:30.",
+      "Normal internet access works, but VPN fails and MFA keeps repeating.",
+      "Thanks,",
+      "Demo User",
+      "This is fake sanitized intake data only. No mailbox, email address, message header, attachment, .msg file, or .eml file is connected."
+    ].join("\n");
+
+    const draft = await provider.generateTicketDraft({
+      context: {
+        ...context(rawText),
+        sourceType: "outlook_web"
+      },
+      profile,
+      kbMatches
+    });
+
+    expect(draft.shortDescription.value).toContain("VPN");
+    expect(draft.description.value).toContain("Remote access is unavailable after password reset at 09:30.");
+    expect(draft.workNotes.value).toContain("Normalized source context reviewed");
+    expect(draft.workNotes.value).toContain("Normal internet access works");
+    expect(`${draft.description.value} ${draft.workNotes.value}`).not.toMatch(/fake sanitized|No mailbox|EXTERNAL|Hello support|From:/i);
+  });
 });

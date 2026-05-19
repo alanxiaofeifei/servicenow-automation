@@ -49,10 +49,14 @@ describe("App", () => {
     expect(output).toContain("Shared mailbox item");
     expect(output).toContain("Fake sanitized intake only; no Teams, mailbox, ServiceNow Chat/API, or self-service polling connection is used.");
     expect(output).toContain("No attachments, .msg/.eml parsing, live channel content, or external AI with real content is used.");
-    expect(output).toContain("Parsed Sanitized Source");
+    expect(output).toContain("Raw vs Cleaned Source");
     expect(output).toContain("Source Channel");
     expect(output).toContain("Body Preview");
     expect(output).toContain("Raw Sanitized Body");
+    expect(output).toContain("Cleaned / Normalized Body");
+    expect(output).toContain("Cleaned / Normalized Text");
+    expect(output).toContain("[08:16] VPN cannot connect after a recent password reset.");
+    expect(output).toContain("[08:18] Impact: Internet works without VPN, but remote access is unavailable.");
     expect(output).toContain("Create Incident Draft");
     expect(output).toContain("Mark as Done");
     expect(output).toContain("Skip");

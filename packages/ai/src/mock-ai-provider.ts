@@ -1,5 +1,6 @@
 import {
   TicketDraftSchema,
+  normalizeSourceContextText,
   type FieldDraft,
   type ProjectProfile,
   type TicketDraft
@@ -32,16 +33,21 @@ export function generateMockTicketDraft(
   options: MockAIProviderOptions = {}
 ): TicketDraft {
   const idFactory = options.idFactory ?? createDraftId;
-  const scenario = detectScenario(input.context.rawText);
-  const category = selectCategory(input.profile, input.context.rawText, scenario);
-  const assignmentGroup = selectAssignmentGroup(input.profile, input.context.rawText, scenario);
+  const sourceCleanup = normalizeSourceContextText({
+    sourceType: input.context.sourceType,
+    rawText: input.context.rawText
+  });
+  const supportContext = sourceCleanup.normalizedText;
+  const scenario = detectScenario(supportContext);
+  const category = selectCategory(input.profile, supportContext, scenario);
+  const assignmentGroup = selectAssignmentGroup(input.profile, supportContext, scenario);
   const draft = {
     id: idFactory(),
     sourceContextId: input.context.id,
     ticketType: "incident",
-    shortDescription: field(shortDescriptionFor(scenario, input.context.rawText), 0.86, "Generated from manual pasted issue context."),
-    description: field(descriptionFor(scenario, input.context.rawText), 0.82, "Summarized from the captured context."),
-    workNotes: field(workNotesFor(scenario, input.kbMatches), 0.78, "Combines deterministic scenario routing with KB matches."),
+    shortDescription: field(shortDescriptionFor(scenario, supportContext), 0.86, "Generated from normalized source context."),
+    description: field(descriptionFor(scenario, supportContext), 0.82, "Summarized from cleaned source context."),
+    workNotes: field(workNotesFor(scenario, input.kbMatches, supportContext), 0.78, "Combines cleaned source context with deterministic scenario routing and KB matches."),
     category: category ? field(category.category, 0.9, `Matched keywords: ${category.keywords.join(", ")}`) : undefined,
     subcategory: category?.subcategory ? field(category.subcategory, 0.88, `Matched keywords: ${category.keywords.join(", ")}`) : undefined,
     assignmentGroup: field(assignmentGroup, 0.84, "Selected from project profile mappings or default assignment group."),
@@ -100,20 +106,26 @@ function descriptionFor(scenario: ScenarioKind, rawText: string): string {
   }
 }
 
-function workNotesFor(scenario: ScenarioKind, kbMatches: GenerateTicketDraftInput["kbMatches"]): string {
+function workNotesFor(scenario: ScenarioKind, kbMatches: GenerateTicketDraftInput["kbMatches"], supportContext: string): string {
   const kbLine = kbMatches.length > 0
     ? `Relevant KB: ${kbMatches.map((match) => match.title).join("; ")}.`
     : "No KB match selected yet.";
+  const sourceLine = `Normalized source context reviewed: ${excerpt(supportContext)}.`;
   switch (scenario) {
     case "vpn":
-      return `Initial triage: confirm internet without VPN, recent password/MFA change, VPN client error message, and failure time. ${kbLine}`;
+      return `Initial triage: confirm internet without VPN, recent password/MFA change, VPN client error message, and failure time. ${sourceLine} ${kbLine}`;
     case "windows":
-      return `Initial triage: confirm when slowness started, whether reboot was attempted, and whether issue affects one app or the whole device. ${kbLine}`;
+      return `Initial triage: confirm when slowness started, whether reboot was attempted, and whether issue affects one app or the whole device. ${sourceLine} ${kbLine}`;
     case "account":
-      return `Initial triage: confirm whether issue is password, MFA, account lock, or application access denied. Do not request password. ${kbLine}`;
+      return `Initial triage: confirm whether issue is password, MFA, account lock, or application access denied. Do not request password. ${sourceLine} ${kbLine}`;
     default:
-      return `Initial triage: collect exact symptom, start time, affected service, and any visible error message. ${kbLine}`;
+      return `Initial triage: collect exact symptom, start time, affected service, and any visible error message. ${sourceLine} ${kbLine}`;
   }
+}
+
+function excerpt(text: string): string {
+  const singleLine = text.replace(/\s+/g, " ").trim();
+  return singleLine.length <= 220 ? singleLine : `${singleLine.slice(0, 217).trim()}...`;
 }
 
 function missingInfoFor(scenario: ScenarioKind): string[] {
