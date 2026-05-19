@@ -63,7 +63,11 @@ describe("App", () => {
     expect(output).toContain("QA Test Environment");
     expect(output).toContain("Development Test Environment");
     expect(output).toContain("Production Shadow Mode");
-    expect(output).toContain("https://yageoqa.service-now.com");
+    expect(output).not.toContain("href=\"https://");
+    expect(output).toContain("Full ServiceNow URL hidden for privacy");
+    expect(output).toContain("No raw clickable QA/dev link");
+    expect(output).toContain("QA — No write until #22");
+    expect(output).toContain("NO SUBMIT · NO UPDATE · NO CLOSE");
     expect(output).toContain("manual-login-only");
     expect(output).toContain("Ignored local runtime path");
     expect(output).toContain(".local/servicenow-browser-profiles/production-shadow");

@@ -58,22 +58,69 @@ describe("BrowserSessionService", () => {
     expect(plan.auditNotes).toContain("Mock mode uses offline demo data and does not need a browser session.");
   });
 
-  it("blocks dev mode until an authorized URL is supplied", async () => {
+  it("blocks credential-bearing target URL overrides without echoing the raw URL", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-credential-url-"));
+    const service = createBrowserSessionService({ projectRoot });
+    const qaHost = new URL(getServiceNowEnvironmentConfig("qa").url ?? "").host;
+
+    const plan = service.createLaunchPlan(getServiceNowEnvironmentConfig("qa"), {
+      targetUrlOverride: `https://user:pass@${qaHost}/nav_to.do`
+    });
+
+    expect(plan.status).toBe("blocked");
+    expect(plan.targetUrl).toBeUndefined();
+    expect(plan.targetValidation).toMatchObject({
+      allowed: false,
+      reason: "credentials-in-url-denied",
+      host: qaHost
+    });
+    expect(JSON.stringify(plan)).not.toContain("user:");
+    expect(JSON.stringify(plan)).not.toContain("@");
+  });
+
+  it("does not echo credential-bearing overrides for no-allowlist or non-HTTPS failures", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-credential-blocked-"));
+    const service = createBrowserSessionService({ projectRoot });
+    const qaHost = new URL(getServiceNowEnvironmentConfig("qa").url ?? "").host;
+
+    const devPlan = service.createLaunchPlan(getServiceNowEnvironmentConfig("dev"), {
+      targetUrlOverride: "https://user:pass@dev-example.service-now.com/nav_to.do"
+    });
+    const productionShadowPlan = service.createLaunchPlan(getServiceNowEnvironmentConfig("production-shadow"), {
+      targetUrlOverride: "https://user:pass@prod-example.service-now.com/nav_to.do"
+    });
+    const httpPlan = service.createLaunchPlan(getServiceNowEnvironmentConfig("qa"), {
+      targetUrlOverride: `http://user:pass@${qaHost}/nav_to.do`
+    });
+
+    for (const plan of [devPlan, productionShadowPlan, httpPlan]) {
+      expect(plan.status).toBe("blocked");
+      expect(plan.targetUrl).toBeUndefined();
+      expect(JSON.stringify(plan)).not.toContain("user:");
+      expect(JSON.stringify(plan)).not.toContain("@");
+    }
+  });
+
+  it("blocks dev mode until an allowlisted URL is configured", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-dev-"));
     const service = createBrowserSessionService({ projectRoot });
 
     const blockedPlan = service.createLaunchPlan(getServiceNowEnvironmentConfig("dev"));
-    const readyPlan = service.createLaunchPlan(getServiceNowEnvironmentConfig("dev"), {
+    const overridePlan = service.createLaunchPlan(getServiceNowEnvironmentConfig("dev"), {
       targetUrlOverride: "https://dev-example.service-now.com/nav_to.do"
     });
 
     expect(blockedPlan.status).toBe("blocked");
-    expect(blockedPlan.blockedReason).toBe("No authorized ServiceNow URL configured for this environment.");
-    expect(readyPlan.status).toBe("ready");
-    expect(readyPlan.targetUrl).toBe("https://dev-example.service-now.com/nav_to.do");
+    expect(blockedPlan.blockedReason).toBe("No allowlisted ServiceNow host configured for this environment.");
+    expect(overridePlan.status).toBe("blocked");
+    expect(overridePlan.blockedReason).toBe("Target URL is not allowlisted for this environment.");
+    expect(overridePlan.targetValidation).toMatchObject({
+      allowed: false,
+      reason: "no-allowlisted-host"
+    });
   });
 
-  it("keeps production shadow plans read-only even when a URL override is supplied", async () => {
+  it("blocks production shadow URL overrides until a production shadow host is allowlisted", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-prod-"));
     const service = createBrowserSessionService({ projectRoot });
 
@@ -81,12 +128,13 @@ describe("BrowserSessionService", () => {
       targetUrlOverride: "https://prod-example.service-now.com/nav_to.do"
     });
 
-    expect(plan.status).toBe("ready");
+    expect(plan.status).toBe("blocked");
     expect(plan.mode).toBe("production-shadow");
+    expect(plan.blockedReason).toBe("Target URL is not allowlisted for this environment.");
     expect(plan.safety.shadowOnly).toBe(true);
     expect(plan.safety.realSubmitAllowed).toBe(false);
     expect(plan.safety.writeOperationsAllowed).toBe(false);
-    expect(plan.actions).toEqual(["open-controlled-browser", "wait-for-manual-login", "capture-page-context-only"]);
-    expect(plan.auditNotes).toContain("Production shadow mode may capture context for comparison only; submit, close, and update remain blocked.");
+    expect(plan.actions).toEqual([]);
+    expect(plan.auditNotes).toContain("Production shadow mode remains read-only; submit, close, and update remain blocked.");
   });
 });

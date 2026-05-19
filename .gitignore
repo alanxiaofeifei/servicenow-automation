@@ -26,6 +26,34 @@ field-test-notes/
 *.sqlite3
 *.log
 
+# Browser automation traces and generated artifacts
+playwright-report/
+test-results/
+*.trace.zip
+*.webm
+storage-state*.json
+storageState.json
+*.storageState.json
+*.cookies.json
+*.session.json
+playwright/.auth/
+.auth/
+.local-downloads/
+.local-screenshots/
+.local-traces/
+private/**/*.png
+private/**/*.jpg
+private/**/*.jpeg
+private/**/*.webp
+private/**/*.mp4
+private/**/*.webm
+.local/**/*.png
+.local/**/*.jpg
+.local/**/*.jpeg
+.local/**/*.webp
+.local/**/*.mp4
+.local/**/*.webm
+
 # Secrets / environment
 .env
 .env.*

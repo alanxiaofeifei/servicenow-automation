@@ -235,17 +235,21 @@ function EnvironmentModePanel({
 }
 
 function EnvironmentCard({ config, selected }: { config: ServiceNowEnvironmentConfig; selected: boolean }) {
+  const safetyLabel = getEnvironmentSafetyLabel(config);
+
   return (
     <article className={selected ? "environment-card selected" : "environment-card"}>
       <div className="environment-card-title-row">
         <h4>{config.label}</h4>
+        <span>{safetyLabel}</span>
         {selected ? <span>Selected</span> : null}
       </div>
       <p>{config.description}</p>
       {config.url ? (
-        <a href={config.url} rel="noreferrer" target="_blank">
-          {config.url}
-        </a>
+        <div className="environment-target-safety">
+          <code>Full ServiceNow URL hidden for privacy</code>
+          <small>No raw clickable QA/dev link. Controlled browser launch requires URL allowlist and #22 RealActionGate.</small>
+        </div>
       ) : (
         <code>No target URL configured</code>
       )}
@@ -277,6 +281,21 @@ function EnvironmentCard({ config, selected }: { config: ServiceNowEnvironmentCo
       </ul>
     </article>
   );
+}
+
+function getEnvironmentSafetyLabel(config: ServiceNowEnvironmentConfig): string {
+  switch (config.mode) {
+    case "mock":
+      return "MOCK — Safe demo";
+    case "qa":
+      return "QA — No write until #22";
+    case "dev":
+      return "DEV — No write until #22";
+    case "production-shadow":
+      return "NO SUBMIT · NO UPDATE · NO CLOSE";
+    default:
+      return config.shadowOnly ? "Shadow-only" : "Requires review";
+  }
 }
 
 function DraftTextField({

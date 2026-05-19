@@ -1,7 +1,12 @@
 import { mkdir, rm } from "node:fs/promises";
-import { resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 
-import type { ServiceNowEnvironmentConfig, ServiceNowEnvironmentMode } from "@servicenow-automation/profiles";
+import {
+  validateServiceNowTargetUrl,
+  type ServiceNowEnvironmentConfig,
+  type ServiceNowEnvironmentMode,
+  type ServiceNowTargetValidationResult
+} from "@servicenow-automation/profiles";
 
 export type BrowserSessionAction = "open-controlled-browser" | "wait-for-manual-login" | "capture-page-context-only";
 
@@ -22,6 +27,7 @@ export type BrowserSessionLaunchPlan = {
   mode: ServiceNowEnvironmentMode;
   environmentLabel: string;
   targetUrl?: string;
+  targetValidation?: ServiceNowTargetValidationResult;
   blockedReason?: string;
   browserProfileDirectory: string;
   actions: BrowserSessionAction[];
@@ -67,12 +73,14 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
   return {
     createLaunchPlan(environment, planOptions = {}) {
       const targetUrl = planOptions.targetUrlOverride ?? environment.url;
+      const targetValidation = validateServiceNowTargetUrl(environment, targetUrl);
       const browserProfileDirectory = getBrowserProfileDirectory(environment);
       const basePlan: BrowserSessionLaunchPlan = {
         status: "ready",
         mode: environment.mode,
         environmentLabel: environment.label,
-        targetUrl,
+        targetUrl: targetValidation.allowed ? targetValidation.targetUrl : undefined,
+        targetValidation,
         browserProfileDirectory,
         actions: ["open-controlled-browser", "wait-for-manual-login", "capture-page-context-only"],
         sessionStoragePolicy: "ignored-local-runtime-directory",
@@ -110,15 +118,22 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
         };
       }
 
-      if (!targetUrl) {
+      if (!targetValidation.allowed) {
+        const blockedReason =
+          targetValidation.reason === "no-allowlisted-host" && !planOptions.targetUrlOverride
+            ? "No allowlisted ServiceNow host configured for this environment."
+            : "Target URL is not allowlisted for this environment.";
+
         return {
           ...basePlan,
           status: "blocked",
           actions: [],
-          blockedReason: "No authorized ServiceNow URL configured for this environment.",
+          blockedReason,
           auditNotes: [
-            "No authorized ServiceNow URL configured for this environment.",
-            "Provide a QA/dev URL explicitly before creating a controlled browser launch plan."
+            blockedReason,
+            environment.mode === "production-shadow"
+              ? "Production shadow mode remains read-only; submit, close, and update remain blocked."
+              : "Configure an allowlisted HTTPS ServiceNow host before creating a controlled browser launch plan."
           ]
         };
       }
@@ -170,7 +185,11 @@ function assertSafeRuntimeDirectory(profileDirectory: string, projectRoot: strin
   const safeRuntimeRoot = resolve(projectRoot, ".local/servicenow-browser-profiles");
   const normalizedProfile = resolve(profileDirectory);
 
-  if (normalizedProfile !== safeRuntimeRoot && !normalizedProfile.startsWith(`${safeRuntimeRoot}/`)) {
-    throw new Error(`Refusing to manage browser session directory outside ignored runtime root: ${normalizedProfile}`);
+  const relativePath = relative(safeRuntimeRoot, normalizedProfile);
+
+  if (relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath))) {
+    return;
   }
+
+  throw new Error(`Refusing to manage browser session directory outside ignored runtime root: ${normalizedProfile}`);
 }
