@@ -33,6 +33,36 @@ describe("App", () => {
     expect(output).toContain("Human review required before any ServiceNow action.");
   });
 
+  it("renders the sanitized demo mail queue and review actions", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Demo queue — fake sanitized data only");
+    expect(output).toContain("VPN connection issue after password reset");
+    expect(output).toContain("Windows laptop slow after update");
+    expect(output).toContain("Account login issue after password change");
+    expect(output).toContain("Demo requester A");
+    expect(output).toContain("Demo mail paste");
+    expect(output).toContain("Parsed Sanitized Source");
+    expect(output).toContain("Body Preview");
+    expect(output).toContain("Raw Sanitized Body");
+    expect(output).toContain("Create Incident Draft");
+    expect(output).toContain("Mark as Done");
+    expect(output).toContain("Skip");
+  });
+
+  it("renders exactly three FIFO queue items", () => {
+    const output = renderAppMarkup();
+    const queueItemCount = output.match(/class=\"queue-item/g)?.length ?? 0;
+    const vpnIndex = output.indexOf("VPN connection issue after password reset");
+    const windowsIndex = output.indexOf("Windows laptop slow after update");
+    const accountIndex = output.indexOf("Account login issue after password change");
+
+    expect(queueItemCount).toBe(3);
+    expect(vpnIndex).toBeGreaterThan(-1);
+    expect(windowsIndex).toBeGreaterThan(vpnIndex);
+    expect(accountIndex).toBeGreaterThan(windowsIndex);
+  });
+
   it("renders a filled mock ServiceNow Incident form with disabled demo submit", () => {
     const output = renderAppMarkup();
 

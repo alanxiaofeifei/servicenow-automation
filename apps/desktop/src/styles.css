@@ -300,6 +300,146 @@ h3 {
   background: #ffe4b8;
 }
 
+.queue-review-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.95fr) minmax(380px, 1.15fr);
+  gap: 16px;
+  align-items: start;
+  margin: 18px 0 20px;
+}
+
+.queue-panel,
+.mail-review-panel {
+  border: 1px solid rgba(116, 96, 68, 0.22);
+  border-radius: 22px;
+  padding: 18px;
+  background: rgba(255, 250, 239, 0.9);
+  box-shadow: 0 16px 42px rgba(82, 57, 25, 0.1);
+}
+
+.queue-panel header,
+.mail-review-panel header {
+  margin-bottom: 14px;
+}
+
+.queue-list {
+  display: grid;
+  gap: 10px;
+}
+
+.queue-item {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.6fr) minmax(220px, 1.4fr) minmax(140px, 0.8fr) minmax(120px, 0.7fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  border: 1px solid #dfcfb3;
+  border-radius: 12px;
+  padding: 11px 12px;
+  color: #3f372d;
+  background: #fffdf7;
+  box-shadow: 0 8px 18px rgba(83, 58, 26, 0.06);
+  text-align: left;
+}
+
+.queue-item strong {
+  color: #211f1a;
+  overflow-wrap: anywhere;
+}
+
+.queue-item span {
+  color: #665c4f;
+  line-height: 1.35;
+}
+
+.queue-item.selected,
+.queue-item:hover {
+  border-color: #28746a;
+  background: #eff8f1;
+}
+
+.queue-time {
+  font-weight: 850;
+}
+
+.status-badge {
+  justify-self: end;
+  border-radius: 999px;
+  padding: 4px 9px;
+  color: #234f49;
+  background: #e6f2eb;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.status-badge.new {
+  color: #68430c;
+  background: #ffe8bf;
+}
+
+.status-badge.reviewed {
+  color: #174f83;
+  background: #e8f2fb;
+}
+
+.status-badge.drafted {
+  color: #214f49;
+  background: #dff4ea;
+}
+
+.status-badge.done {
+  color: #2f4e25;
+  background: #e6f3dc;
+}
+
+.status-badge.skipped {
+  color: #6a463b;
+  background: #f6e1d9;
+}
+
+.review-meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.review-meta,
+.review-actions {
+  display: grid;
+}
+
+.review-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.review-actions button {
+  border: 1px solid #c9b28c;
+  border-radius: 12px;
+  padding: 11px 12px;
+  color: #443729;
+  background: #fff9ed;
+  font-weight: 900;
+}
+
+.review-actions button:first-child {
+  border-color: #2f756c;
+  color: #fffef7;
+  background: #2f756c;
+}
+
+.review-actions button:hover {
+  border-color: #b96f24;
+  color: #502f0a;
+  background: #ffe4b8;
+}
+
+.review-actions button:first-child:hover {
+  border-color: #245d56;
+  color: #fffef7;
+  background: #245d56;
+}
+
 .workspace-grid {
   display: grid;
   grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.35fr) minmax(300px, 0.95fr);
@@ -626,6 +766,7 @@ textarea:focus {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .queue-review-grid,
   .workspace-grid,
   .risk-control-gate {
     grid-template-columns: 1fr;
@@ -663,6 +804,16 @@ textarea:focus {
 
   .environment-grid {
     grid-template-columns: 1fr;
+  }
+
+  .queue-item,
+  .review-actions,
+  .review-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .status-badge {
+    justify-self: start;
   }
 
   .mock-form-header,

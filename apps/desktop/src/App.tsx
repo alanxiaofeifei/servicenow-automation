@@ -20,12 +20,74 @@ const manualPasteAdapter = new ManualPasteAdapter({
 
 const profile = loadDemoYageoProfile();
 
+type DemoQueueStatus = "New" | "Reviewed" | "Drafted" | "Done" | "Skipped";
+
+type DemoQueueItem = {
+  id: string;
+  scenarioId: ManualPasteScenario["id"];
+  senderLabel: string;
+  receivedAt: string;
+  subject: string;
+  bodyPreview: string;
+  sourceBody: string;
+  sourceType: string;
+  status: DemoQueueStatus;
+};
+
+const demoMailQueue: DemoQueueItem[] = [
+  {
+    id: "demo-mail-vpn",
+    scenarioId: "vpn-issue",
+    senderLabel: "Demo requester A",
+    receivedAt: "2026-05-18 08:15",
+    subject: "VPN connection issue after password reset",
+    bodyPreview:
+      "User reports VPN cannot connect after a recent password reset. The VPN client loops at the MFA prompt.",
+    sourceBody:
+      "Hello support,\n\nA demo user reports that VPN cannot connect after a recent password reset. The VPN client keeps looping at the MFA prompt. Internet works without VPN, but remote access is unavailable.\n\nThis is sanitized demo queue data only.",
+    sourceType: "Demo mail paste",
+    status: "New"
+  },
+  {
+    id: "demo-mail-windows",
+    scenarioId: "windows-issue",
+    senderLabel: "Demo requester B",
+    receivedAt: "2026-05-18 08:40",
+    subject: "Windows laptop slow after update",
+    bodyPreview:
+      "User reports a Windows laptop became very slow after the latest update. Reboot was attempted once.",
+    sourceBody:
+      "Hello support,\n\nA demo user reports that a Windows laptop became very slow after the latest update. Reboot was attempted once, but startup and application launch remain slow.\n\nThis is sanitized demo queue data only.",
+    sourceType: "Demo mail paste",
+    status: "New"
+  },
+  {
+    id: "demo-mail-account",
+    scenarioId: "account-login-issue",
+    senderLabel: "Demo requester C",
+    receivedAt: "2026-05-18 09:05",
+    subject: "Account login issue after password change",
+    bodyPreview:
+      "User cannot login after changing password. MFA prompt appears but authentication fails repeatedly.",
+    sourceBody:
+      "Hello support,\n\nA demo user cannot login after changing password. MFA prompt appears but authentication fails repeatedly. The user can access some services but not the required application.\n\nThis is sanitized demo queue data only.",
+    sourceType: "Demo mail paste",
+    status: "New"
+  }
+];
+
 export function App() {
   const [selectedScenarioId, setSelectedScenarioId] = useState<ManualPasteScenario["id"]>("vpn-issue");
+  const [selectedQueueItemId, setSelectedQueueItemId] = useState(demoMailQueue[0].id);
+  const [queueItems, setQueueItems] = useState<DemoQueueItem[]>(demoMailQueue);
   const selectedScenario = useMemo(
     () => demoManualPasteScenarios.find((scenario) => scenario.id === selectedScenarioId) ?? demoManualPasteScenarios[0],
     [selectedScenarioId]
   );
+  const selectedQueueItem =
+    queueItems.find((item) => item.id === selectedQueueItemId) ??
+    queueItems.find((item) => item.scenarioId === selectedScenarioId) ??
+    queueItems[0];
 
   const initialDraft = useMemo(() => buildDraftForScenario(selectedScenario), [selectedScenario]);
   const [fieldOverrides, setFieldOverrides] = useState<Record<string, string>>({});
@@ -39,9 +101,45 @@ export function App() {
   const context = manualPasteAdapter.capture({ title: selectedScenario.title, rawText: selectedScenario.rawText });
 
   function selectScenario(id: ManualPasteScenario["id"]) {
+    const queueItem = queueItems.find((item) => item.scenarioId === id);
+    if (queueItem) {
+      setSelectedQueueItemId(queueItem.id);
+    }
     setSelectedScenarioId(id);
     setFieldOverrides({});
     setFillConfirmed(false);
+  }
+
+  function selectQueueItem(itemId: string) {
+    const queueItem = queueItems.find((item) => item.id === itemId);
+    if (!queueItem) {
+      return;
+    }
+
+    setSelectedQueueItemId(queueItem.id);
+    setSelectedScenarioId(queueItem.scenarioId);
+    setFieldOverrides({});
+    setFillConfirmed(false);
+    if (queueItem.status === "New") {
+      updateQueueItemStatus(queueItem.id, "Reviewed");
+    }
+  }
+
+  function createIncidentDraft(itemId: string) {
+    const queueItem = queueItems.find((item) => item.id === itemId);
+    if (!queueItem) {
+      return;
+    }
+
+    setSelectedQueueItemId(queueItem.id);
+    setSelectedScenarioId(queueItem.scenarioId);
+    setFieldOverrides({});
+    setFillConfirmed(false);
+    updateQueueItemStatus(queueItem.id, "Drafted");
+  }
+
+  function updateQueueItemStatus(itemId: string, status: DemoQueueStatus) {
+    setQueueItems((items) => items.map((item) => (item.id === itemId ? { ...item, status } : item)));
   }
 
   function updateField(fieldName: keyof TicketDraft, value: string) {
@@ -59,7 +157,7 @@ export function App() {
           <p className="eyebrow">Field-trial accelerated P0</p>
           <h1 id="app-title">ServiceNow Automation</h1>
           <p className="summary">
-            Human-in-the-loop ServiceNow workbench for turning pasted support context into editable Incident drafts.
+            Human-in-the-loop Service Desk workflow cockpit for reviewing sanitized queue items and preparing editable Incident drafts.
           </p>
         </div>
       </section>
@@ -67,7 +165,7 @@ export function App() {
       <section className="workspace" aria-labelledby="workspace-title">
         <header className="workspace-header">
           <div>
-            <p className="eyebrow">Manual Paste → TicketDraft</p>
+            <p className="eyebrow">Queue → Mail Review → TicketDraft</p>
             <h2 id="workspace-title">Ticket Draft Workspace</h2>
             <p>
               Demo mode is deterministic. QA/Dev ServiceNow testing will be added after this mock workflow is stable.
@@ -80,6 +178,16 @@ export function App() {
           selectedMode={selectedEnvironmentMode}
           onSelectedModeChange={setSelectedEnvironmentMode}
         />
+
+        <div className="queue-review-grid">
+          <DemoQueuePanel items={queueItems} selectedItemId={selectedQueueItem.id} onSelectItem={selectQueueItem} />
+          <MailReviewPanel
+            item={selectedQueueItem}
+            onCreateIncidentDraft={createIncidentDraft}
+            onMarkDone={(itemId) => updateQueueItemStatus(itemId, "Done")}
+            onSkip={(itemId) => updateQueueItemStatus(itemId, "Skipped")}
+          />
+        </div>
 
         <div className="scenario-bar" aria-label="Demo scenarios">
           {demoManualPasteScenarios.map((scenario) => (
@@ -164,6 +272,110 @@ export function App() {
         <MockServiceNowForm draft={draft} fillConfirmed={fillConfirmed} />
       </section>
     </main>
+  );
+}
+
+function DemoQueuePanel({
+  items,
+  onSelectItem,
+  selectedItemId
+}: {
+  items: DemoQueueItem[];
+  onSelectItem: (itemId: string) => void;
+  selectedItemId: string;
+}) {
+  const sortedItems = [...items].sort((left, right) => left.receivedAt.localeCompare(right.receivedAt));
+
+  return (
+    <section className="queue-panel" aria-labelledby="demo-queue-title">
+      <header>
+        <p className="eyebrow">Mail Review Queue</p>
+        <h3 id="demo-queue-title">Demo queue — fake sanitized data only</h3>
+      </header>
+
+      <div className="queue-list" role="list">
+        {sortedItems.map((item) => (
+          <button
+            key={item.id}
+            className={item.id === selectedItemId ? "queue-item selected" : "queue-item"}
+            type="button"
+            onClick={() => onSelectItem(item.id)}
+          >
+            <span className="queue-time">{item.receivedAt}</span>
+            <strong>{item.subject}</strong>
+            <span>{item.senderLabel}</span>
+            <span>{item.sourceType}</span>
+            <span className={`status-badge ${statusClassName(item.status)}`}>{item.status}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MailReviewPanel({
+  item,
+  onCreateIncidentDraft,
+  onMarkDone,
+  onSkip
+}: {
+  item: DemoQueueItem;
+  onCreateIncidentDraft: (itemId: string) => void;
+  onMarkDone: (itemId: string) => void;
+  onSkip: (itemId: string) => void;
+}) {
+  return (
+    <section className="mail-review-panel" aria-labelledby="mail-review-title">
+      <header>
+        <p className="eyebrow">Mail Review</p>
+        <h3 id="mail-review-title">Parsed Sanitized Source</h3>
+      </header>
+
+      <dl className="meta-list review-meta">
+        <div>
+          <dt>Subject</dt>
+          <dd>{item.subject}</dd>
+        </div>
+        <div>
+          <dt>Sender</dt>
+          <dd>{item.senderLabel}</dd>
+        </div>
+        <div>
+          <dt>Received</dt>
+          <dd>{item.receivedAt}</dd>
+        </div>
+        <div>
+          <dt>Source Type</dt>
+          <dd>{item.sourceType}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>{item.status}</dd>
+        </div>
+      </dl>
+
+      <label className="field-block">
+        <span>Body Preview</span>
+        <textarea readOnly rows={3} value={item.bodyPreview} />
+      </label>
+
+      <label className="field-block">
+        <span>Raw Sanitized Body</span>
+        <textarea readOnly rows={5} value={item.sourceBody} />
+      </label>
+
+      <div className="review-actions" aria-label="Mail review actions">
+        <button type="button" onClick={() => onCreateIncidentDraft(item.id)}>
+          Create Incident Draft
+        </button>
+        <button type="button" onClick={() => onMarkDone(item.id)}>
+          Mark as Done
+        </button>
+        <button type="button" onClick={() => onSkip(item.id)}>
+          Skip
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -436,6 +648,10 @@ function MockFormField({
 
 function fieldValue(field: FieldDraft | undefined): string {
   return field?.value ?? "Not set";
+}
+
+function statusClassName(status: DemoQueueStatus): string {
+  return status.toLowerCase();
 }
 
 function buttonLabelForScenario(id: ManualPasteScenario["id"]): string {
