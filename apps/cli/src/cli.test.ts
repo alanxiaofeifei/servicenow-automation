@@ -1,3 +1,7 @@
+import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { runCli } from "./cli";
@@ -80,6 +84,39 @@ describe("sda CLI", () => {
     expect(payload.workflow).toBe("vpn_troubleshooting");
     expect(payload.dryRun).toBe(true);
     expect(payload.plannedActions).toContain("Generate editable TicketDraft");
+    expect(payload.safety.noExternalActionPerformed).toBe(true);
+  });
+
+  it("prints a browser session launch plan for QA without launching a browser", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-browser-plan-"));
+
+    const result = await runCli(["browser", "plan", "--mode", "qa", "--json"], { cwd: projectRoot });
+    const payload = JSON.parse(result.stdout);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.command).toBe("browser plan");
+    expect(payload.plan.status).toBe("ready");
+    expect(payload.plan.targetUrl).toContain("https://yageoqa.service-now.com");
+    expect(payload.plan.browserProfileDirectory).toContain(".local/servicenow-browser-profiles/qa");
+    expect(payload.plan.safety.browserAutomationImplemented).toBe(false);
+    expect(payload.plan.safety.realSubmitAllowed).toBe(false);
+    expect(payload.safety.noExternalActionPerformed).toBe(true);
+  });
+
+  it("resets a browser session profile directory without touching source files", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-browser-reset-"));
+    const profileDir = join(projectRoot, ".local/servicenow-browser-profiles/qa");
+    const marker = join(profileDir, "cookie-placeholder.txt");
+    await mkdir(profileDir, { recursive: true });
+    await writeFile(marker, "runtime only", "utf8");
+
+    const result = await runCli(["browser", "reset", "--mode", "qa", "--json"], { cwd: projectRoot });
+    const payload = JSON.parse(result.stdout);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.command).toBe("browser reset");
+    expect(payload.reset.deletedDirectory).toContain(".local/servicenow-browser-profiles/qa");
+    await expect(readFile(marker, "utf8")).rejects.toThrow();
     expect(payload.safety.noExternalActionPerformed).toBe(true);
   });
 });

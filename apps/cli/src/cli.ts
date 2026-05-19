@@ -1,10 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { ManualPasteAdapter } from "@servicenow-automation/adapters";
+import { createBrowserSessionService, ManualPasteAdapter } from "@servicenow-automation/adapters";
 import { generateMockTicketDraft } from "@servicenow-automation/ai";
 import { demoKnowledgeArticles, searchKnowledgeArticles } from "@servicenow-automation/kb/browser";
-import { loadDemoYageoProfile } from "@servicenow-automation/profiles";
+import {
+  getServiceNowEnvironmentConfig,
+  loadDemoYageoProfile,
+  type ServiceNowEnvironmentMode
+} from "@servicenow-automation/profiles";
 import type { CapturedContext, KnowledgeMatch, TicketDraft } from "@servicenow-automation/core";
 
 export type CliResult = {
@@ -95,6 +99,36 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
         notes,
         safety: safetyEnvelope()
       }, notes.workNotes);
+    }
+
+    if (namespace === "browser" && action === "plan") {
+      const mode = parseEnvironmentMode(requiredFlag(parsed, "mode", "browser plan"));
+      const environment = getServiceNowEnvironmentConfig(mode);
+      const service = createBrowserSessionService({ projectRoot: cwd });
+      const plan = service.createLaunchPlan(environment, {
+        targetUrlOverride: parsed.flags["target-url"]
+      });
+
+      return output(parsed, {
+        command: "browser plan",
+        mode,
+        plan,
+        safety: safetyEnvelope()
+      }, formatBrowserPlan(plan.status, plan.browserProfileDirectory));
+    }
+
+    if (namespace === "browser" && action === "reset") {
+      const mode = parseEnvironmentMode(requiredFlag(parsed, "mode", "browser reset"));
+      const environment = getServiceNowEnvironmentConfig(mode);
+      const service = createBrowserSessionService({ projectRoot: cwd });
+      const reset = await service.resetSession(environment);
+
+      return output(parsed, {
+        command: "browser reset",
+        mode,
+        reset,
+        safety: safetyEnvelope()
+      }, `Reset ignored browser profile directory: ${reset.recreatedDirectory}`);
     }
 
     if (namespace === "run") {
@@ -196,6 +230,14 @@ function requiredFlag(parsed: ParsedFlags, name: string, command: string): strin
   return value;
 }
 
+function parseEnvironmentMode(value: string): ServiceNowEnvironmentMode {
+  const allowedModes: ServiceNowEnvironmentMode[] = ["mock", "qa", "dev", "production-shadow"];
+  if (allowedModes.includes(value as ServiceNowEnvironmentMode)) {
+    return value as ServiceNowEnvironmentMode;
+  }
+  throw new Error(`Unknown ServiceNow environment mode: ${value}`);
+}
+
 function output(parsed: ParsedFlags, payload: unknown, text: string): CliResult {
   if (parsed.json) {
     return ok(`${JSON.stringify(payload, null, 2)}\n`);
@@ -237,6 +279,14 @@ function formatTicketDraft(ticketDraft: TicketDraft): string {
   ].join("\n");
 }
 
+function formatBrowserPlan(status: string, browserProfileDirectory: string): string {
+  return [
+    `Browser session plan: ${status}`,
+    `Profile directory: ${browserProfileDirectory}`,
+    "Safety: skeleton only; no browser is launched and no ServiceNow record is modified."
+  ].join("\n");
+}
+
 function helpText(): string {
   return `Usage: sda <command> [options]
 
@@ -246,6 +296,8 @@ Commands:
   sda kb search <query> [--json]
   sda ticket draft --template <template> --user <user> --summary <summary> [--json]
   sda notes generate --template <template> --input <json_file> [--json]
+  sda browser plan --mode <mock|qa|dev|production-shadow> [--target-url <url>] [--json]
+  sda browser reset --mode <mock|qa|dev|production-shadow> [--json]
   sda run --workflow <workflow_name> --input <json_file> --dry-run [--json]
 
 Safety:

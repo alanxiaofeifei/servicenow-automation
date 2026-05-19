@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./browser": "./src/browser.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "@servicenow-automation/core": "workspace:*"
+    "@servicenow-automation/core": "workspace:*",
+    "@servicenow-automation/profiles": "workspace:*"
   }
 }

@@ -90,6 +90,9 @@ importers:
       '@servicenow-automation/core':
         specifier: workspace:*
         version: link:../core
+      '@servicenow-automation/profiles':
+        specifier: workspace:*
+        version: link:../profiles
 
   packages/ai:
     dependencies:
