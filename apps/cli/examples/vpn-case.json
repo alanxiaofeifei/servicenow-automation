@@ -1,0 +1,5 @@
+{
+  "user": "Demo User",
+  "summary": "Cannot connect to VPN after password change. MFA prompt keeps looping.",
+  "template": "vpn_issue"
+}

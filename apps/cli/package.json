@@ -1,0 +1,23 @@
+{
+  "name": "@servicenow-automation/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "sda": "./bin/sda.mjs"
+  },
+  "scripts": {
+    "sda": "node ./bin/sda.mjs",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@servicenow-automation/adapters": "workspace:*",
+    "@servicenow-automation/ai": "workspace:*",
+    "@servicenow-automation/core": "workspace:*",
+    "@servicenow-automation/kb": "workspace:*",
+    "@servicenow-automation/profiles": "workspace:*",
+    "tsx": "^4.19.2"
+  }
+}

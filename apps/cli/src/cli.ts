@@ -1,0 +1,254 @@
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+
+import { ManualPasteAdapter } from "@servicenow-automation/adapters";
+import { generateMockTicketDraft } from "@servicenow-automation/ai";
+import { demoKnowledgeArticles, searchKnowledgeArticles } from "@servicenow-automation/kb/browser";
+import { loadDemoYageoProfile } from "@servicenow-automation/profiles";
+import type { CapturedContext, KnowledgeMatch, TicketDraft } from "@servicenow-automation/core";
+
+export type CliResult = {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+};
+
+export type RunCliOptions = {
+  cwd?: string;
+};
+
+type ParsedFlags = {
+  json: boolean;
+  dryRun: boolean;
+  flags: Record<string, string>;
+  positionals: string[];
+};
+
+type CaseInput = {
+  user?: string;
+  summary?: string;
+  template?: string;
+};
+
+const profile = loadDemoYageoProfile();
+const manualPasteAdapter = new ManualPasteAdapter({
+  idFactory: () => "cli-demo-context",
+  now: () => new Date("2026-05-18T12:00:00.000Z")
+});
+
+export async function runCli(argv: string[], options: RunCliOptions = {}): Promise<CliResult> {
+  const cwd = options.cwd ?? process.cwd();
+  const parsed = parseArgs(argv);
+
+  try {
+    if (parsed.positionals.length === 0 || parsed.positionals[0] === "--help" || parsed.positionals[0] === "help") {
+      return ok(helpText());
+    }
+
+    const [namespace, action, ...rest] = parsed.positionals;
+
+    if (namespace === "kb" && action === "search") {
+      const query = rest.join(" ").trim();
+      if (!query) return fail("Missing query. Usage: sda kb search <query> [--json]");
+      const matches = searchKnowledgeArticles(query, demoKnowledgeArticles, { limit: 3 });
+      return output(parsed, {
+        command: "kb search",
+        query,
+        matches,
+        safety: safetyEnvelope()
+      }, formatKbSearch(query, matches));
+    }
+
+    if (namespace === "ticket" && action === "draft") {
+      const template = requiredFlag(parsed, "template", "ticket draft");
+      const user = requiredFlag(parsed, "user", "ticket draft");
+      const summary = requiredFlag(parsed, "summary", "ticket draft");
+      const ticketDraft = buildTicketDraft({ template, user, summary });
+      return output(parsed, {
+        command: "ticket draft",
+        dryRun: true,
+        template,
+        user,
+        ticketDraft,
+        safety: safetyEnvelope()
+      }, formatTicketDraft(ticketDraft));
+    }
+
+    if (namespace === "notes" && action === "generate") {
+      const template = requiredFlag(parsed, "template", "notes generate");
+      const inputPath = requiredFlag(parsed, "input", "notes generate");
+      const caseInput = await readCaseInput(cwd, inputPath);
+      const ticketDraft = buildTicketDraft({
+        template,
+        user: caseInput.user ?? "Demo User",
+        summary: caseInput.summary ?? `Generate notes for ${template}`
+      });
+      const notes = {
+        workNotes: ticketDraft.workNotes.value,
+        missingInfoQuestions: ticketDraft.missingInfoQuestions,
+        kbMatches: ticketDraft.kbMatches
+      };
+      return output(parsed, {
+        command: "notes generate",
+        template,
+        input: inputPath,
+        notes,
+        safety: safetyEnvelope()
+      }, notes.workNotes);
+    }
+
+    if (namespace === "run") {
+      const workflow = requiredFlag(parsed, "workflow", "run");
+      const inputPath = requiredFlag(parsed, "input", "run");
+      if (!parsed.dryRun) {
+        return fail("Only --dry-run is supported for sda run in this phase. No external actions are allowed.");
+      }
+      const caseInput = await readCaseInput(cwd, inputPath);
+      const ticketDraft = buildTicketDraft({
+        template: caseInput.template ?? workflow,
+        user: caseInput.user ?? "Demo User",
+        summary: caseInput.summary ?? `Run ${workflow}`
+      });
+      return output(parsed, {
+        command: "run",
+        workflow,
+        dryRun: true,
+        input: inputPath,
+        plannedActions: [
+          "Capture manual-style context from input JSON",
+          "Search local demo knowledge base",
+          "Generate editable TicketDraft",
+          "Preview mock ServiceNow form mapping",
+          "Stop before any external ServiceNow action"
+        ],
+        ticketDraft,
+        safety: safetyEnvelope()
+      }, `Dry-run workflow ${workflow}: no external action performed.`);
+    }
+
+    return fail(`Unknown command: ${argv.join(" ")}\n\n${helpText()}`);
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : String(error));
+  }
+}
+
+function buildTicketDraft(input: { template: string; user: string; summary: string }): TicketDraft {
+  const rawText = `${input.user}: ${input.summary}\nTemplate: ${input.template}`;
+  const context: CapturedContext = manualPasteAdapter.capture({
+    title: `${input.template} draft`,
+    rawText
+  });
+  const kbMatches = searchKnowledgeArticles(input.summary, demoKnowledgeArticles, { limit: 3 });
+
+  return generateMockTicketDraft({ context, kbMatches, profile }, { idFactory: () => "cli-demo-draft" });
+}
+
+async function readCaseInput(cwd: string, inputPath: string): Promise<CaseInput> {
+  const raw = await readFile(resolve(cwd, inputPath), "utf8");
+  const parsed = JSON.parse(raw) as CaseInput;
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new Error(`Input file must contain a JSON object: ${inputPath}`);
+  }
+  return parsed;
+}
+
+function parseArgs(argv: string[]): ParsedFlags {
+  const flags: Record<string, string> = {};
+  const positionals: string[] = [];
+  let json = false;
+  let dryRun = false;
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (token === "--help") {
+      positionals.push(token);
+      continue;
+    }
+    if (token === "--json") {
+      json = true;
+      continue;
+    }
+    if (token === "--dry-run") {
+      dryRun = true;
+      continue;
+    }
+    if (token.startsWith("--")) {
+      const name = token.slice(2);
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error(`Missing value for --${name}`);
+      }
+      flags[name] = value;
+      index += 1;
+      continue;
+    }
+    positionals.push(token);
+  }
+
+  return { json, dryRun, flags, positionals };
+}
+
+function requiredFlag(parsed: ParsedFlags, name: string, command: string): string {
+  const value = parsed.flags[name];
+  if (!value) {
+    throw new Error(`Missing --${name}. Usage: sda ${command} ...`);
+  }
+  return value;
+}
+
+function output(parsed: ParsedFlags, payload: unknown, text: string): CliResult {
+  if (parsed.json) {
+    return ok(`${JSON.stringify(payload, null, 2)}\n`);
+  }
+  return ok(`${text}\n`);
+}
+
+function ok(stdout: string): CliResult {
+  return { exitCode: 0, stdout, stderr: "" };
+}
+
+function fail(stderr: string): CliResult {
+  return { exitCode: 1, stdout: "", stderr: `${stderr}\n` };
+}
+
+function safetyEnvelope() {
+  return {
+    noExternalActionPerformed: true,
+    realServiceNowApiCalled: false,
+    browserAutomationCalled: false,
+    productionWriteAllowed: false,
+    message: "Draft/preview only. The CLI does not submit, close, or update real ServiceNow records."
+  };
+}
+
+function formatKbSearch(query: string, matches: KnowledgeMatch[]): string {
+  const lines = [`KB search: ${query}`];
+  for (const match of matches) {
+    lines.push(`- ${match.title} (${match.score})`);
+  }
+  return lines.join("\n");
+}
+
+function formatTicketDraft(ticketDraft: TicketDraft): string {
+  return [
+    `Short description: ${ticketDraft.shortDescription.value}`,
+    `Work notes: ${ticketDraft.workNotes.value}`,
+    "Safety: draft/preview only; no external action performed."
+  ].join("\n");
+}
+
+function helpText(): string {
+  return `Usage: sda <command> [options]
+
+Minimal headless CLI for ServiceNow Automation demo workflows.
+
+Commands:
+  sda kb search <query> [--json]
+  sda ticket draft --template <template> --user <user> --summary <summary> [--json]
+  sda notes generate --template <template> --input <json_file> [--json]
+  sda run --workflow <workflow_name> --input <json_file> --dry-run [--json]
+
+Safety:
+  Draft/preview only by default. No real ServiceNow API calls, browser automation, submit, close, or update actions are performed.
+`;
+}
