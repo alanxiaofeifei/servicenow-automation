@@ -99,6 +99,43 @@ describe("App", () => {
     expect(output).toContain("Final submit is always manual.");
   });
 
+  it("renders the legacy-inspired ServiceNow field review checklist and safety boundary", () => {
+    const output = renderAppMarkup();
+    const checklistLabels = [
+      "Source channel reviewed",
+      "Requester identified",
+      "Location checked",
+      "Channel selected",
+      "Short description generated/reviewed",
+      "Description generated/reviewed",
+      "Category selected",
+      "Subcategory selected if needed",
+      "Configuration item / affected service checked",
+      "Impact checked",
+      "Urgency checked",
+      "Priority reviewed as derived value",
+      "Assignment group suggested/reviewed",
+      "Work notes prepared",
+      "Customer-visible comments separated from internal Work Notes",
+      "Human confirmation before any mock fill/copy"
+    ];
+
+    expect(output).toContain("Legacy-inspired field review");
+    expect(output).toContain("Incident field dependency checklist");
+    expect(output).toContain("Ticket quality depends on field order and dependencies, not text generation alone.");
+    expect(output).toContain("Requester, Category, Location, Channel, Impact, Urgency, Assignment group, Short description");
+    expect(output).toContain(
+      "Description, Subcategory, Configuration item, Business service, Service offering, Priority, Assigned to, Additional comments, Work notes, Related Search / Knowledge &amp; Catalog"
+    );
+    for (const label of checklistLabels) {
+      expect(output).toContain(label);
+    }
+    expect(output).toContain("0/16");
+    expect(output).toContain("Demo checklist only. Local state only.");
+    expect(output).toContain("No real ServiceNow field fill, Save, Submit, Update, Close, API call");
+    expect(output).toContain("browser automation, DOM inspection, screenshots, HAR, traces, sessions, or storage export.");
+  });
+
   it("renders ServiceNow environment modes and QA/dev safety boundaries", () => {
     const output = renderAppMarkup();
 

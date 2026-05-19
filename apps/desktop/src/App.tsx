@@ -38,6 +38,33 @@ type DemoQueueItem = {
   status: DemoQueueStatus;
 };
 
+type FieldReviewChecklistItem = {
+  id: string;
+  label: string;
+};
+
+const fieldReviewChecklistItems: FieldReviewChecklistItem[] = [
+  { id: "source-channel-reviewed", label: "Source channel reviewed" },
+  { id: "requester-identified", label: "Requester identified" },
+  { id: "location-checked", label: "Location checked" },
+  { id: "channel-selected", label: "Channel selected" },
+  { id: "short-description-reviewed", label: "Short description generated/reviewed" },
+  { id: "description-reviewed", label: "Description generated/reviewed" },
+  { id: "category-selected", label: "Category selected" },
+  { id: "subcategory-selected-if-needed", label: "Subcategory selected if needed" },
+  { id: "ci-affected-service-checked", label: "Configuration item / affected service checked" },
+  { id: "impact-checked", label: "Impact checked" },
+  { id: "urgency-checked", label: "Urgency checked" },
+  { id: "priority-reviewed-derived", label: "Priority reviewed as derived value" },
+  { id: "assignment-group-reviewed", label: "Assignment group suggested/reviewed" },
+  { id: "work-notes-prepared", label: "Work notes prepared" },
+  {
+    id: "comments-separated",
+    label: "Customer-visible comments separated from internal Work Notes"
+  },
+  { id: "human-confirmation-before-mock-fill", label: "Human confirmation before any mock fill/copy" }
+];
+
 const demoIntakeQueue: DemoQueueItem[] = [
   {
     id: "demo-teams-vpn",
@@ -105,6 +132,7 @@ export function App() {
   const initialDraft = useMemo(() => buildDraftForQueueItem(selectedQueueItem), [selectedQueueItem]);
   const [fieldOverrides, setFieldOverrides] = useState<Record<string, string>>({});
   const [fillConfirmed, setFillConfirmed] = useState(false);
+  const [checkedFieldReviewItems, setCheckedFieldReviewItems] = useState<string[]>([]);
   const [selectedEnvironmentMode, setSelectedEnvironmentMode] = useState<ServiceNowEnvironmentMode>(
     getDefaultServiceNowEnvironmentMode()
   );
@@ -125,6 +153,7 @@ export function App() {
     setSelectedScenarioId(id);
     setFieldOverrides({});
     setFillConfirmed(false);
+    setCheckedFieldReviewItems([]);
   }
 
   function selectQueueItem(itemId: string) {
@@ -137,6 +166,7 @@ export function App() {
     setSelectedScenarioId(queueItem.scenarioId);
     setFieldOverrides({});
     setFillConfirmed(false);
+    setCheckedFieldReviewItems([]);
     if (queueItem.status === "New") {
       updateQueueItemStatus(queueItem.id, "Reviewed");
     }
@@ -152,6 +182,7 @@ export function App() {
     setSelectedScenarioId(queueItem.scenarioId);
     setFieldOverrides({});
     setFillConfirmed(false);
+    setCheckedFieldReviewItems([]);
     updateQueueItemStatus(queueItem.id, "Drafted");
   }
 
@@ -161,6 +192,12 @@ export function App() {
 
   function updateField(fieldName: keyof TicketDraft, value: string) {
     setFieldOverrides((current) => ({ ...current, [fieldName]: value }));
+  }
+
+  function toggleFieldReviewItem(itemId: string) {
+    setCheckedFieldReviewItems((current) =>
+      current.includes(itemId) ? current.filter((id) => id !== itemId) : [...current, itemId]
+    );
   }
 
   return (
@@ -289,6 +326,12 @@ export function App() {
             </ul>
           </section>
         </div>
+
+        <FieldReviewChecklist
+          checkedItemIds={checkedFieldReviewItems}
+          items={fieldReviewChecklistItems}
+          onToggleItem={toggleFieldReviewItem}
+        />
 
         <MockServiceNowForm draft={draft} fillConfirmed={fillConfirmed} />
       </section>
@@ -634,6 +677,73 @@ function RiskControlGate({
         />
         <span>Confirm human review before fill</span>
       </label>
+    </section>
+  );
+}
+
+function FieldReviewChecklist({
+  checkedItemIds,
+  items,
+  onToggleItem
+}: {
+  checkedItemIds: string[];
+  items: FieldReviewChecklistItem[];
+  onToggleItem: (itemId: string) => void;
+}) {
+  return (
+    <section className="field-review-checklist" aria-labelledby="field-review-title">
+      <header className="field-review-header">
+        <div>
+          <p className="eyebrow">Legacy-inspired field review</p>
+          <h2 id="field-review-title">Incident field dependency checklist</h2>
+          <p>
+            Ticket quality depends on field order and dependencies, not text generation alone. Review requester,
+            location, channel, category, affected service, impact, urgency, priority, assignment, comments, and work
+            notes before any mock fill/copy.
+          </p>
+        </div>
+        <div className="field-review-progress" aria-label="Field review progress">
+          <strong>
+            {checkedItemIds.length}/{items.length}
+          </strong>
+          <span>reviewed locally</span>
+        </div>
+      </header>
+
+      <div className="field-reference-strip" aria-label="Sanitized ServiceNow create form reference">
+        <div>
+          <span>Required/starred reference</span>
+          <p>Requester, Category, Location, Channel, Impact, Urgency, Assignment group, Short description</p>
+        </div>
+        <div>
+          <span>Supporting fields</span>
+          <p>
+            Description, Subcategory, Configuration item, Business service, Service offering, Priority, Assigned to,
+            Additional comments, Work notes, Related Search / Knowledge & Catalog
+          </p>
+        </div>
+      </div>
+
+      <ol className="field-review-list">
+        {items.map((item, index) => (
+          <li key={item.id}>
+            <label>
+              <span className="field-review-number">{index + 1}</span>
+              <input
+                checked={checkedItemIds.includes(item.id)}
+                type="checkbox"
+                onChange={() => onToggleItem(item.id)}
+              />
+              <span>{item.label}</span>
+            </label>
+          </li>
+        ))}
+      </ol>
+
+      <p className="field-review-safety">
+        Demo checklist only. Local state only. No real ServiceNow field fill, Save, Submit, Update, Close, API call,
+        browser automation, DOM inspection, screenshots, HAR, traces, sessions, or storage export.
+      </p>
     </section>
   );
 }
