@@ -54,4 +54,23 @@ describe("App", () => {
     expect(output).toContain("Fill action locked until review confirmation");
     expect(output).toContain("Final submit is always manual.");
   });
+
+  it("renders ServiceNow environment modes and QA/dev safety boundaries", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("ServiceNow Environment Mode");
+    expect(output).toContain("Mock Demo");
+    expect(output).toContain("QA Test Environment");
+    expect(output).toContain("Development Test Environment");
+    expect(output).toContain("Production Shadow Mode");
+    expect(output).toContain("https://yageoqa.service-now.com");
+    expect(output).toContain("manual-login-only");
+    expect(output).toContain("Ignored local runtime path");
+    expect(output).toContain(".local/servicenow-browser-profiles/production-shadow");
+    expect(output).toContain("Manual login required. Credentials are never stored in source code.");
+    expect(output).toContain("Browser sessions stay in ignored local runtime folders.");
+    expect(output).toContain("Any real QA/dev submit requires explicit Alan approval.");
+    expect(output).toContain("Production remains shadow-only by default.");
+    expect(output).toContain("No production submit, close, or update path is implemented.");
+  });
 });

@@ -3,7 +3,14 @@ import { useMemo, useState } from "react";
 import { demoManualPasteScenarios, ManualPasteAdapter, type ManualPasteScenario } from "@servicenow-automation/adapters";
 import { generateMockTicketDraft } from "@servicenow-automation/ai";
 import { demoKnowledgeArticles, searchKnowledgeArticles } from "@servicenow-automation/kb/browser";
-import { loadDemoYageoProfile } from "@servicenow-automation/profiles";
+import {
+  getDefaultServiceNowEnvironmentMode,
+  getServiceNowEnvironmentConfig,
+  loadDemoYageoProfile,
+  serviceNowEnvironmentConfigs,
+  type ServiceNowEnvironmentConfig,
+  type ServiceNowEnvironmentMode
+} from "@servicenow-automation/profiles";
 import type { FieldDraft, TicketDraft } from "@servicenow-automation/core";
 
 const manualPasteAdapter = new ManualPasteAdapter({
@@ -23,7 +30,11 @@ export function App() {
   const initialDraft = useMemo(() => buildDraftForScenario(selectedScenario), [selectedScenario]);
   const [fieldOverrides, setFieldOverrides] = useState<Record<string, string>>({});
   const [fillConfirmed, setFillConfirmed] = useState(false);
+  const [selectedEnvironmentMode, setSelectedEnvironmentMode] = useState<ServiceNowEnvironmentMode>(
+    getDefaultServiceNowEnvironmentMode()
+  );
 
+  const selectedEnvironment = getServiceNowEnvironmentConfig(selectedEnvironmentMode);
   const draft = applyOverrides(initialDraft, fieldOverrides);
   const context = manualPasteAdapter.capture({ title: selectedScenario.title, rawText: selectedScenario.rawText });
 
@@ -62,8 +73,13 @@ export function App() {
               Demo mode is deterministic. QA/Dev ServiceNow testing will be added after this mock workflow is stable.
             </p>
           </div>
-          <div className="mode-pill">Demo Mode · MockAIProvider</div>
+          <div className="mode-pill">{selectedEnvironment.label} · MockAIProvider</div>
         </header>
+
+        <EnvironmentModePanel
+          selectedMode={selectedEnvironmentMode}
+          onSelectedModeChange={setSelectedEnvironmentMode}
+        />
 
         <div className="scenario-bar" aria-label="Demo scenarios">
           {demoManualPasteScenarios.map((scenario) => (
@@ -168,6 +184,99 @@ function applyOverrides(draft: TicketDraft, overrides: Record<string, string>): 
 
 function applyFieldOverride(field: FieldDraft, value: string | undefined): FieldDraft {
   return value === undefined ? field : { ...field, value };
+}
+
+
+function EnvironmentModePanel({
+  onSelectedModeChange,
+  selectedMode
+}: {
+  onSelectedModeChange: (mode: ServiceNowEnvironmentMode) => void;
+  selectedMode: ServiceNowEnvironmentMode;
+}) {
+  const selectedEnvironment = getServiceNowEnvironmentConfig(selectedMode);
+
+  return (
+    <section className="environment-panel" aria-labelledby="environment-title">
+      <header className="environment-header">
+        <div>
+          <p className="eyebrow">ServiceNow Environment Mode</p>
+          <h3 id="environment-title">Choose the safest target for this run.</h3>
+          <p>
+            Start in mock mode, move to QA/dev only after review, and keep production validation shadow-only by default unless a separate safety review changes that boundary.
+          </p>
+        </div>
+        <div className="environment-current">
+          <span>Current mode</span>
+          <strong>{selectedEnvironment.label}</strong>
+        </div>
+      </header>
+
+      <div className="environment-selector" aria-label="ServiceNow environment modes">
+        {serviceNowEnvironmentConfigs.map((config) => (
+          <button
+            key={config.mode}
+            className={config.mode === selectedMode ? "environment-button active" : "environment-button"}
+            type="button"
+            onClick={() => onSelectedModeChange(config.mode)}
+          >
+            {config.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="environment-grid">
+        {serviceNowEnvironmentConfigs.map((config) => (
+          <EnvironmentCard config={config} key={config.mode} selected={config.mode === selectedMode} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function EnvironmentCard({ config, selected }: { config: ServiceNowEnvironmentConfig; selected: boolean }) {
+  return (
+    <article className={selected ? "environment-card selected" : "environment-card"}>
+      <div className="environment-card-title-row">
+        <h4>{config.label}</h4>
+        {selected ? <span>Selected</span> : null}
+      </div>
+      <p>{config.description}</p>
+      {config.url ? (
+        <a href={config.url} rel="noreferrer" target="_blank">
+          {config.url}
+        </a>
+      ) : (
+        <code>No target URL configured</code>
+      )}
+      <dl>
+        <div>
+          <dt>Credential policy</dt>
+          <dd>
+            <code>{config.credentialPolicy}</code>
+            {config.credentialPolicy === "manual-login-only" ? " · Manual login required" : " · No credentials required"}
+          </dd>
+        </div>
+        <div>
+          <dt>Ignored local runtime path</dt>
+          <dd>{config.localRuntimeDirectory}</dd>
+        </div>
+        <div>
+          <dt>Submit policy</dt>
+          <dd>
+            {config.allowsRealSubmit
+              ? "Explicit approval required before real QA/dev submit"
+              : "No real submit from this mode"}
+          </dd>
+        </div>
+      </dl>
+      <ul>
+        {config.safetyNotes.map((note) => (
+          <li key={note}>{note}</li>
+        ))}
+      </ul>
+    </article>
+  );
 }
 
 function DraftTextField({
