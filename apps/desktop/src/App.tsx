@@ -43,6 +43,11 @@ type FieldReviewChecklistItem = {
   label: string;
 };
 
+type PreparedCopyDraft = {
+  confirmation: string;
+  text: string;
+};
+
 const fieldReviewChecklistItems: FieldReviewChecklistItem[] = [
   { id: "source-channel-reviewed", label: "Source channel reviewed" },
   { id: "requester-identified", label: "Requester identified" },
@@ -131,6 +136,7 @@ export function App() {
 
   const initialDraft = useMemo(() => buildDraftForQueueItem(selectedQueueItem), [selectedQueueItem]);
   const [fieldOverrides, setFieldOverrides] = useState<Record<string, string>>({});
+  const [preparedCopyDraft, setPreparedCopyDraft] = useState<PreparedCopyDraft | null>(null);
   const [fillConfirmed, setFillConfirmed] = useState(false);
   const [checkedFieldReviewItems, setCheckedFieldReviewItems] = useState<string[]>([]);
   const [selectedEnvironmentMode, setSelectedEnvironmentMode] = useState<ServiceNowEnvironmentMode>(
@@ -152,6 +158,7 @@ export function App() {
     }
     setSelectedScenarioId(id);
     setFieldOverrides({});
+    setPreparedCopyDraft(null);
     setFillConfirmed(false);
     setCheckedFieldReviewItems([]);
   }
@@ -165,6 +172,7 @@ export function App() {
     setSelectedQueueItemId(queueItem.id);
     setSelectedScenarioId(queueItem.scenarioId);
     setFieldOverrides({});
+    setPreparedCopyDraft(null);
     setFillConfirmed(false);
     setCheckedFieldReviewItems([]);
     if (queueItem.status === "New") {
@@ -181,6 +189,7 @@ export function App() {
     setSelectedQueueItemId(queueItem.id);
     setSelectedScenarioId(queueItem.scenarioId);
     setFieldOverrides({});
+    setPreparedCopyDraft(null);
     setFillConfirmed(false);
     setCheckedFieldReviewItems([]);
     updateQueueItemStatus(queueItem.id, "Drafted");
@@ -198,6 +207,20 @@ export function App() {
     setCheckedFieldReviewItems((current) =>
       current.includes(itemId) ? current.filter((id) => id !== itemId) : [...current, itemId]
     );
+  }
+
+  function prepareCopyDraft(label: string, text: string) {
+    const preparedDraft = { confirmation: "Prepared copy text", text };
+    setPreparedCopyDraft(preparedDraft);
+
+    void copyTextToBrowserClipboard(text).then((copied) => {
+      if (copied) {
+        setPreparedCopyDraft({
+          confirmation: label === "full safe draft as Markdown" ? "Copied demo draft" : "Copied demo text",
+          text
+        });
+      }
+    });
   }
 
   return (
@@ -290,6 +313,11 @@ export function App() {
             <DraftTextField label="Short Description" field={draft.shortDescription} onChange={(value) => updateField("shortDescription", value)} />
             <DraftTextField label="Description" field={draft.description} multiline onChange={(value) => updateField("description", value)} />
             <DraftTextField label="Work Notes" field={draft.workNotes} multiline onChange={(value) => updateField("workNotes", value)} />
+            <DraftCopyActions
+              draft={draft}
+              preparedCopyDraft={preparedCopyDraft}
+              onPrepareCopyDraft={prepareCopyDraft}
+            />
 
             <div className="field-grid">
               <ReadOnlyField label="Category" field={draft.category} />
@@ -499,6 +527,101 @@ function applyOverrides(draft: TicketDraft, overrides: Record<string, string>): 
 
 function applyFieldOverride(field: FieldDraft, value: string | undefined): FieldDraft {
   return value === undefined ? field : { ...field, value };
+}
+
+function DraftCopyActions({
+  draft,
+  onPrepareCopyDraft,
+  preparedCopyDraft
+}: {
+  draft: TicketDraft;
+  onPrepareCopyDraft: (label: string, text: string) => void;
+  preparedCopyDraft: PreparedCopyDraft | null;
+}) {
+  const safeMarkdownDraft = buildSafeDraftMarkdown(draft);
+  const fallbackText = preparedCopyDraft?.text ?? safeMarkdownDraft;
+
+  return (
+    <section className="draft-copy-actions" aria-labelledby="draft-copy-actions-title">
+      <div className="draft-copy-header">
+        <div>
+          <p className="eyebrow">Local copy/export</p>
+          <h3 id="draft-copy-actions-title">Safe draft actions</h3>
+        </div>
+        <span role="status">{preparedCopyDraft?.confirmation ?? "Prepared copy text preview"}</span>
+      </div>
+
+      <div className="draft-copy-button-grid" aria-label="Copy safe draft fields">
+        <button
+          type="button"
+          onClick={() => onPrepareCopyDraft("short description", draft.shortDescription.value)}
+        >
+          Copy Short Description
+        </button>
+        <button type="button" onClick={() => onPrepareCopyDraft("description", draft.description.value)}>
+          Copy Description
+        </button>
+        <button type="button" onClick={() => onPrepareCopyDraft("work notes", draft.workNotes.value)}>
+          Copy Work Notes
+        </button>
+        <button type="button" onClick={() => onPrepareCopyDraft("full safe draft as Markdown", safeMarkdownDraft)}>
+          Copy full safe draft as Markdown
+        </button>
+      </div>
+
+      <label className="field-block draft-copy-preview">
+        <span>Fallback copy preview</span>
+        <textarea readOnly rows={8} value={fallbackText} />
+        <small>
+          Browser clipboard is used only when available. This local preview remains available for manual copy in SSR,
+          locked-down browsers, or clipboard-denied sessions.
+        </small>
+      </label>
+    </section>
+  );
+}
+
+async function copyTextToBrowserClipboard(text: string): Promise<boolean> {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+    return false;
+  }
+
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function buildSafeDraftMarkdown(draft: TicketDraft): string {
+  return [
+    "# Safe Demo Incident Draft",
+    "",
+    "> Safety note: fake/sanitized demo draft only. Local copy/export only; no network, file upload, real email send, ServiceNow write, API call, external AI with real content, or real ticket number is included.",
+    "",
+    "## Short Description",
+    draft.shortDescription.value,
+    "",
+    "## Description",
+    draft.description.value,
+    "",
+    "## Work Notes",
+    draft.workNotes.value,
+    "",
+    "## Routing Fields",
+    `- Category: ${fieldValue(draft.category)}`,
+    `- Subcategory: ${fieldValue(draft.subcategory)}`,
+    `- Assignment Group: ${fieldValue(draft.assignmentGroup)}`,
+    `- Impact: ${fieldValue(draft.impact)}`,
+    `- Urgency: ${fieldValue(draft.urgency)}`,
+    `- Priority: ${fieldValue(draft.priority)}`,
+    "",
+    "## Safety Boundary",
+    "- Demo-only local text prepared for manual review.",
+    "- No real ServiceNow record is created, changed, submitted, updated, saved, or closed.",
+    "- No real requester identity, ticket number, mailbox, chat, portal, attachment, or production content is included."
+  ].join("\n");
 }
 
 

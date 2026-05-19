@@ -33,6 +33,22 @@ describe("App", () => {
     expect(output).toContain("Human review required before any ServiceNow action.");
   });
 
+  it("renders local safe draft copy actions and sanitized Markdown export text", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Safe draft actions");
+    expect(output).toContain("Copy Short Description");
+    expect(output).toContain("Copy Description");
+    expect(output).toContain("Copy Work Notes");
+    expect(output).toContain("Copy full safe draft as Markdown");
+    expect(output).toContain("Prepared copy text preview");
+    expect(output).toContain("Fallback copy preview");
+    expect(output).toContain("# Safe Demo Incident Draft");
+    expect(output).toContain("Safety note: fake/sanitized demo draft only.");
+    expect(output).toContain("Local copy/export only; no network, file upload, real email send, ServiceNow write, API call, external AI with real content, or real ticket number is included.");
+    expect(output).toContain("No real ServiceNow record is created, changed, submitted, updated, saved, or closed.");
+  });
+
   it("renders the sanitized multi-channel intake queue and source review actions", () => {
     const output = renderAppMarkup();
 
