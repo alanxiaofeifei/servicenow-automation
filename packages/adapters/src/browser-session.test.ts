@@ -452,4 +452,155 @@ describe("BrowserSessionService", () => {
       expect(serialized).not.toContain("placeholder");
     }
   });
+
+  it("prepares a Windows dedicated Chromium about:blank smoke dry-run without launching a browser", async () => {
+    const launchedCommands: unknown[] = [];
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-smoke-dry-run-"));
+    const service = createBrowserSessionService({
+      projectRoot,
+      browserLauncher: async (command) => {
+        launchedCommands.push(command);
+        return { pid: 13579 };
+      }
+    });
+
+    const result = await service.smokeWindowsDedicatedChromium({
+      browserExecutablePath: "%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Chromium\\chrome.exe",
+      profileDirectory: "%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\smoke\\session-123"
+    });
+
+    expect(result.status).toBe("dry-run");
+    expect(launchedCommands).toEqual([]);
+    expect(result.targetValidation).toMatchObject({
+      status: "allowed",
+      reason: "about-blank-target",
+      target: "about:blank"
+    });
+    expect(result.runtimeClassification).toMatchObject({
+      status: "allowed",
+      reason: "tool-owned-dedicated-chromium-runtime"
+    });
+    expect(result.profileValidation).toMatchObject({
+      status: "allowed",
+      reason: "tool-owned-disposable-profile-root"
+    });
+    expect(result.commandPreview).toMatchObject({
+      target: "about:blank",
+      profileDirectory: "%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\smoke\\session-123"
+    });
+    expect(result.commandPreview?.args).toContain("about:blank");
+    expect(result.safety).toMatchObject({
+      noWriteMode: true,
+      browserProcessLaunched: false,
+      realServiceNowApiCalled: false,
+      writeOperationsAllowed: false,
+      targetTouchesServiceNow: false,
+      pageInspectionAllowed: false,
+      captureArtifactsAllowed: false
+    });
+    expect(JSON.stringify(result)).not.toContain("service-now.com");
+  });
+
+  it("runs a Windows dedicated Chromium about:blank smoke launch only with execute and confirmation", async () => {
+    const launchedCommands: unknown[] = [];
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-smoke-confirm-"));
+    const service = createBrowserSessionService({
+      projectRoot,
+      browserLauncher: async (command) => {
+        launchedCommands.push(command);
+        return { pid: 97531 };
+      }
+    });
+    const smokeOptions = {
+      browserExecutablePath: "%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Chromium\\chrome.exe",
+      profileDirectory: "%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\smoke\\session-456"
+    };
+
+    const dryRun = await service.smokeWindowsDedicatedChromium(smokeOptions);
+    const blocked = await service.smokeWindowsDedicatedChromium({
+      ...smokeOptions,
+      execute: true
+    });
+    const launched = await service.smokeWindowsDedicatedChromium({
+      ...smokeOptions,
+      execute: true,
+      confirmNoWriteLaunch: true
+    });
+
+    expect(dryRun.status).toBe("dry-run");
+    expect(blocked.status).toBe("blocked");
+    expect(blocked.blockedReason).toBe("Explicit --confirm-no-write-launch is required before running the Windows Chromium smoke launch.");
+    expect(launched.status).toBe("launched");
+    expect(launched.process).toEqual({ pid: 97531 });
+    expect(launched.safety.browserProcessLaunched).toBe(true);
+    expect(launchedCommands).toHaveLength(1);
+    expect(JSON.stringify(launchedCommands[0])).toContain("about:blank");
+  });
+
+  it("blocks Windows Chromium smoke targets other than about:blank without leaking target details", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-smoke-target-blocked-"));
+    const service = createBrowserSessionService({ projectRoot });
+
+    const sensitiveQueryName = "sys" + "_id";
+    const sensitiveTokenName = "to" + "ken";
+    const blockedTargets = [
+      `https://qa-example.service-now.com/nav_to.do?${sensitiveQueryName}=abc123`,
+      "http://example.test/",
+      "file:///tmp/safe.html",
+      `about:blank?${sensitiveTokenName}=abc123`
+    ];
+
+    for (const target of blockedTargets) {
+      const result = await service.smokeWindowsDedicatedChromium({
+        target,
+        browserExecutablePath: "%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Chromium\\chrome.exe",
+        profileDirectory: "%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\smoke\\session-789",
+        execute: true,
+        confirmNoWriteLaunch: true
+      });
+      const serialized = JSON.stringify(result);
+
+      expect(result.status).toBe("blocked");
+      expect(result.targetValidation).toMatchObject({
+        status: "blocked",
+        reason: "unsafe-smoke-target-denied"
+      });
+      expect(result.commandPreview).toBeUndefined();
+      expect(result.safety.browserProcessLaunched).toBe(false);
+      expect(serialized).not.toContain("qa-example.service-now.com");
+      expect(serialized).not.toContain("service-now.com");
+      expect(serialized).not.toContain(sensitiveQueryName);
+      expect(serialized).not.toContain(`${sensitiveTokenName}=abc123`);
+    }
+  });
+
+  it("blocks daily Windows browser runtimes and daily browser profile roots for smoke", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-smoke-daily-blocked-"));
+    const service = createBrowserSessionService({ projectRoot });
+
+    const dailyRuntime = await service.smokeWindowsDedicatedChromium({
+      browserExecutablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      profileDirectory: "%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\smoke\\session-123"
+    });
+    const dailyProfile = await service.smokeWindowsDedicatedChromium({
+      browserExecutablePath: "%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Chromium\\chrome.exe",
+      profileDirectory: "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default"
+    });
+
+    expect(dailyRuntime.status).toBe("blocked");
+    expect(dailyRuntime.runtimeClassification).toMatchObject({
+      status: "blocked",
+      reason: "daily-installed-browser-runtime-denied"
+    });
+    expect(dailyRuntime.blockedReason).toBe("Daily installed Chrome/Edge cannot be used as the dedicated product browser runtime.");
+    expect(dailyRuntime.commandPreview).toBeUndefined();
+
+    expect(dailyProfile.status).toBe("blocked");
+    expect(dailyProfile.profileValidation).toMatchObject({
+      status: "blocked",
+      reason: "daily-browser-profile-root-denied"
+    });
+    expect(dailyProfile.blockedReason).toBe("Windows dedicated Chromium runtime requires a tool-owned disposable profile root.");
+    expect(dailyProfile.commandPreview).toBeUndefined();
+  });
 });

@@ -141,6 +141,26 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
       }, formatBrowserLaunch(launch.status, launch.blockedReason));
     }
 
+    if (namespace === "browser" && action === "smoke") {
+      const service = createBrowserSessionService({ projectRoot: cwd });
+      const smoke = await service.smokeWindowsDedicatedChromium({
+        target: parsed.flags["target"],
+        execute: parsed.execute,
+        confirmNoWriteLaunch: parsed.confirmNoWriteLaunch,
+        browserExecutablePath: parsed.flags["browser-executable"],
+        profileDirectory: parsed.flags["profile-root"]
+      });
+
+      return output(parsed, {
+        command: "browser smoke",
+        smoke,
+        safety: safetyEnvelope({
+          noExternalActionPerformed: smoke.status !== "launched",
+          browserProcessLaunched: smoke.status === "launched"
+        })
+      }, formatBrowserSmoke(smoke.status, smoke.blockedReason));
+    }
+
     if (namespace === "browser" && action === "reset") {
       const mode = parseEnvironmentMode(requiredFlag(parsed, "mode", "browser reset"));
       const environment = getServiceNowEnvironmentConfig(mode);
@@ -336,6 +356,13 @@ function formatBrowserLaunch(status: string, blockedReason?: string): string {
   ].join("\n");
 }
 
+function formatBrowserSmoke(status: string, blockedReason?: string): string {
+  return [
+    `Windows Chromium smoke: ${status}`,
+    blockedReason ? `Blocked reason: ${blockedReason}` : "Safety: about:blank only; no ServiceNow URL, page inspection, or write action."
+  ].join("\n");
+}
+
 function helpText(): string {
   return `Usage: sda <command> [options]
 
@@ -347,6 +374,7 @@ Commands:
   sda notes generate --template <template> --input <json_file> [--json]
   sda browser plan --mode <mock|qa|dev|production-shadow> [--target-url <url>] [--json]
   sda browser launch --mode <qa|dev> [--target-url <url>] [--browser-executable <path>] [--execute --confirm-no-write-launch] [--json]
+  sda browser smoke [--target about:blank] [--browser-executable <path>] [--profile-root <path>] [--execute --confirm-no-write-launch] [--json]
   sda browser reset --mode <mock|qa|dev|production-shadow> [--json]
   sda run --workflow <workflow_name> --input <json_file> --dry-run [--json]
 

@@ -116,6 +116,42 @@ export type BrowserNoWriteLaunchResult = {
   auditNotes: string[];
 };
 
+export type BrowserSmokeStatus = "dry-run" | "launched" | "blocked";
+
+export type BrowserSmokeTargetValidation = {
+  status: "allowed" | "blocked";
+  reason: "about-blank-target" | "unsafe-smoke-target-denied";
+  target?: "about:blank";
+};
+
+export type BrowserSmokeCommandPreview = {
+  executable: string;
+  args: string[];
+  target: "about:blank";
+  profileDirectory: string;
+};
+
+export type BrowserSmokeSafety = BrowserNoWriteLaunchSafety & {
+  browserProcessLaunched: boolean;
+  executeRequiredForRealLaunch: true;
+  confirmNoWriteLaunchRequiredForRealLaunch: true;
+  targetTouchesServiceNow: false;
+  pageInspectionAllowed: false;
+  captureArtifactsAllowed: false;
+};
+
+export type BrowserSmokeResult = {
+  status: BrowserSmokeStatus;
+  targetValidation: BrowserSmokeTargetValidation;
+  runtimeClassification: WindowsBrowserRuntimePathClassification;
+  profileValidation: WindowsToolOwnedProfileRootValidation;
+  commandPreview?: BrowserSmokeCommandPreview;
+  process?: BrowserLaunchProcess;
+  blockedReason?: string;
+  safety: BrowserSmokeSafety;
+  auditNotes: string[];
+};
+
 export type BrowserSessionServiceOptions = {
   projectRoot: string;
   browserExecutablePath?: string;
@@ -132,6 +168,14 @@ export type LaunchNoWriteBrowserOptions = CreateLaunchPlanOptions & {
   browserExecutablePath?: string;
 };
 
+export type SmokeWindowsDedicatedChromiumOptions = {
+  target?: string;
+  execute?: boolean;
+  confirmNoWriteLaunch?: boolean;
+  browserExecutablePath?: string;
+  profileDirectory?: string;
+};
+
 export type BrowserSessionService = {
   createLaunchPlan: (
     environment: ServiceNowEnvironmentConfig,
@@ -141,6 +185,9 @@ export type BrowserSessionService = {
     environment: ServiceNowEnvironmentConfig,
     options?: LaunchNoWriteBrowserOptions
   ) => Promise<BrowserNoWriteLaunchResult>;
+  smokeWindowsDedicatedChromium: (
+    options?: SmokeWindowsDedicatedChromiumOptions
+  ) => Promise<BrowserSmokeResult>;
   ensureBrowserProfileDirectory: (environment: ServiceNowEnvironmentConfig) => Promise<string>;
   resetSession: (environment: ServiceNowEnvironmentConfig) => Promise<BrowserSessionResetResult>;
 };
@@ -401,9 +448,116 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
     }
   }
 
+  async function smokeWindowsDedicatedChromium(
+    smokeOptions: SmokeWindowsDedicatedChromiumOptions = {}
+  ): Promise<BrowserSmokeResult> {
+    const targetValidation = validateBrowserSmokeTarget(smokeOptions.target);
+    const browserExecutablePath = resolveBrowserExecutablePath(smokeOptions.browserExecutablePath ?? options.browserExecutablePath);
+    const profileDirectory = smokeOptions.profileDirectory ?? defaultWindowsSmokeProfileDirectory();
+    const runtimeClassification = classifyWindowsBrowserRuntimePath(browserExecutablePath);
+    const profileValidation = validateWindowsToolOwnedProfileRoot(profileDirectory);
+    const baseResult = createBaseBrowserSmokeResult({
+      targetValidation,
+      runtimeClassification,
+      profileValidation
+    });
+
+    if (targetValidation.status === "blocked") {
+      return {
+        ...baseResult,
+        blockedReason: "Browser smoke target must be about:blank; HTTP, HTTPS, and ServiceNow targets are blocked."
+      };
+    }
+
+    if (runtimeClassification.status !== "allowed") {
+      return {
+        ...baseResult,
+        blockedReason:
+          runtimeClassification.reason === "daily-installed-browser-runtime-denied"
+            ? WINDOWS_DAILY_BROWSER_RUNTIME_BLOCKED_REASON
+            : "Browser smoke requires a Windows tool-owned dedicated Chromium runtime path."
+      };
+    }
+
+    if (profileValidation.status !== "allowed") {
+      return {
+        ...baseResult,
+        blockedReason: WINDOWS_PROFILE_ROOT_BLOCKED_REASON
+      };
+    }
+
+    const command = buildBrowserSmokeCommand(browserExecutablePath, profileDirectory);
+    const commandPreview = sanitizeBrowserSmokeCommandPreview(command);
+
+    if (!smokeOptions.execute) {
+      return {
+        ...baseResult,
+        status: "dry-run",
+        commandPreview,
+        auditNotes: [
+          ...baseResult.auditNotes,
+          "Dry-run only: about:blank smoke command preview generated, browser process was not started."
+        ]
+      };
+    }
+
+    if (!smokeOptions.confirmNoWriteLaunch) {
+      return {
+        ...baseResult,
+        commandPreview,
+        blockedReason: "Explicit --confirm-no-write-launch is required before running the Windows Chromium smoke launch."
+      };
+    }
+
+    if (process.platform === "win32" || !isWindowsRootedPath(profileDirectory)) {
+      await mkdir(profileDirectory, { recursive: true });
+    }
+
+    try {
+      const launchedProcess = await launcher(command);
+      if (!launchedProcess.pid) {
+        return {
+          ...baseResult,
+          commandPreview,
+          blockedReason: "Browser process could not be started. Check the configured browser executable.",
+          auditNotes: [
+            ...baseResult.auditNotes,
+            "Browser executable did not report a process id; smoke launch was treated as blocked."
+          ]
+        };
+      }
+
+      return {
+        ...baseResult,
+        status: "launched",
+        commandPreview,
+        process: launchedProcess,
+        safety: {
+          ...baseResult.safety,
+          browserProcessLaunched: true
+        },
+        auditNotes: [
+          ...baseResult.auditNotes,
+          "Dedicated Chromium smoke process launched with about:blank only; no ServiceNow target or page automation was used."
+        ]
+      };
+    } catch {
+      return {
+        ...baseResult,
+        commandPreview,
+        blockedReason: "Browser process could not be started. Check the configured browser executable.",
+        auditNotes: [
+          ...baseResult.auditNotes,
+          "Browser smoke launch failed before a controlled session could start; raw spawn errors were not exposed."
+        ]
+      };
+    }
+  }
+
   return {
     createLaunchPlan,
     launchNoWriteBrowser,
+    smokeWindowsDedicatedChromium,
 
     async ensureBrowserProfileDirectory(environment) {
       const profileDirectory = getBrowserProfileDirectory(environment);
@@ -429,6 +583,39 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
   };
 }
 
+function createBaseBrowserSmokeResult(input: {
+  targetValidation: BrowserSmokeTargetValidation;
+  runtimeClassification: WindowsBrowserRuntimePathClassification;
+  profileValidation: WindowsToolOwnedProfileRootValidation;
+}): BrowserSmokeResult {
+  return {
+    status: "blocked",
+    targetValidation: input.targetValidation,
+    runtimeClassification: input.runtimeClassification,
+    profileValidation: input.profileValidation,
+    safety: {
+      noWriteMode: true,
+      formAutomationAllowed: false,
+      fieldFillAllowed: false,
+      realServiceNowApiCalled: false,
+      realSubmitAllowed: false,
+      writeOperationsAllowed: false,
+      realActionGateRequiredForWrites: true,
+      browserProcessLaunched: false,
+      executeRequiredForRealLaunch: true,
+      confirmNoWriteLaunchRequiredForRealLaunch: true,
+      targetTouchesServiceNow: false,
+      pageInspectionAllowed: false,
+      captureArtifactsAllowed: false
+    },
+    auditNotes: [
+      "Windows Chromium smoke is separate from ServiceNow browser launch and does not validate or open a ServiceNow target.",
+      "Only about:blank is allowed for this smoke command; HTTP, HTTPS, and ServiceNow URLs are blocked.",
+      "No DOM automation, page inspection, browser artifact export, field fill, submit, update, save, close, upload, email, or ServiceNow API call is performed."
+    ]
+  };
+}
+
 function createBaseNoWriteLaunchResult(plan: BrowserSessionLaunchPlan): BrowserNoWriteLaunchResult {
   return {
     status: "blocked",
@@ -449,8 +636,32 @@ function createBaseNoWriteLaunchResult(plan: BrowserSessionLaunchPlan): BrowserN
   };
 }
 
+function validateBrowserSmokeTarget(target: string | undefined): BrowserSmokeTargetValidation {
+  const normalizedTarget = (target ?? "about:blank").trim().toLowerCase();
+  if (normalizedTarget === "about:blank") {
+    return {
+      status: "allowed",
+      reason: "about-blank-target",
+      target: "about:blank"
+    };
+  }
+
+  return {
+    status: "blocked",
+    reason: "unsafe-smoke-target-denied"
+  };
+}
+
 function resolveBrowserExecutablePath(browserExecutablePath: string | undefined): string {
   return browserExecutablePath ?? process.env.SDA_BROWSER_EXECUTABLE ?? "chromium";
+}
+
+function defaultWindowsSmokeProfileDirectory(): string {
+  if (process.env.LOCALAPPDATA) {
+    return win32.join(process.env.LOCALAPPDATA, "ServiceNowAutomation", "Profiles", "smoke", "default");
+  }
+
+  return "%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\smoke\\default";
 }
 
 function validateBrowserProfileIsolation(browserExecutablePath: string, profileDirectory: string): BrowserProfileIsolation {
@@ -696,6 +907,30 @@ function buildBrowserLaunchCommand(plan: BrowserSessionLaunchPlan, browserExecut
     args,
     targetUrl: plan.targetUrl,
     profileDirectory: plan.browserProfileDirectory
+  };
+}
+
+function buildBrowserSmokeCommand(browserExecutablePath: string, profileDirectory: string): BrowserLaunchCommand {
+  const targetUrl = "about:blank";
+  return {
+    executable: browserExecutablePath,
+    args: [
+      `--user-data-dir=${profileDirectory}`,
+      "--no-first-run",
+      "--new-window",
+      targetUrl
+    ],
+    targetUrl,
+    profileDirectory
+  };
+}
+
+function sanitizeBrowserSmokeCommandPreview(command: BrowserLaunchCommand): BrowserSmokeCommandPreview {
+  return {
+    executable: command.executable,
+    args: command.args.map((arg) => (arg === command.targetUrl ? "about:blank" : arg)),
+    target: "about:blank",
+    profileDirectory: command.profileDirectory
   };
 }
 
