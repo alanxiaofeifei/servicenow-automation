@@ -5,7 +5,12 @@ import { describe, expect, it } from "vitest";
 
 import { getServiceNowEnvironmentConfig } from "@servicenow-automation/profiles";
 
-import { createBrowserSessionService } from "./browser-session";
+import {
+  classifyWindowsBrowserRuntimePath,
+  createBrowserSessionService,
+  validateWindowsDedicatedChromiumRuntime,
+  validateWindowsToolOwnedProfileRoot
+} from "./browser-session";
 
 describe("BrowserSessionService", () => {
   it("builds a QA controlled-browser launch plan with manual login and ignored runtime storage", async () => {
@@ -177,6 +182,8 @@ describe("BrowserSessionService", () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-windows-exe-blocked-"));
     const windowsBrowserPaths = [
       "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe",
+      "/mnt//c/Program Files/Google/Chrome/Application/chrome.exe",
+      "/mnt/./c/Program Files/Google/Chrome/Application/chrome.exe",
       "/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.EXE  ",
       "/mnt/c/tools/chrome-wrapper",
       "/mnt//c/tools/chrome-wrapper",
@@ -213,6 +220,141 @@ describe("BrowserSessionService", () => {
       }
     }
     expect(launchedCommands).toEqual([]);
+  });
+
+  it("classifies daily installed Windows Chrome and Edge paths as blocked product runtimes", () => {
+    const dailyBrowserPaths = [
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+      "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+      "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+      "%ProgramFiles%\\Google\\Chrome\\Application\\chrome.exe",
+      "%ProgramFiles(x86)%\\Google\\Chrome\\Application\\chrome.exe",
+      "%ProgramFiles%\\Microsoft\\Edge\\Application\\msedge.exe",
+      "%ProgramFiles(x86)%\\Microsoft\\Edge\\Application\\msedge.exe"
+    ];
+
+    for (const browserExecutablePath of dailyBrowserPaths) {
+      expect(classifyWindowsBrowserRuntimePath(browserExecutablePath)).toMatchObject({
+        status: "blocked",
+        reason: "daily-installed-browser-runtime-denied"
+      });
+    }
+  });
+
+  it("classifies only tool-owned Windows Chromium runtime paths as allowed candidates", () => {
+    expect(
+      classifyWindowsBrowserRuntimePath("%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Chromium\\chrome.exe")
+    ).toMatchObject({
+      status: "allowed",
+      reason: "tool-owned-dedicated-chromium-runtime"
+    });
+
+    expect(
+      classifyWindowsBrowserRuntimePath("%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Chromium\\msedge.exe")
+    ).toMatchObject({
+      status: "blocked",
+      reason: "not-tool-owned-dedicated-chromium-runtime"
+    });
+
+    expect(
+      classifyWindowsBrowserRuntimePath("%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\ChromiumEvil\\chrome.exe")
+    ).toMatchObject({
+      status: "blocked",
+      reason: "not-tool-owned-dedicated-chromium-runtime"
+    });
+
+    expect(classifyWindowsBrowserRuntimePath("%LOCALAPPDATA%\\Google\\Chrome\\Application\\chrome.exe"))
+      .toMatchObject({
+        status: "blocked",
+        reason: "not-tool-owned-dedicated-chromium-runtime"
+      });
+
+    expect(
+      classifyWindowsBrowserRuntimePath("%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Chromium\\..\\Chromium\\chrome.exe")
+    ).toMatchObject({
+      status: "blocked",
+      reason: "parent-traversal-denied"
+    });
+  });
+
+  it("validates Windows dedicated Chromium only when paired with a tool-owned disposable profile root", () => {
+    const browserExecutablePath = "%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Chromium\\chrome.exe";
+
+    expect(
+      validateWindowsDedicatedChromiumRuntime({
+        browserExecutablePath,
+        profileDirectory: "%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\qa\\session-123"
+      })
+    ).toMatchObject({ status: "verified" });
+
+    expect(
+      validateWindowsDedicatedChromiumRuntime({
+        browserExecutablePath,
+        profileDirectory: "%LOCALAPPDATA%\\Google\\Chrome\\User Data"
+      })
+    ).toMatchObject({
+      status: "blocked",
+      reason: "Windows dedicated Chromium runtime requires a tool-owned disposable profile root."
+    });
+  });
+
+  it("validates Windows cleanup profile roots and blocks daily profiles or traversal", () => {
+    expect(validateWindowsToolOwnedProfileRoot("%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\qa\\session-123"))
+      .toMatchObject({
+        status: "allowed",
+        reason: "tool-owned-disposable-profile-root"
+      });
+
+    expect(validateWindowsToolOwnedProfileRoot("%LOCALAPPDATA%\\Google\\Chrome\\User Data")).toMatchObject({
+      status: "blocked",
+      reason: "daily-browser-profile-root-denied"
+    });
+    expect(validateWindowsToolOwnedProfileRoot("%LOCALAPPDATA%\\Microsoft\\Edge\\User Data")).toMatchObject({
+      status: "blocked",
+      reason: "daily-browser-profile-root-denied"
+    });
+    expect(validateWindowsToolOwnedProfileRoot("%APPDATA%\\Mozilla\\Firefox\\Profiles")).toMatchObject({
+      status: "blocked",
+      reason: "daily-browser-profile-root-denied"
+    });
+    expect(validateWindowsToolOwnedProfileRoot("ServiceNowAutomation\\Profiles\\qa\\session-123")).toMatchObject({
+      status: "blocked",
+      reason: "ambiguous-or-relative-profile-root-denied"
+    });
+    expect(validateWindowsToolOwnedProfileRoot("%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles")).toMatchObject({
+      status: "blocked",
+      reason: "not-tool-owned-disposable-profile-root"
+    });
+    expect(validateWindowsToolOwnedProfileRoot("%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\qa"))
+      .toMatchObject({
+        status: "blocked",
+        reason: "not-tool-owned-disposable-profile-root"
+      });
+    expect(validateWindowsToolOwnedProfileRoot("%LOCALAPPDATA%\\ServiceNowAutomation\\ProfilesX\\qa\\session-123"))
+      .toMatchObject({
+        status: "blocked",
+        reason: "not-tool-owned-disposable-profile-root"
+      });
+    expect(
+      validateWindowsToolOwnedProfileRoot("%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\qa\\..\\..\\Google")
+    ).toMatchObject({
+      status: "blocked",
+      reason: "parent-traversal-denied"
+    });
+  });
+
+  it("refuses reset when an environment runtime directory escapes the tool-owned project profile root", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-reset-traversal-"));
+    const service = createBrowserSessionService({ projectRoot });
+    const qaConfig = getServiceNowEnvironmentConfig("qa");
+
+    await expect(
+      service.resetSession({
+        ...qaConfig,
+        localRuntimeDirectory: "../Google/Chrome/User Data"
+      })
+    ).rejects.toThrow("Refusing to manage browser session directory outside ignored runtime root");
   });
 
   it("executes a no-write QA launch only with explicit confirmation", async () => {

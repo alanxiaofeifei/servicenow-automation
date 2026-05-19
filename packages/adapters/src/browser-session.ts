@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { mkdir, rm } from "node:fs/promises";
-import { isAbsolute, normalize, relative, resolve } from "node:path";
+import { isAbsolute, normalize, relative, resolve, win32 } from "node:path";
 
 import {
   validateServiceNowTargetUrl,
@@ -83,6 +83,28 @@ export type BrowserProfileIsolation = {
   reason?: string;
 };
 
+export type WindowsBrowserRuntimePathClassification = {
+  status: "allowed" | "blocked" | "not-applicable";
+  reason:
+    | "tool-owned-dedicated-chromium-runtime"
+    | "daily-installed-browser-runtime-denied"
+    | "parent-traversal-denied"
+    | "not-tool-owned-dedicated-chromium-runtime"
+    | "not-windows-runtime-path";
+  normalizedPath: string;
+};
+
+export type WindowsToolOwnedProfileRootValidation = {
+  status: "allowed" | "blocked";
+  reason:
+    | "tool-owned-disposable-profile-root"
+    | "daily-browser-profile-root-denied"
+    | "parent-traversal-denied"
+    | "ambiguous-or-relative-profile-root-denied"
+    | "not-tool-owned-disposable-profile-root";
+  normalizedPath: string;
+};
+
 export type BrowserNoWriteLaunchResult = {
   status: BrowserNoWriteLaunchStatus;
   plan: BrowserSessionLaunchPlan;
@@ -127,6 +149,29 @@ const WINDOWS_BROWSER_PROFILE_ISOLATION_BLOCKED_REASON =
   "Windows browser executable requires a verified Windows-compatible isolated profile path before launch.";
 const WINDOWS_BROWSER_PROFILE_ISOLATION_AUDIT_NOTE =
   "Profile isolation strategy must be implemented before launching a Windows browser executable from WSL.";
+const WINDOWS_DAILY_BROWSER_RUNTIME_BLOCKED_REASON =
+  "Daily installed Chrome/Edge cannot be used as the dedicated product browser runtime.";
+const WINDOWS_PROFILE_ROOT_BLOCKED_REASON =
+  "Windows dedicated Chromium runtime requires a tool-owned disposable profile root.";
+
+const WINDOWS_DAILY_BROWSER_EXECUTABLE_PATHS = [
+  "c:\\program files\\google\\chrome\\application\\chrome.exe",
+  "c:\\program files (x86)\\google\\chrome\\application\\chrome.exe",
+  "c:\\program files\\microsoft\\edge\\application\\msedge.exe",
+  "c:\\program files (x86)\\microsoft\\edge\\application\\msedge.exe",
+  "%programfiles%\\google\\chrome\\application\\chrome.exe",
+  "%programfiles(x86)%\\google\\chrome\\application\\chrome.exe",
+  "%programfiles%\\microsoft\\edge\\application\\msedge.exe",
+  "%programfiles(x86)%\\microsoft\\edge\\application\\msedge.exe"
+];
+
+const WINDOWS_DAILY_PROFILE_ROOT_MARKERS = [
+  "\\google\\chrome\\user data",
+  "\\microsoft\\edge\\user data",
+  "\\mozilla\\firefox\\profiles"
+];
+
+const WINDOWS_ALLOWED_CHROMIUM_EXECUTABLE_NAMES = new Set(["chrome.exe", "chromium.exe"]);
 
 export function createBrowserSessionService(options: BrowserSessionServiceOptions): BrowserSessionService {
   const projectRoot = resolve(options.projectRoot);
@@ -264,7 +309,7 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
     }
 
     const browserExecutablePath = resolveBrowserExecutablePath(launchOptions.browserExecutablePath ?? options.browserExecutablePath);
-    const profileIsolation = validateBrowserProfileIsolation(browserExecutablePath);
+    const profileIsolation = validateBrowserProfileIsolation(browserExecutablePath, plan.browserProfileDirectory);
 
     if (profileIsolation.status === "blocked") {
       const blockedPlan: BrowserSessionLaunchPlan = {
@@ -408,11 +453,161 @@ function resolveBrowserExecutablePath(browserExecutablePath: string | undefined)
   return browserExecutablePath ?? process.env.SDA_BROWSER_EXECUTABLE ?? "chromium";
 }
 
-function validateBrowserProfileIsolation(browserExecutablePath: string): BrowserProfileIsolation {
+function validateBrowserProfileIsolation(browserExecutablePath: string, profileDirectory: string): BrowserProfileIsolation {
   if (isWindowsBrowserExecutableFromLinux(browserExecutablePath)) {
     return {
       status: "blocked",
       reason: WINDOWS_BROWSER_PROFILE_ISOLATION_BLOCKED_REASON
+    };
+  }
+
+  const runtimeClassification = classifyWindowsBrowserRuntimePath(browserExecutablePath);
+  if (runtimeClassification.status === "blocked") {
+    return {
+      status: "blocked",
+      reason:
+        runtimeClassification.reason === "daily-installed-browser-runtime-denied"
+          ? WINDOWS_DAILY_BROWSER_RUNTIME_BLOCKED_REASON
+          : "Windows browser executable is not a verified tool-owned Chromium runtime."
+    };
+  }
+
+  if (runtimeClassification.status === "allowed") {
+    const profileValidation = validateWindowsToolOwnedProfileRoot(profileDirectory);
+    if (profileValidation.status === "blocked") {
+      return {
+        status: "blocked",
+        reason: WINDOWS_PROFILE_ROOT_BLOCKED_REASON
+      };
+    }
+  }
+
+  return { status: "verified" };
+}
+
+export function classifyWindowsBrowserRuntimePath(browserExecutablePath: string): WindowsBrowserRuntimePathClassification {
+  const normalizedPath = normalizeWindowsPathForComparison(browserExecutablePath);
+
+  if (!isWindowsRuntimePathCandidate(browserExecutablePath)) {
+    return {
+      status: "not-applicable",
+      reason: "not-windows-runtime-path",
+      normalizedPath
+    };
+  }
+
+  if (hasWindowsParentTraversal(browserExecutablePath)) {
+    return {
+      status: "blocked",
+      reason: "parent-traversal-denied",
+      normalizedPath
+    };
+  }
+
+  if (WINDOWS_DAILY_BROWSER_EXECUTABLE_PATHS.includes(normalizedPath)) {
+    return {
+      status: "blocked",
+      reason: "daily-installed-browser-runtime-denied",
+      normalizedPath
+    };
+  }
+
+  const executableName = win32.basename(normalizedPath);
+  if (
+    WINDOWS_ALLOWED_CHROMIUM_EXECUTABLE_NAMES.has(executableName) &&
+    isUnderAnyWindowsRoot(normalizedPath, windowsToolOwnedRootCandidates(["Runtime", "Chromium"]))
+  ) {
+    return {
+      status: "allowed",
+      reason: "tool-owned-dedicated-chromium-runtime",
+      normalizedPath
+    };
+  }
+
+  return {
+    status: "blocked",
+    reason: "not-tool-owned-dedicated-chromium-runtime",
+    normalizedPath
+  };
+}
+
+export function validateWindowsToolOwnedProfileRoot(profileDirectory: string): WindowsToolOwnedProfileRootValidation {
+  const normalizedPath = normalizeWindowsPathForComparison(profileDirectory);
+
+  if (hasWindowsParentTraversal(profileDirectory)) {
+    return {
+      status: "blocked",
+      reason: "parent-traversal-denied",
+      normalizedPath
+    };
+  }
+
+  if (!isWindowsRootedPath(profileDirectory)) {
+    return {
+      status: "blocked",
+      reason: "ambiguous-or-relative-profile-root-denied",
+      normalizedPath
+    };
+  }
+
+  if (containsDailyBrowserProfileRoot(normalizedPath)) {
+    return {
+      status: "blocked",
+      reason: "daily-browser-profile-root-denied",
+      normalizedPath
+    };
+  }
+
+  const profileRoot = matchingWindowsRoot(normalizedPath, windowsToolOwnedRootCandidates(["Profiles"]));
+  if (!profileRoot) {
+    return {
+      status: "blocked",
+      reason: "not-tool-owned-disposable-profile-root",
+      normalizedPath
+    };
+  }
+
+  const disposableProfileSegments = normalizedPath
+    .slice(profileRoot.length)
+    .replace(/^\\+/, "")
+    .split("\\")
+    .filter(Boolean);
+
+  if (disposableProfileSegments.length < 2) {
+    return {
+      status: "blocked",
+      reason: "not-tool-owned-disposable-profile-root",
+      normalizedPath
+    };
+  }
+
+  return {
+    status: "allowed",
+    reason: "tool-owned-disposable-profile-root",
+    normalizedPath
+  };
+}
+
+export function validateWindowsDedicatedChromiumRuntime(options: {
+  browserExecutablePath: string;
+  profileDirectory: string;
+}): BrowserProfileIsolation {
+  const runtimeClassification = classifyWindowsBrowserRuntimePath(options.browserExecutablePath);
+  if (runtimeClassification.status !== "allowed") {
+    return {
+      status: "blocked",
+      reason:
+        runtimeClassification.reason === "daily-installed-browser-runtime-denied"
+          ? WINDOWS_DAILY_BROWSER_RUNTIME_BLOCKED_REASON
+          : "Windows browser executable is not a verified tool-owned Chromium runtime."
+    };
+  }
+
+  const profileValidation = validateWindowsToolOwnedProfileRoot(options.profileDirectory);
+  if (profileValidation.status === "blocked") {
+    return {
+      status: "blocked",
+      reason: WINDOWS_PROFILE_ROOT_BLOCKED_REASON
     };
   }
 
@@ -426,6 +621,61 @@ function isWindowsBrowserExecutableFromLinux(browserExecutablePath: string): boo
 
   const normalizedExecutablePath = normalize(browserExecutablePath.trim()).replace(/\\\\/g, "/").toLowerCase();
   return normalizedExecutablePath.endsWith(".exe") || /^\/mnt\/[a-z]\//.test(normalizedExecutablePath);
+}
+
+function normalizeWindowsPathForComparison(pathValue: string): string {
+  return win32
+    .normalize(pathValue.trim().replace(/\//g, "\\"))
+    .replace(/\\+$/, "")
+    .toLowerCase();
+}
+
+function isWindowsRuntimePathCandidate(pathValue: string): boolean {
+  const trimmedPath = pathValue.trim();
+  return (
+    /^[a-z]:[\\/]/i.test(trimmedPath) ||
+    /^%[a-z0-9_()]+%[\\/]/i.test(trimmedPath) ||
+    trimmedPath.includes("\\") ||
+    /\.exe$/i.test(trimmedPath)
+  );
+}
+
+function isWindowsRootedPath(pathValue: string): boolean {
+  const trimmedPath = pathValue.trim();
+  return /^[a-z]:[\\/]/i.test(trimmedPath) || /^%[a-z0-9_()]+%[\\/]/i.test(trimmedPath);
+}
+
+function hasWindowsParentTraversal(pathValue: string): boolean {
+  return pathValue
+    .trim()
+    .replace(/\//g, "\\")
+    .split("\\")
+    .some((segment) => segment === "..");
+}
+
+function containsDailyBrowserProfileRoot(normalizedPath: string): boolean {
+  return WINDOWS_DAILY_PROFILE_ROOT_MARKERS.some(
+    (marker) => normalizedPath.endsWith(marker) || normalizedPath.includes(`${marker}\\`)
+  );
+}
+
+function windowsToolOwnedRootCandidates(segments: string[]): string[] {
+  const relativeRoot = ["ServiceNowAutomation", ...segments].join("\\");
+  const roots = [`%localappdata%\\${relativeRoot.toLowerCase()}`];
+
+  if (process.env.LOCALAPPDATA) {
+    roots.push(`${normalizeWindowsPathForComparison(process.env.LOCALAPPDATA)}\\${relativeRoot.toLowerCase()}`);
+  }
+
+  return roots;
+}
+
+function matchingWindowsRoot(normalizedPath: string, roots: string[]): string | undefined {
+  return roots.find((root) => normalizedPath === root || normalizedPath.startsWith(`${root}\\`));
+}
+
+function isUnderAnyWindowsRoot(normalizedPath: string, roots: string[]): boolean {
+  return matchingWindowsRoot(normalizedPath, roots) !== undefined;
 }
 
 function buildBrowserLaunchCommand(plan: BrowserSessionLaunchPlan, browserExecutablePath: string): BrowserLaunchCommand {
