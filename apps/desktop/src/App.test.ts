@@ -18,6 +18,26 @@ describe("App", () => {
     );
   });
 
+  it("renders the static runtime and safety status panel", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Runtime / Safety");
+    expect(output).toContain("Static demo posture");
+    expect(output).toContain("Demo mode");
+    expect(output).toContain("ON");
+    expect(output).toContain("Real ServiceNow");
+    expect(output).toContain("OFF");
+    expect(output).toContain("Auto-submit");
+    expect(output).toContain("disabled");
+    expect(output).toContain("External AI with real data");
+    expect(output).toContain("Browser/runtime");
+    expect(output).toContain("dedicated Chromium prepared/planned; not launched by this panel");
+    expect(output).toContain("Profile");
+    expect(output).toContain("disposable/tool-owned model");
+    expect(output).toContain("Data");
+    expect(output).toContain("fake sanitized demo data only");
+  });
+
   it("renders the Ticket Draft workspace controls and default VPN draft", () => {
     const output = renderAppMarkup();
 

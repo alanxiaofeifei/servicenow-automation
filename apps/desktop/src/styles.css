@@ -131,6 +131,40 @@ h3 {
   font-weight: 800;
 }
 
+.runtime-safety-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.4fr) minmax(520px, 1fr);
+  gap: 16px;
+  align-items: start;
+  margin: 0 0 18px;
+  border: 1px solid #d8c9af;
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: rgba(255, 253, 247, 0.82);
+}
+
+.runtime-safety-panel h3 {
+  margin-top: 2px;
+}
+
+.runtime-safety-panel dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.runtime-safety-panel dl div {
+  border: 1px solid #e2d4bc;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #fffaf0;
+}
+
+.runtime-safety-panel dd {
+  font-size: 0.92rem;
+}
+
 .environment-panel {
   margin: 0 0 18px;
   border: 1px solid #d9c8ac;
@@ -963,8 +997,13 @@ textarea:focus {
   .queue-review-grid,
   .workspace-grid,
   .risk-control-gate,
+  .runtime-safety-panel,
   .field-reference-strip {
     grid-template-columns: 1fr;
+  }
+
+  .runtime-safety-panel dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .field-review-list {
@@ -1003,6 +1042,10 @@ textarea:focus {
   }
 
   .environment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .runtime-safety-panel dl {
     grid-template-columns: 1fr;
   }
 

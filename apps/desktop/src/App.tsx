@@ -48,6 +48,19 @@ type PreparedCopyDraft = {
   text: string;
 };
 
+const runtimeSafetyStatuses = [
+  { label: "Demo mode", value: "ON" },
+  { label: "Real ServiceNow", value: "OFF" },
+  { label: "Auto-submit", value: "disabled" },
+  { label: "External AI with real data", value: "disabled" },
+  {
+    label: "Browser/runtime",
+    value: "dedicated Chromium prepared/planned; not launched by this panel"
+  },
+  { label: "Profile", value: "disposable/tool-owned model" },
+  { label: "Data", value: "fake sanitized demo data only" }
+];
+
 const fieldReviewChecklistItems: FieldReviewChecklistItem[] = [
   { id: "source-channel-reviewed", label: "Source channel reviewed" },
   { id: "requester-identified", label: "Requester identified" },
@@ -251,6 +264,8 @@ export function App() {
           <div className="mode-pill">{selectedEnvironment.label} · MockAIProvider</div>
         </header>
 
+        <RuntimeSafetyPanel />
+
         <EnvironmentModePanel
           selectedMode={selectedEnvironmentMode}
           onSelectedModeChange={setSelectedEnvironmentMode}
@@ -364,6 +379,25 @@ export function App() {
         <MockServiceNowForm draft={draft} fillConfirmed={fillConfirmed} />
       </section>
     </main>
+  );
+}
+
+function RuntimeSafetyPanel() {
+  return (
+    <aside className="runtime-safety-panel" aria-labelledby="runtime-safety-title">
+      <div>
+        <p className="eyebrow">Runtime / Safety</p>
+        <h3 id="runtime-safety-title">Static demo posture</h3>
+      </div>
+      <dl>
+        {runtimeSafetyStatuses.map((status) => (
+          <div key={status.label}>
+            <dt>{status.label}</dt>
+            <dd>{status.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </aside>
   );
 }
 
