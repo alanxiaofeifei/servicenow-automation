@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { App } from "./App";
+import { App, buildDemoQueueItems, buildDraftForQueueItem } from "./App";
 
 function renderAppMarkup() {
   return renderToStaticMarkup(createElement(App));
@@ -75,9 +75,48 @@ describe("App", () => {
 
     expect(output).toContain("Interface language");
     expect(output).toContain("Future languages can be added per project.");
-    expect(output).toContain("中文");
     expect(output).toContain("English");
+    expect(output).toContain("简体中文");
+    expect(output).toContain("繁中（台灣）");
     expect(output).toContain("Español");
+    expect(output.match(/<option/g)?.length ?? 0).toBe(4);
+    expect(output).toContain("Language simulation uses local deterministic demo data only");
+    expect(output).toContain("no external translation service");
+    expect(output).toContain("no real ServiceNow, Teams, mailbox, Graph, or API connection is used");
+  });
+
+  it("builds zh-TW queue data and draft fields from deterministic local content", () => {
+    const queue = buildDemoQueueItems("zh-TW");
+    const selfServiceItem = queue.find((item) => item.id === "demo-self-service-windows");
+
+    expect(selfServiceItem).toBeDefined();
+    expect(selfServiceItem?.subject).toContain("自助服務請求：Windows 筆電更新後變慢");
+    expect(selfServiceItem?.requesterLabel).toBe("示範請求者 B");
+    expect(selfServiceItem?.sourceLanguage).toBe("台灣繁體中文自助服務來源");
+    expect(selfServiceItem?.draftLanguageMode).toContain("自助服務來源語言驅動 Description / Work Notes");
+
+    const draft = buildDraftForQueueItem(selfServiceItem!);
+    expect(draft.shortDescription.value).toContain("Windows 筆電更新後效能下降");
+    expect(draft.description.value).toContain("自助服務來源語言驅動 Description / Work Notes");
+    expect(draft.workNotes.value).toContain("重新啟動結果");
+  });
+
+  it("builds explicit bilingual fallback text for unsupported source languages", () => {
+    const queue = buildDemoQueueItems("en-US");
+    const unsupportedItem = queue.find((item) => item.id === "demo-shared-mailbox-vpn");
+
+    expect(unsupportedItem).toBeDefined();
+    expect(unsupportedItem?.sourceLanguage).toBe("Unsupported demo source (fr-FR)");
+    expect(unsupportedItem?.draftLanguageMode).toBe(
+      "Unsupported-language fallback: source language + English bilingual draft"
+    );
+
+    const draft = buildDraftForQueueItem(unsupportedItem!);
+    expect(draft.description.value).toContain(
+      "Unsupported-language fallback: source language + English bilingual draft"
+    );
+    expect(draft.description.value).toContain("English helper summary");
+    expect(draft.workNotes.value).toContain("Do not call external translation services");
   });
 
   it("renders local safe draft copy actions and sanitized Markdown export text", () => {
@@ -114,6 +153,9 @@ describe("App", () => {
     expect(output).toContain("No attachments, .msg/.eml parsing, live channel content, or external AI with real content is used.");
     expect(output).toContain("Raw vs Cleaned Source");
     expect(output).toContain("Source Channel");
+    expect(output).toContain("Source Language");
+    expect(output).toContain("Draft Language Mode");
+    expect(output).toContain("Unsupported-language fallback: source language + English bilingual draft");
     expect(output).toContain("Body Preview");
     expect(output).toContain("Raw Sanitized Body");
     expect(output).toContain("Cleaned / Normalized Body");

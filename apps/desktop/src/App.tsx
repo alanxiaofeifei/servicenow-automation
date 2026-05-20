@@ -31,13 +31,33 @@ type SourceChannel = "Teams message" | "Self-service ticket" | "ServiceNow Chat 
 type DemoQueueItem = {
   id: string;
   scenarioId: ManualPasteScenario["id"];
+  language: LanguageCode;
   requesterLabel: string;
   receivedAt: string;
   subject: string;
   bodyPreview: string;
   sourceBody: string;
   sourceChannel: SourceChannel;
+  sourceLanguage: string;
+  draftLanguageMode: string;
   status: DemoQueueStatus;
+};
+
+type DemoQueueContent = {
+  requesterLabel: string;
+  subject: string;
+  bodyPreview: string;
+  sourceBody: string;
+  sourceLanguage: string;
+  draftLanguageMode: string;
+};
+
+type DemoQueueDefinition = {
+  id: string;
+  scenarioId: ManualPasteScenario["id"];
+  receivedAt: string;
+  sourceChannel: SourceChannel;
+  content: Record<LanguageCode, DemoQueueContent>;
 };
 
 type FieldReviewChecklistItem = {
@@ -50,7 +70,7 @@ type PreparedCopyDraft = {
   text: string;
 };
 
-type LanguageCode = "zh-CN" | "en-US" | "es-ES";
+export type LanguageCode = "zh-CN" | "zh-TW" | "en-US" | "es-ES";
 
 type UiTranslations = {
   safetyTagline: string;
@@ -59,6 +79,7 @@ type UiTranslations = {
   heroSubtitle: string;
   languageLabel: string;
   languageHelper: string;
+  languageSimulationNotice: string;
   workflowEyebrow: string;
   workflowStages: {
     queue: string;
@@ -105,9 +126,10 @@ type UiTranslations = {
   mockDemoStamp: string;
 };
 
-const languageOptions: { code: LanguageCode; label: string }[] = [
-  { code: "zh-CN", label: "中文" },
+export const languageOptions: { code: LanguageCode; label: string }[] = [
   { code: "en-US", label: "English" },
+  { code: "zh-CN", label: "简体中文" },
+  { code: "zh-TW", label: "繁中（台灣）" },
   { code: "es-ES", label: "Español" }
 ];
 
@@ -119,6 +141,8 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     heroSubtitle: "人工把关的服务台工作台，用于审核脱敏队列项并准备可编辑的 Incident 草稿。",
     languageLabel: "界面语言",
     languageHelper: "每个项目可扩展更多语言。",
+    languageSimulationNotice:
+      "语言模拟仅使用本地确定性演示数据；不调用外部翻译服务，也不连接真实 ServiceNow、Teams、邮箱、Graph 或 API。",
     workflowEyebrow: "队列 → 来源审核 → TicketDraft",
     workflowStages: {
       queue: "队列",
@@ -173,6 +197,8 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
       "Human-in-the-loop Service Desk workflow cockpit for reviewing sanitized queue items and preparing editable Incident drafts.",
     languageLabel: "Interface language",
     languageHelper: "Future languages can be added per project.",
+    languageSimulationNotice:
+      "Language simulation uses local deterministic demo data only; no external translation service and no real ServiceNow, Teams, mailbox, Graph, or API connection is used.",
     workflowEyebrow: "Queue → Source Review → TicketDraft",
     workflowStages: {
       queue: "Queue",
@@ -220,6 +246,61 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     mockDisabledStatus: "Save / Submit / Update / Close unavailable in demo mode",
     mockDemoStamp: "MOCK / Demo only"
   },
+  "zh-TW": {
+    safetyTagline: "AI 僅產生草稿。必須人工審核並手動提交。",
+    productEyebrow: "現場試行加速 P0",
+    heroTitle: "ServiceNow 自動化",
+    heroSubtitle: "人工把關的 Service Desk 工作台，用於審核已去識別化的佇列項目並準備可編輯的 Incident 草稿。",
+    languageLabel: "介面語言",
+    languageHelper: "每個專案都可擴充更多語言。",
+    languageSimulationNotice:
+      "語言模擬僅使用本地端確定性示範資料；不呼叫外部翻譯服務，也不連線真實 ServiceNow、Teams、信箱、Graph 或 API。",
+    workflowEyebrow: "佇列 → 來源審核 → TicketDraft",
+    workflowStages: {
+      queue: "佇列",
+      sourceReview: "來源審核",
+      ticketDraft: "工單草稿"
+    },
+    workspaceTitle: "工單草稿工作台",
+    workspaceSubtitle:
+      "示範模式是確定性的。僅使用假的去識別化受理資料；不連線 Teams、信箱、ServiceNow Chat/API 或自助服務輪詢。",
+    runtimeEyebrow: "執行階段 / 安全",
+    runtimeTitle: "靜態示範狀態",
+    highSeverityMonitor: {
+      title: "High Severity Monitor Simulator",
+      safetyNotice: "Fake simulator only — no ServiceNow polling or API calls",
+      stateLabel: "狀態",
+      countLabel: "假告警數",
+      affectedServicesLabel: "假受影響服務",
+      acknowledgedLabel: "已確認",
+      mutedLabel: "示範靜音",
+      acknowledgeAction: "Acknowledge",
+      muteAction: "Mute demo alerts"
+    },
+    environmentEyebrow: "ServiceNow 環境模式",
+    environmentTitle: "為本次執行選擇最安全的目標。",
+    queueEyebrow: "受理佇列",
+    queueTitle: "受理佇列 — 僅假的去識別化資料",
+    sourceReviewEyebrow: "來源審核",
+    sourceReviewTitle: "原始與清理後來源",
+    capturedContextTitle: "擷取內容",
+    editableDraftTitle: "可編輯 Incident 草稿",
+    kbMatchesTitle: "KB 符合項目",
+    missingInfoTitle: "缺少資訊",
+    riskFlagsTitle: "風險標記",
+    copyEyebrow: "本地複製 / 匯出",
+    copyTitle: "安全草稿操作",
+    checklistEyebrow: "傳統欄位審核",
+    checklistTitle: "Incident 欄位相依檢查清單",
+    mockEyebrow: "Incident · QA/Dev 預演",
+    mockTitle: "Mock ServiceNow Incident 預覽",
+    mockSubtitle: "此面板展示可編輯草稿如何對應到近似 ServiceNow 的 Incident 新增表單，僅供示範。",
+    mockFillButton: "填入 Mock ServiceNow 表單",
+    mockReadyStatus: "已準備好 mock 填入",
+    mockLockedStatus: "審核確認前鎖定填入動作",
+    mockDisabledStatus: "示範模式下 Save / Submit / Update / Close 不可用",
+    mockDemoStamp: "MOCK / 僅示範"
+  },
   "es-ES": {
     safetyTagline: "Solo borradores de IA. Se requiere revisión humana y envío manual.",
     productEyebrow: "P0 acelerado para prueba de campo",
@@ -228,6 +309,8 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
       "Cockpit de Service Desk con revisión humana para validar elementos sanitizados de la cola y preparar borradores editables de Incident.",
     languageLabel: "Idioma de la interfaz",
     languageHelper: "Se pueden añadir idiomas futuros por proyecto.",
+    languageSimulationNotice:
+      "La simulación de idioma usa solo datos demo locales y deterministas; no usa servicio externo de traducción ni conexión real a ServiceNow, Teams, buzón, Graph o API.",
     workflowEyebrow: "Cola → Revisión de origen → TicketDraft",
     workflowStages: {
       queue: "Cola",
@@ -333,66 +416,219 @@ const fieldReviewChecklistItems: FieldReviewChecklistItem[] = [
   { id: "human-confirmation-before-mock-fill", label: "Human confirmation before any mock fill/copy" }
 ];
 
-const demoIntakeQueue: DemoQueueItem[] = [
+const unsupportedFallbackMode = "Unsupported-language fallback: source language + English bilingual draft";
+
+const demoQueueDefinitions: DemoQueueDefinition[] = [
   {
     id: "demo-teams-vpn",
     scenarioId: "vpn-issue",
-    requesterLabel: "Demo requester A",
     receivedAt: "2026-05-18 08:15",
-    subject: "Teams note: VPN connection issue after password reset",
-    bodyPreview:
-      "A demo teammate reports VPN cannot connect after a recent password reset. The VPN client loops at the MFA prompt.",
-    sourceBody:
-      "Teams-style demo message:\n\n[08:15] Demo requester: Hi team,\n[08:16] Demo requester: RE: [EXTERNAL] VPN cannot connect after a recent password reset. The VPN client keeps looping at the MFA prompt.\n[08:18] Demo requester: Impact: Internet works without VPN, but remote access is unavailable.\n\nThanks,\nDemo requester A\n\nThis is fake sanitized intake data only. No Teams tenant, channel, chat, user profile, or message link is connected.",
     sourceChannel: "Teams message",
-    status: "New"
+    content: {
+      "en-US": {
+        requesterLabel: "Demo requester A",
+        subject: "Teams note: VPN connection issue after password reset",
+        bodyPreview:
+          "A demo teammate reports VPN cannot connect after a recent password reset. The VPN client loops at the MFA prompt.",
+        sourceBody:
+          "Teams-style demo message:\n\n[08:15] Demo requester: Hi team,\n[08:16] Demo requester: RE: [EXTERNAL] VPN cannot connect after a recent password reset. The VPN client keeps looping at the MFA prompt.\n[08:18] Demo requester: Impact: Internet works without VPN, but remote access is unavailable.\n\nThanks,\nDemo requester A\n\nThis is fake sanitized intake data only. No Teams tenant, channel, chat, user profile, or message link is connected.",
+        sourceLanguage: "English",
+        draftLanguageMode: "Primary demo language: English"
+      },
+      "zh-CN": {
+        requesterLabel: "演示请求者 A",
+        subject: "Teams 备注：密码重置后 VPN 无法连接",
+        bodyPreview: "演示同事反馈密码重置后 VPN 无法连接，VPN 客户端在 MFA 提示处反复循环。",
+        sourceBody:
+          "Teams 风格演示消息：\n\n[08:15] 演示请求者：团队好，\n[08:16] 演示请求者：RE: [EXTERNAL] 密码重置后 VPN 无法连接。VPN 客户端一直在 MFA 提示处循环。\n[08:18] 演示请求者：影响：不连 VPN 时互联网可用，但远程访问不可用。\n\n谢谢，\n演示请求者 A\n\n这只是假的脱敏受理数据。未连接 Teams 租户、频道、聊天、用户资料或消息链接。",
+        sourceLanguage: "简体中文",
+        draftLanguageMode: "主要演示语言：简体中文"
+      },
+      "zh-TW": {
+        requesterLabel: "示範請求者 A",
+        subject: "Teams 備註：密碼重設後 VPN 無法連線",
+        bodyPreview: "示範同事回報密碼重設後 VPN 無法連線，VPN 用戶端停在 MFA 提示並反覆循環。",
+        sourceBody:
+          "Teams 風格示範訊息：\n\n[08:15] 示範請求者：團隊好，\n[08:16] 示範請求者：RE: [EXTERNAL] 密碼重設後 VPN 無法連線。VPN 用戶端一直在 MFA 提示處循環。\n[08:18] 示範請求者：影響：未連 VPN 時網際網路可用，但遠端存取不可用。\n\n謝謝，\n示範請求者 A\n\n這只是假的去識別化受理資料。未連線 Teams 租戶、頻道、聊天、使用者資料或訊息連結。",
+        sourceLanguage: "台灣繁體中文",
+        draftLanguageMode: "主要示範語言：台灣繁體中文"
+      },
+      "es-ES": {
+        requesterLabel: "Solicitante demo A",
+        subject: "Nota de Teams: VPN no conecta tras restablecer contraseña",
+        bodyPreview:
+          "Un compañero demo informa que la VPN no conecta tras restablecer la contraseña. El cliente VPN repite el aviso MFA.",
+        sourceBody:
+          "Mensaje demo estilo Teams:\n\n[08:15] Solicitante demo: Hola equipo,\n[08:16] Solicitante demo: RE: [EXTERNAL] La VPN no conecta tras restablecer la contraseña. El cliente VPN sigue repitiendo el aviso MFA.\n[08:18] Solicitante demo: Impacto: Internet funciona sin VPN, pero el acceso remoto no está disponible.\n\nGracias,\nSolicitante demo A\n\nEstos son datos demo falsos y sanitizados. No hay conexión a tenant, canal, chat, perfil de usuario ni enlace de mensaje de Teams.",
+        sourceLanguage: "Español",
+        draftLanguageMode: "Idioma demo principal: Español"
+      }
+    }
   },
   {
     id: "demo-self-service-windows",
     scenarioId: "windows-issue",
-    requesterLabel: "Demo requester B",
     receivedAt: "2026-05-18 08:40",
-    subject: "Self-service request: Windows laptop slow after update",
-    bodyPreview:
-      "A fake portal submission says a Windows laptop became very slow after the latest update. Reboot was attempted once.",
-    sourceBody:
-      "Self-service-style demo submission:\n\nRequest ID: DEMO-PORTAL-002\nDescription: A demo requester reports that a Windows laptop became very slow after the latest update.\nImpact: Reboot was attempted once, but startup and application launch remain slow for the user.\n\nThis is fake sanitized intake data only. No portal polling, ticket number, requester profile, or live self-service record is connected.",
     sourceChannel: "Self-service ticket",
-    status: "New"
+    content: {
+      "en-US": {
+        requesterLabel: "Demo requester B",
+        subject: "Self-service request: Windows laptop slow after update",
+        bodyPreview:
+          "A fake portal submission says a Windows laptop became very slow after the latest update. Reboot was attempted once.",
+        sourceBody:
+          "Self-service-style demo submission:\n\nRequest ID: DEMO-PORTAL-002\nDescription: A demo requester reports that a Windows laptop became very slow after the latest update.\nImpact: Reboot was attempted once, but startup and application launch remain slow for the user.\n\nThis is fake sanitized intake data only. No portal polling, ticket number, requester profile, or live self-service record is connected.",
+        sourceLanguage: "English self-service source",
+        draftLanguageMode: "Self-service source language drives Description / Work Notes"
+      },
+      "zh-CN": {
+        requesterLabel: "演示请求者 B",
+        subject: "自助服务请求：Windows 笔记本更新后变慢",
+        bodyPreview: "假的门户提交说明 Windows 笔记本在最近更新后明显变慢，用户已尝试重启一次。",
+        sourceBody:
+          "自助服务风格演示提交：\n\n请求 ID: DEMO-PORTAL-002\n描述：演示请求者反馈 Windows 笔记本在最近更新后变得非常慢。\n影响：已尝试重启一次，但开机和应用启动仍然很慢。\n\n这只是假的脱敏受理数据。未连接门户轮询、工单号、请求者资料或实时自助服务记录。",
+        sourceLanguage: "简体中文自助服务来源",
+        draftLanguageMode: "自助服务来源语言驱动 Description / Work Notes"
+      },
+      "zh-TW": {
+        requesterLabel: "示範請求者 B",
+        subject: "自助服務請求：Windows 筆電更新後變慢",
+        bodyPreview: "假的入口網站提交指出 Windows 筆電在最近更新後明顯變慢，使用者已嘗試重新啟動一次。",
+        sourceBody:
+          "自助服務風格示範提交：\n\n請求 ID: DEMO-PORTAL-002\n描述：示範請求者回報 Windows 筆電在最近更新後變得非常慢。\n影響：已嘗試重新啟動一次，但開機與應用程式啟動仍然很慢。\n\n這只是假的去識別化受理資料。未連線入口網站輪詢、工單號、請求者資料或即時自助服務記錄。",
+        sourceLanguage: "台灣繁體中文自助服務來源",
+        draftLanguageMode: "自助服務來源語言驅動 Description / Work Notes"
+      },
+      "es-ES": {
+        requesterLabel: "Solicitante demo B",
+        subject: "Solicitud de autoservicio: portátil Windows lento tras actualización",
+        bodyPreview:
+          "Una solicitud falsa del portal indica que un portátil Windows quedó muy lento tras la última actualización. Se intentó reiniciar una vez.",
+        sourceBody:
+          "Envío demo estilo autoservicio:\n\nID de solicitud: DEMO-PORTAL-002\nDescripción: Un solicitante demo informa que un portátil Windows quedó muy lento tras la última actualización.\nImpacto: Se intentó reiniciar una vez, pero el arranque y la apertura de aplicaciones siguen lentos para el usuario.\n\nEstos son datos demo falsos y sanitizados. No hay sondeo de portal, número de ticket, perfil de solicitante ni registro real de autoservicio conectado.",
+        sourceLanguage: "Origen de autoservicio en Español",
+        draftLanguageMode: "El idioma de origen de autoservicio guía Description / Work Notes"
+      }
+    }
   },
   {
     id: "demo-chat-account",
     scenarioId: "account-login-issue",
-    requesterLabel: "Demo requester C",
     receivedAt: "2026-05-18 09:05",
-    subject: "Chat transcript: account login issue after password change",
-    bodyPreview:
-      "A sanitized chat transcript says login fails after password change. MFA appears but authentication fails repeatedly.",
-    sourceBody:
-      "ServiceNow Chat-style demo transcript:\n\nTranscript ID: DEMO-CHAT-003\n[09:05] Demo requester: I cannot login after changing password.\n[09:06] Demo support: Does the MFA prompt appear?\n[09:07] Demo requester: Yes, but authentication fails repeatedly. I can access some services but not the required application.\n\nThis is fake sanitized intake data only. No ServiceNow Chat, ServiceNow API, transcript ID, or live conversation is connected.",
     sourceChannel: "ServiceNow Chat transcript",
-    status: "New"
+    content: {
+      "en-US": {
+        requesterLabel: "Demo requester C",
+        subject: "Chat transcript: account login issue after password change",
+        bodyPreview:
+          "A sanitized chat transcript says login fails after password change. MFA appears but authentication fails repeatedly.",
+        sourceBody:
+          "ServiceNow Chat-style demo transcript:\n\nTranscript ID: DEMO-CHAT-003\n[09:05] Demo requester: I cannot login after changing password.\n[09:06] Demo support: Does the MFA prompt appear?\n[09:07] Demo requester: Yes, but authentication fails repeatedly. I can access some services but not the required application.\n\nThis is fake sanitized intake data only. No ServiceNow Chat, ServiceNow API, transcript ID, or live conversation is connected.",
+        sourceLanguage: "English",
+        draftLanguageMode: "Primary demo language: English"
+      },
+      "zh-CN": {
+        requesterLabel: "演示请求者 C",
+        subject: "聊天记录：密码修改后账号登录异常",
+        bodyPreview: "脱敏聊天记录显示密码修改后无法登录，MFA 会出现但认证反复失败。",
+        sourceBody:
+          "ServiceNow Chat 风格演示记录：\n\n记录 ID: DEMO-CHAT-003\n[09:05] 演示请求者：我修改密码后无法登录。\n[09:06] 演示支持：是否出现 MFA 提示？\n[09:07] 演示请求者：会出现，但认证反复失败。我可以访问部分服务，但无法访问所需应用。\n\n这只是假的脱敏受理数据。未连接 ServiceNow Chat、ServiceNow API、记录 ID 或实时对话。",
+        sourceLanguage: "简体中文",
+        draftLanguageMode: "主要演示语言：简体中文"
+      },
+      "zh-TW": {
+        requesterLabel: "示範請求者 C",
+        subject: "聊天記錄：密碼變更後帳號登入異常",
+        bodyPreview: "去識別化聊天記錄顯示密碼變更後無法登入，MFA 會出現但驗證反覆失敗。",
+        sourceBody:
+          "ServiceNow Chat 風格示範記錄：\n\n記錄 ID: DEMO-CHAT-003\n[09:05] 示範請求者：我變更密碼後無法登入。\n[09:06] 示範支援：是否有出現 MFA 提示？\n[09:07] 示範請求者：有，但驗證一直失敗。我可以存取部分服務，但無法進入需要的應用程式。\n\n這只是假的去識別化受理資料。未連線 ServiceNow Chat、ServiceNow API、記錄 ID 或即時對話。",
+        sourceLanguage: "台灣繁體中文",
+        draftLanguageMode: "主要示範語言：台灣繁體中文"
+      },
+      "es-ES": {
+        requesterLabel: "Solicitante demo C",
+        subject: "Transcripción de chat: problema de inicio de sesión tras cambiar contraseña",
+        bodyPreview:
+          "Una transcripción sanitizada dice que el inicio de sesión falla tras cambiar la contraseña. MFA aparece pero la autenticación falla repetidamente.",
+        sourceBody:
+          "Transcripción demo estilo ServiceNow Chat:\n\nID de transcripción: DEMO-CHAT-003\n[09:05] Solicitante demo: No puedo iniciar sesión después de cambiar la contraseña.\n[09:06] Soporte demo: ¿Aparece el aviso MFA?\n[09:07] Solicitante demo: Sí, pero la autenticación falla repetidamente. Puedo acceder a algunos servicios, pero no a la aplicación requerida.\n\nEstos son datos demo falsos y sanitizados. No hay ServiceNow Chat, API de ServiceNow, ID de transcripción ni conversación real conectada.",
+        sourceLanguage: "Español",
+        draftLanguageMode: "Idioma demo principal: Español"
+      }
+    }
   },
   {
     id: "demo-shared-mailbox-vpn",
     scenarioId: "vpn-issue",
-    requesterLabel: "Demo requester D",
     receivedAt: "2026-05-18 09:30",
-    subject: "Shared mailbox item: remote access unavailable",
-    bodyPreview:
-      "A shared mailbox style item reports remote access is unavailable while normal internet access still works.",
-    sourceBody:
-      "Shared mailbox-style demo item:\n\nFrom: Demo requester D\nTo: Demo service desk\nSubject: RE: [EXTERNAL] FW: remote access unavailable\n\nHello support,\nRemote access is unavailable after password reset at 09:30. Normal internet access works, but VPN fails and MFA keeps repeating.\n\nRegards,\nDemo requester D\n\nThis is fake sanitized intake data only. No mailbox, email address, message header, attachment, .msg file, or .eml file is connected.",
     sourceChannel: "Shared mailbox item",
-    status: "New"
+    content: {
+      "en-US": {
+        requesterLabel: "Demo requester D",
+        subject: "Shared mailbox item: remote access unavailable",
+        bodyPreview:
+          "A shared mailbox style item reports remote access is unavailable while normal internet access still works.",
+        sourceBody:
+          "Shared mailbox-style demo item:\n\nFrom: Demo requester D\nTo: Demo service desk\nSubject: RE: [EXTERNAL] FW: remote access unavailable\n\nBonjour support,\nL'acces a distance est indisponible apres la reinitialisation du mot de passe a 09:30. Normal internet access works, but VPN fails and MFA keeps repeating.\n\nRegards,\nDemo requester D\n\nThis is fake sanitized intake data only. No mailbox, email address, message header, attachment, .msg file, or .eml file is connected.",
+        sourceLanguage: "Unsupported demo source (fr-FR)",
+        draftLanguageMode: unsupportedFallbackMode
+      },
+      "zh-CN": {
+        requesterLabel: "演示请求者 D",
+        subject: "共享邮箱项目：远程访问不可用",
+        bodyPreview: "共享邮箱风格项目反馈普通互联网仍可用，但远程访问不可用。",
+        sourceBody:
+          "共享邮箱风格演示项目：\n\n发件人：演示请求者 D\n收件人：演示服务台\n主题：RE: [EXTERNAL] FW: 远程访问不可用\n\nBonjour support,\nL'acces a distance est indisponible apres la reinitialisation du mot de passe a 09:30. 普通互联网可用，但 VPN 失败且 MFA 反复出现。\n\n此致，\n演示请求者 D\n\n这只是假的脱敏受理数据。未连接邮箱、电子邮件地址、邮件头、附件、.msg 文件或 .eml 文件。",
+        sourceLanguage: "不支持的演示来源 (fr-FR)",
+        draftLanguageMode: unsupportedFallbackMode
+      },
+      "zh-TW": {
+        requesterLabel: "示範請求者 D",
+        subject: "共用信箱項目：遠端存取不可用",
+        bodyPreview: "共用信箱風格項目回報一般網際網路仍可使用，但遠端存取不可用。",
+        sourceBody:
+          "共用信箱風格示範項目：\n\n寄件者：示範請求者 D\n收件者：示範服務台\n主旨：RE: [EXTERNAL] FW: 遠端存取不可用\n\nBonjour support,\nL'acces a distance est indisponible apres la reinitialisation du mot de passe a 09:30. 一般網際網路可用，但 VPN 失敗且 MFA 反覆出現。\n\n此致，\n示範請求者 D\n\n這只是假的去識別化受理資料。未連線信箱、電子郵件地址、郵件標頭、附件、.msg 檔或 .eml 檔。",
+        sourceLanguage: "不支援的示範來源 (fr-FR)",
+        draftLanguageMode: unsupportedFallbackMode
+      },
+      "es-ES": {
+        requesterLabel: "Solicitante demo D",
+        subject: "Elemento de buzón compartido: acceso remoto no disponible",
+        bodyPreview:
+          "Un elemento estilo buzón compartido informa que el acceso remoto no está disponible mientras Internet normal funciona.",
+        sourceBody:
+          "Elemento demo estilo buzón compartido:\n\nDe: Solicitante demo D\nPara: Mesa de ayuda demo\nAsunto: RE: [EXTERNAL] FW: acceso remoto no disponible\n\nBonjour support,\nL'acces a distance est indisponible apres la reinitialisation du mot de passe a 09:30. El acceso normal a Internet funciona, pero la VPN falla y MFA se repite.\n\nSaludos,\nSolicitante demo D\n\nEstos son datos demo falsos y sanitizados. No hay buzón, dirección de correo, encabezado, adjunto, archivo .msg ni archivo .eml conectado.",
+        sourceLanguage: "Origen demo no soportado (fr-FR)",
+        draftLanguageMode: unsupportedFallbackMode
+      }
+    }
   }
 ];
+
+export function buildDemoQueueItems(
+  language: LanguageCode,
+  statusById: Partial<Record<string, DemoQueueStatus>> = {}
+): DemoQueueItem[] {
+  return demoQueueDefinitions.map((definition) => {
+    const content = definition.content[language];
+    return {
+      id: definition.id,
+      scenarioId: definition.scenarioId,
+      receivedAt: definition.receivedAt,
+      sourceChannel: definition.sourceChannel,
+      language,
+      status: statusById[definition.id] ?? "New",
+      ...content
+    };
+  });
+}
 
 export function App() {
   const [language, setLanguage] = useState<LanguageCode>("en-US");
   const [selectedScenarioId, setSelectedScenarioId] = useState<ManualPasteScenario["id"]>("vpn-issue");
-  const [selectedQueueItemId, setSelectedQueueItemId] = useState(demoIntakeQueue[0].id);
-  const [queueItems, setQueueItems] = useState<DemoQueueItem[]>(demoIntakeQueue);
+  const [selectedQueueItemId, setSelectedQueueItemId] = useState(demoQueueDefinitions[0].id);
+  const [queueStatuses, setQueueStatuses] = useState<Partial<Record<string, DemoQueueStatus>>>({});
+  const queueItems = useMemo(() => buildDemoQueueItems(language, queueStatuses), [language, queueStatuses]);
   const selectedQueueItem =
     queueItems.find((item) => item.id === selectedQueueItemId) ??
     queueItems.find((item) => item.scenarioId === selectedScenarioId) ??
@@ -464,7 +700,15 @@ export function App() {
   }
 
   function updateQueueItemStatus(itemId: string, status: DemoQueueStatus) {
-    setQueueItems((items) => items.map((item) => (item.id === itemId ? { ...item, status } : item)));
+    setQueueStatuses((items) => ({ ...items, [itemId]: status }));
+  }
+
+  function changeLanguage(nextLanguage: LanguageCode) {
+    setLanguage(nextLanguage);
+    setFieldOverrides({});
+    setPreparedCopyDraft(null);
+    setFillConfirmed(false);
+    setCheckedFieldReviewItems([]);
   }
 
   function updateField(fieldName: keyof TicketDraft, value: string) {
@@ -498,7 +742,7 @@ export function App() {
           <div className="safety-banner" role="status">
             {t.safetyTagline}
           </div>
-          <LanguageSelector language={language} onLanguageChange={setLanguage} t={t} />
+          <LanguageSelector language={language} onLanguageChange={changeLanguage} t={t} />
         </header>
 
         <div className="content">
@@ -523,6 +767,7 @@ export function App() {
               {t.workspaceSubtitle} No attachments, .msg/.eml parsing, live channel content, or external AI with
               real content is used.
             </p>
+            <p className="language-simulation-note">{t.languageSimulationNotice}</p>
           </div>
           <div className="mode-pill">{selectedEnvironment.label} · MockAIProvider</div>
         </header>
@@ -594,6 +839,14 @@ export function App() {
               <div>
                 <dt>Profile</dt>
                 <dd>{profile.displayName}</dd>
+              </div>
+              <div>
+                <dt>Source Language</dt>
+                <dd>{selectedQueueItem.sourceLanguage}</dd>
+              </div>
+              <div>
+                <dt>Draft Language Mode</dt>
+                <dd>{selectedQueueItem.draftLanguageMode}</dd>
               </div>
             </dl>
             <label className="field-block">
@@ -820,6 +1073,9 @@ function DemoQueuePanel({
             <strong>{item.subject}</strong>
             <span>{item.requesterLabel}</span>
             <span className="source-channel-badge">{item.sourceChannel}</span>
+            <span className="language-mode-line">
+              {item.sourceLanguage} · {item.draftLanguageMode}
+            </span>
             <span className={`status-badge ${statusClassName(item.status)}`}>{item.status}</span>
           </button>
         ))}
@@ -873,6 +1129,14 @@ function SourceReviewPanel({
           </dd>
         </div>
         <div>
+          <dt>Source Language</dt>
+          <dd>{item.sourceLanguage}</dd>
+        </div>
+        <div>
+          <dt>Draft Language Mode</dt>
+          <dd>{item.draftLanguageMode}</dd>
+        </div>
+        <div>
           <dt>Status</dt>
           <dd>{item.status}</dd>
         </div>
@@ -908,14 +1172,34 @@ function SourceReviewPanel({
   );
 }
 
-function buildDraftForQueueItem(item: DemoQueueItem): TicketDraft {
+export function buildDraftForQueueItem(item: DemoQueueItem): TicketDraft {
   const context = buildContextForQueueItem(item);
   const sourceCleanup = normalizeSourceContextText({
     sourceType: context.sourceType,
     rawText: context.rawText
   });
   const kbMatches = searchKnowledgeArticles(sourceCleanup.normalizedText, demoKnowledgeArticles, { limit: 3 });
-  return generateMockTicketDraft({ context, profile, kbMatches }, { idFactory: () => "desktop-demo-draft" });
+  const baseDraft = generateMockTicketDraft({ context, profile, kbMatches }, { idFactory: () => "desktop-demo-draft" });
+  const localizedDraftText = localizedDraftTextForQueueItem(item, sourceCleanup.normalizedText, kbMatches.map((match) => match.title));
+
+  return {
+    ...baseDraft,
+    shortDescription: {
+      ...baseDraft.shortDescription,
+      value: localizedDraftText.shortDescription,
+      evidence: `Deterministic local language demo. ${item.draftLanguageMode}`
+    },
+    description: {
+      ...baseDraft.description,
+      value: localizedDraftText.description,
+      evidence: `Summarized from ${item.sourceLanguage}; no external translation service.`
+    },
+    workNotes: {
+      ...baseDraft.workNotes,
+      value: localizedDraftText.workNotes,
+      evidence: `Prepared locally from source language metadata: ${item.sourceLanguage}.`
+    }
+  };
 }
 
 function buildContextForQueueItem(item: DemoQueueItem): CapturedContext {
@@ -939,6 +1223,143 @@ function sourceTypeForQueueItem(item: DemoQueueItem): SourceType {
     case "Shared mailbox item":
       return "outlook_web";
   }
+}
+
+function localizedDraftTextForQueueItem(
+  item: DemoQueueItem,
+  normalizedText: string,
+  kbTitles: string[]
+): { shortDescription: string; description: string; workNotes: string } {
+  if (item.draftLanguageMode === unsupportedFallbackMode) {
+    return unsupportedFallbackDraftText(item, normalizedText);
+  }
+
+  const sourceLine = compactSourceLine(normalizedText);
+  const kbLine = kbTitles.length > 0 ? kbTitles.join("; ") : "No KB match selected yet";
+
+  if (item.sourceChannel === "Self-service ticket") {
+    switch (item.language) {
+      case "zh-CN":
+        return {
+          shortDescription: "Windows 笔记本更新后性能下降",
+          description: `自助服务来源语言驱动 Description / Work Notes。本地演示草稿根据简体中文门户描述生成：${sourceLine}`,
+          workNotes: `自助服务来源语言驱动 Description / Work Notes。初步排查：确认变慢开始时间、重启结果、是否影响整机或单一应用。相关 KB：${kbLine}。`
+        };
+      case "zh-TW":
+        return {
+          shortDescription: "Windows 筆電更新後效能下降",
+          description: `自助服務來源語言驅動 Description / Work Notes。本地示範草稿依台灣繁體中文入口網站描述生成：${sourceLine}`,
+          workNotes: `自助服務來源語言驅動 Description / Work Notes。初步排查：確認變慢開始時間、重新啟動結果、是否影響整台裝置或單一應用程式。相關 KB：${kbLine}。`
+        };
+      case "es-ES":
+        return {
+          shortDescription: "Portatil Windows lento tras actualizacion",
+          description: `El idioma de origen de autoservicio guia Description / Work Notes. Borrador demo local generado desde la descripcion del portal en espanol: ${sourceLine}`,
+          workNotes: `El idioma de origen de autoservicio guia Description / Work Notes. Triaje inicial: confirmar cuando inicio la lentitud, resultado del reinicio y si afecta al equipo o a una app. KB relevante: ${kbLine}.`
+        };
+      case "en-US":
+        return {
+          shortDescription: "Windows endpoint performance issue after update",
+          description: `Self-service source language drives Description / Work Notes. Local demo draft generated from the English portal description: ${sourceLine}`,
+          workNotes: `Self-service source language drives Description / Work Notes. Initial triage: confirm when slowness started, reboot result, and whether it affects the whole device or one app. Relevant KB: ${kbLine}.`
+        };
+    }
+  }
+
+  switch (item.language) {
+    case "zh-CN":
+      if (item.scenarioId === "account-login-issue") {
+        return {
+          shortDescription: "密码变更后账号登录异常",
+          description: `用户反馈密码变更后无法登录。捕获的本地演示上下文：${sourceLine}`,
+          workNotes: `初步排查：确认是否为密码、MFA、账号锁定或应用访问拒绝问题；不要询问密码。相关 KB：${kbLine}。`
+        };
+      }
+      return {
+        shortDescription: "密码或 MFA 变更后 VPN 连接异常",
+        description: `用户反馈 VPN 连接问题。捕获的本地演示上下文：${sourceLine}`,
+        workNotes: `初步排查：确认不连 VPN 时互联网是否可用、最近是否修改密码/MFA、VPN 客户端错误信息和失败时间。相关 KB：${kbLine}。`
+      };
+    case "zh-TW":
+      if (item.scenarioId === "account-login-issue") {
+        return {
+          shortDescription: "密碼變更後帳號登入異常",
+          description: `使用者回報密碼變更後無法登入。擷取的本地示範內容：${sourceLine}`,
+          workNotes: `初步排查：確認是否為密碼、MFA、帳號鎖定或應用程式存取被拒；不要詢問密碼。相關 KB：${kbLine}。`
+        };
+      }
+      return {
+        shortDescription: "密碼或 MFA 變更後 VPN 連線異常",
+        description: `使用者回報 VPN 連線問題。擷取的本地示範內容：${sourceLine}`,
+        workNotes: `初步排查：確認未連 VPN 時網際網路是否可用、最近是否變更密碼/MFA、VPN 用戶端錯誤訊息與失敗時間。相關 KB：${kbLine}。`
+      };
+    case "es-ES":
+      if (item.scenarioId === "account-login-issue") {
+        return {
+          shortDescription: "Problema de inicio de sesion tras cambiar contrasena",
+          description: `El usuario informa un problema de cuenta o inicio de sesion. Contexto demo local capturado: ${sourceLine}`,
+          workNotes: `Triaje inicial: confirmar si el problema es contrasena, MFA, bloqueo de cuenta o acceso denegado a la aplicacion. No solicitar contrasena. KB relevante: ${kbLine}.`
+        };
+      }
+      return {
+        shortDescription: "Problema de conexion VPN tras cambio de contrasena o MFA",
+        description: `El usuario informa un problema de conectividad VPN. Contexto demo local capturado: ${sourceLine}`,
+        workNotes: `Triaje inicial: confirmar Internet sin VPN, cambio reciente de contrasena/MFA, mensaje de error del cliente VPN y hora de falla. KB relevante: ${kbLine}.`
+      };
+    case "en-US":
+      if (item.scenarioId === "account-login-issue") {
+        return {
+          shortDescription: "Account/login issue requiring access troubleshooting",
+          description: `User reports an account or login issue. Local demo context: ${sourceLine}`,
+          workNotes: `Initial triage: confirm whether issue is password, MFA, account lock, or application access denied. Do not request password. Relevant KB: ${kbLine}.`
+        };
+      }
+      return {
+        shortDescription: "VPN connection issue after password or MFA change",
+        description: `User reports a VPN connectivity problem. Local demo context: ${sourceLine}`,
+        workNotes: `Initial triage: confirm internet without VPN, recent password/MFA change, VPN client error message, and failure time. Relevant KB: ${kbLine}.`
+      };
+  }
+}
+
+function unsupportedFallbackDraftText(
+  item: DemoQueueItem,
+  normalizedText: string
+): { shortDescription: string; description: string; workNotes: string } {
+  const sourceLine = compactSourceLine(normalizedText);
+  const englishSummary = "English helper summary: remote access is unavailable after a password reset; VPN fails while normal internet access still works.";
+
+  switch (item.language) {
+    case "zh-CN":
+      return {
+        shortDescription: "远程访问不可用（不支持来源语言双语回退）",
+        description: `${unsupportedFallbackMode}\n来源语言片段：${sourceLine}\n${englishSummary}`,
+        workNotes: `${unsupportedFallbackMode}\n本地演示排查：保留来源语言片段，并附英文摘要供人工审核。不得调用外部翻译服务。`
+      };
+    case "zh-TW":
+      return {
+        shortDescription: "遠端存取不可用（不支援來源語言雙語回退）",
+        description: `${unsupportedFallbackMode}\n來源語言片段：${sourceLine}\n${englishSummary}`,
+        workNotes: `${unsupportedFallbackMode}\n本地示範排查：保留來源語言片段，並附英文摘要供人工審核。不得呼叫外部翻譯服務。`
+      };
+    case "es-ES":
+      return {
+        shortDescription: "Acceso remoto no disponible (respaldo bilingue por idioma no soportado)",
+        description: `${unsupportedFallbackMode}\nFragmento del idioma de origen: ${sourceLine}\n${englishSummary}`,
+        workNotes: `${unsupportedFallbackMode}\nTriaje demo local: conservar el fragmento del idioma de origen y agregar resumen en ingles para revision humana. No llamar servicios externos de traduccion.`
+      };
+    case "en-US":
+      return {
+        shortDescription: "Remote access unavailable (unsupported source language bilingual fallback)",
+        description: `${unsupportedFallbackMode}\nSource-language excerpt: ${sourceLine}\n${englishSummary}`,
+        workNotes: `${unsupportedFallbackMode}\nLocal demo triage: preserve the source-language excerpt and add an English summary for human review. Do not call external translation services.`
+      };
+  }
+}
+
+function compactSourceLine(text: string): string {
+  const singleLine = text.replace(/\s+/g, " ").trim();
+  return singleLine.length <= 220 ? singleLine : `${singleLine.slice(0, 217).trim()}...`;
 }
 
 function applyOverrides(draft: TicketDraft, overrides: Record<string, string>): TicketDraft {

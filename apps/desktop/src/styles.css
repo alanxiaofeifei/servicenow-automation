@@ -173,6 +173,11 @@ h3 {
   line-height: 1.55;
 }
 
+.workspace-header .language-simulation-note {
+  color: #4f6155;
+  font-weight: 750;
+}
+
 .mode-pill {
   flex: 0 0 auto;
   border: 1px solid #9db5a8;
@@ -515,7 +520,7 @@ h3 {
 
 .queue-item {
   display: grid;
-  grid-template-columns: minmax(120px, 0.6fr) minmax(220px, 1.4fr) minmax(140px, 0.8fr) minmax(120px, 0.7fr) auto;
+  grid-template-columns: minmax(120px, 0.6fr) minmax(220px, 1.25fr) minmax(140px, 0.7fr) minmax(120px, 0.7fr) minmax(170px, 1fr) auto;
   gap: 10px;
   align-items: center;
   width: 100%;
@@ -536,6 +541,11 @@ h3 {
 .queue-item span {
   color: #665c4f;
   line-height: 1.35;
+}
+
+.queue-item .language-mode-line {
+  color: #3f665e;
+  font-size: 0.76rem;
 }
 
 .queue-item.selected,
