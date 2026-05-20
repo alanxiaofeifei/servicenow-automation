@@ -50,6 +50,39 @@ describe("sda CLI", () => {
     expect(payload.safety.noExternalActionPerformed).toBe(true);
   });
 
+  it("evaluates qa smoke JSON without performing an external action", async () => {
+    const result = await runCli([
+      "qa",
+      "smoke",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo User",
+      "--summary",
+      "Cannot connect to VPN after password change",
+      "--approval-phrase",
+      "I APPROVE QA SUBMIT ONLY",
+      "--json"
+    ], { cwd });
+    const payload = JSON.parse(result.stdout);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.command).toBe("qa smoke");
+    expect(payload.plan.status).toBe("ready-for-manual-fill");
+    expect(payload.plan.targetHost).toBe("yageoqa.service-now.com");
+    expect(payload.plan.requiredApprovalPhrase).toBe("I APPROVE QA SUBMIT ONLY");
+    expect(payload.plan.fieldMappings.find((field: { key: string }) => field.key === "shortDescription").value).toContain("VPN");
+    expect(payload.plan.safety.manualFillOnly).toBe(true);
+    expect(payload.plan.safety.noBrowserAutomation).toBe(true);
+    expect(payload.plan.safety.noServiceNowApi).toBe(true);
+    expect(payload.plan.safety.noAutoSubmit).toBe(true);
+    expect(payload.plan.safety.noExternalActionPerformed).toBe(true);
+    expect(payload.safety.noExternalActionPerformed).toBe(true);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+  });
+
   it("generates work notes from a sample JSON file", async () => {
     const result = await runCli([
       "notes",

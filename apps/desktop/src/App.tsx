@@ -8,14 +8,17 @@ import {
   getServiceNowEnvironmentConfig,
   loadDemoYageoProfile,
   serviceNowEnvironmentConfigs,
+  validateServiceNowTargetUrl,
   type ServiceNowEnvironmentConfig,
   type ServiceNowEnvironmentMode
 } from "@servicenow-automation/profiles";
 import {
   CapturedContextSchema,
+  evaluateQaSingleTicketSmokePlan,
   normalizeSourceContextText,
   type CapturedContext,
   type FieldDraft,
+  type QaSingleTicketSmokePlan,
   type SourceType,
   type TicketDraft
 } from "@servicenow-automation/core";
@@ -727,6 +730,7 @@ export function App() {
   const [fieldOverrides, setFieldOverrides] = useState<Record<string, string>>({});
   const [preparedCopyDraft, setPreparedCopyDraft] = useState<PreparedCopyDraft | null>(null);
   const [fillConfirmed, setFillConfirmed] = useState(false);
+  const [qaSmokeApprovalPhrase, setQaSmokeApprovalPhrase] = useState("");
   const [checkedFieldReviewItems, setCheckedFieldReviewItems] = useState<string[]>([]);
   const [selectedEnvironmentMode, setSelectedEnvironmentMode] = useState<ServiceNowEnvironmentMode>(
     getDefaultServiceNowEnvironmentMode()
@@ -746,6 +750,23 @@ export function App() {
   const t = uiTranslations[language];
   const templatedDraft = applyDraftTemplates(initialDraft, draftTemplateSettings);
   const draft = applyOverrides(templatedDraft, fieldOverrides);
+  const qaSmokeTargetUrl = selectedEnvironment.url;
+  const qaSmokeTargetValidation = validateServiceNowTargetUrl(selectedEnvironment, qaSmokeTargetUrl);
+  const qaSmokePlan = evaluateQaSingleTicketSmokePlan({
+    draft,
+    environment: selectedEnvironment,
+    targetUrl: qaSmokeTargetUrl,
+    targetValidation: qaSmokeTargetValidation,
+    mappingOptions: {
+      requester: selectedQueueItem.requesterLabel,
+      contactType: selectedQueueItem.sourceChannel,
+      location: "Demo location / sanitized"
+    },
+    approvalPhrase: qaSmokeApprovalPhrase,
+    language,
+    templatePreset: selectedTemplatePresetId,
+    now: new Date()
+  });
   const context = buildContextForQueueItem(selectedQueueItem);
   const sourceCleanup = normalizeSourceContextText({
     sourceType: context.sourceType,
@@ -1059,6 +1080,11 @@ export function App() {
             </div>
 
             <MockServiceNowForm draft={draft} fillConfirmed={fillConfirmed} item={selectedQueueItem} t={t} />
+            <ControlledQaSingleTicketSmokePanel
+              approvalPhrase={qaSmokeApprovalPhrase}
+              plan={qaSmokePlan}
+              onApprovalPhraseChange={setQaSmokeApprovalPhrase}
+            />
           </div>
 
           <SettingsSidebar
@@ -2250,6 +2276,113 @@ function MockServiceNowForm({
           </span>
         </div>
       </div>
+    </section>
+  );
+}
+
+function ControlledQaSingleTicketSmokePanel({
+  approvalPhrase,
+  onApprovalPhraseChange,
+  plan
+}: {
+  approvalPhrase: string;
+  onApprovalPhraseChange: (value: string) => void;
+  plan: QaSingleTicketSmokePlan;
+}) {
+  const statusText =
+    plan.status === "ready-for-manual-fill"
+      ? "Ready for manual fill only"
+      : `Blocked: ${plan.gateDecision.reason}`;
+
+  return (
+    <section className="qa-smoke-panel" aria-labelledby="qa-smoke-title">
+      <header className="qa-smoke-header">
+        <div>
+          <p className="eyebrow">Manual-fill assisted QA smoke</p>
+          <h2 id="qa-smoke-title">Controlled QA single-ticket smoke</h2>
+          <p>
+            This does NOT submit, save, update, close, launch browser automation, call ServiceNow APIs, or write
+            ServiceNow.
+          </p>
+        </div>
+        <strong className={plan.status === "ready-for-manual-fill" ? "qa-smoke-status ready" : "qa-smoke-status"}>
+          {statusText}
+        </strong>
+      </header>
+
+      <div className="qa-smoke-summary-grid">
+        <div>
+          <span>Current environment mode</span>
+          <strong>{plan.mode}</strong>
+        </div>
+        <div>
+          <span>QA/dev target host</span>
+          <strong>{plan.targetHost ?? "not available"}</strong>
+        </div>
+        <div>
+          <span>Required approval phrase for submit_incident</span>
+          <code>{plan.requiredApprovalPhrase}</code>
+        </div>
+      </div>
+
+      <label className="qa-smoke-approval">
+        <span>Local approval phrase</span>
+        <input
+          autoComplete="off"
+          placeholder={plan.requiredApprovalPhrase}
+          value={approvalPhrase}
+          onChange={(event) => onApprovalPhraseChange(event.currentTarget.value)}
+        />
+      </label>
+
+      <ul className="qa-smoke-rules">
+        <li>Mock/prod shadow blocked.</li>
+        <li>QA/dev missing phrase blocked.</li>
+        <li>QA/dev exact phrase + complete mapping -&gt; ready for manual fill only.</li>
+      </ul>
+
+      {plan.missingRequiredFields.length > 0 ? (
+        <p className="qa-smoke-missing">Missing required mapping: {plan.missingRequiredFields.join(", ")}</p>
+      ) : (
+        <p className="qa-smoke-missing">Required mapping complete.</p>
+      )}
+
+      <div className="qa-smoke-field-preview" aria-label="Controlled QA smoke field mapping preview">
+        {plan.fieldMappings.map((mapping) => (
+          <div key={mapping.key}>
+            <span>{mapping.label}</span>
+            <strong>{mapping.value}</strong>
+          </div>
+        ))}
+      </div>
+
+      <dl className="qa-smoke-audit-preview" aria-label="Privacy-safe audit preview">
+        <div>
+          <dt>Timestamp</dt>
+          <dd>{plan.privacySafeAuditPreview.timestamp}</dd>
+        </div>
+        <div>
+          <dt>Mode</dt>
+          <dd>{plan.privacySafeAuditPreview.mode}</dd>
+        </div>
+        <div>
+          <dt>Language</dt>
+          <dd>{plan.privacySafeAuditPreview.language}</dd>
+        </div>
+        <div>
+          <dt>Template preset</dt>
+          <dd>{plan.privacySafeAuditPreview.templatePreset}</dd>
+        </div>
+        <div>
+          <dt>Action state</dt>
+          <dd>{plan.privacySafeAuditPreview.actionState}</dd>
+        </div>
+      </dl>
+
+      <p className="qa-smoke-safety-copy">
+        Manual fill only. Single ticket only. No browser DOM filling, no ServiceNow API, no auto-submit, no bulk create,
+        and productionWriteAllowed=false.
+      </p>
     </section>
   );
 }

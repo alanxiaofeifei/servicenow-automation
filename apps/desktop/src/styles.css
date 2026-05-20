@@ -1838,6 +1838,138 @@ textarea:focus,
   font-weight: 700;
 }
 
+.qa-smoke-panel {
+  margin-top: 14px;
+  border: 1px solid rgba(67, 84, 95, 0.24);
+  border-radius: 10px;
+  padding: 14px;
+  background: #fbfcfa;
+  box-shadow: 0 8px 22px rgba(60, 54, 42, 0.07);
+}
+
+.qa-smoke-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.qa-smoke-header h2 {
+  font-size: 1.25rem;
+}
+
+.qa-smoke-header p {
+  max-width: 760px;
+  margin: 7px 0 0;
+  color: #596257;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.qa-smoke-status {
+  border: 1px solid #c78428;
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: #63410d;
+  background: #fff3d8;
+  font-size: 0.84rem;
+}
+
+.qa-smoke-status.ready {
+  border-color: #2f756c;
+  color: #1f5f58;
+  background: #e9f5f1;
+}
+
+.qa-smoke-summary-grid,
+.qa-smoke-field-preview,
+.qa-smoke-audit-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.qa-smoke-summary-grid div,
+.qa-smoke-field-preview div,
+.qa-smoke-audit-preview div {
+  min-width: 0;
+  border: 1px solid #d8e0dc;
+  border-radius: 8px;
+  padding: 8px;
+  background: #ffffff;
+}
+
+.qa-smoke-summary-grid span,
+.qa-smoke-field-preview span,
+.qa-smoke-audit-preview dt,
+.qa-smoke-approval span {
+  display: block;
+  margin-bottom: 4px;
+  color: #617066;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.qa-smoke-summary-grid strong,
+.qa-smoke-field-preview strong,
+.qa-smoke-audit-preview dd {
+  margin: 0;
+  color: #263b45;
+  overflow-wrap: anywhere;
+}
+
+.qa-smoke-summary-grid code {
+  color: #263b45;
+  overflow-wrap: anywhere;
+}
+
+.qa-smoke-approval {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+}
+
+.qa-smoke-approval input {
+  border: 1px solid #cbd8d4;
+  border-radius: 8px;
+  padding: 10px 11px;
+  font-weight: 800;
+}
+
+.qa-smoke-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.qa-smoke-rules li {
+  border: 1px solid #d8e0dc;
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #536159;
+  background: #f1f7f4;
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.qa-smoke-missing,
+.qa-smoke-safety-copy {
+  margin: 10px 0 0;
+  color: #5a4421;
+  font-weight: 850;
+  line-height: 1.4;
+}
+
+.qa-smoke-audit-preview dd {
+  font-weight: 800;
+}
+
 .app-shell[data-theme="night"] .mock-form-panel {
   color: #1f2b30;
   background: linear-gradient(180deg, rgba(252, 253, 250, 0.96), rgba(239, 245, 241, 0.94));
@@ -1912,6 +2044,11 @@ textarea:focus,
 .app-shell[data-theme="night"] .fill-button:disabled {
   color: #61420f;
   background: #f8dfb4;
+}
+
+.app-shell[data-theme="night"] .qa-smoke-panel {
+  color: #1f2b30;
+  background: #fbfcfa;
 }
 
 @media (max-width: 1320px) {

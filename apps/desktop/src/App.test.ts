@@ -313,6 +313,27 @@ describe("App", () => {
     expect(output).toContain("Final submit is always manual.");
   });
 
+  it("renders the controlled QA single-ticket smoke panel with phrase and status text", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Controlled QA single-ticket smoke");
+    expect(output).toContain("Manual-fill assisted QA smoke");
+    expect(output).toContain("Current environment mode");
+    expect(output).toContain("Required approval phrase for submit_incident");
+    expect(output).toContain("I APPROVE MOCK SUBMIT ONLY");
+    expect(output).toContain("Blocked: mock-write-denied");
+    expect(output).toContain("Mock/prod shadow blocked.");
+    expect(output).toContain("QA/dev missing phrase blocked.");
+    expect(output).toContain("QA/dev exact phrase + complete mapping -&gt; ready for manual fill only.");
+    expect(output).toContain("Privacy-safe audit preview");
+    expect(output).toContain("Manual fill only. Single ticket only.");
+    expect(output).toContain("No browser DOM filling");
+    expect(output).toContain("productionWriteAllowed=false");
+    expect(output).toContain("Channel / Contact type");
+    expect(output).toContain("Work notes");
+    expect(output).toContain("not available");
+  });
+
   it("renders the legacy-inspired ServiceNow field review checklist and safety boundary", () => {
     const output = renderAppMarkup();
     const checklistLabels = [

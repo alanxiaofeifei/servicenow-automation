@@ -7,9 +7,16 @@ import { demoKnowledgeArticles, searchKnowledgeArticles } from "@servicenow-auto
 import {
   getServiceNowEnvironmentConfig,
   loadDemoYageoProfile,
+  validateServiceNowTargetUrl,
   type ServiceNowEnvironmentMode
 } from "@servicenow-automation/profiles";
-import type { CapturedContext, KnowledgeMatch, TicketDraft } from "@servicenow-automation/core";
+import {
+  evaluateQaSingleTicketSmokePlan,
+  type CapturedContext,
+  type KnowledgeMatch,
+  type QaSingleTicketSmokePlan,
+  type TicketDraft
+} from "@servicenow-automation/core";
 
 export type CliResult = {
   exitCode: number;
@@ -173,6 +180,40 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
         reset,
         safety: safetyEnvelope()
       }, `Reset ignored browser profile directory: ${reset.recreatedDirectory}`);
+    }
+
+    if (namespace === "qa" && action === "smoke") {
+      const mode = parseEnvironmentMode(requiredFlag(parsed, "mode", "qa smoke"));
+      const template = requiredFlag(parsed, "template", "qa smoke");
+      const user = requiredFlag(parsed, "user", "qa smoke");
+      const summary = requiredFlag(parsed, "summary", "qa smoke");
+      const environment = getServiceNowEnvironmentConfig(mode);
+      const targetUrl = parsed.flags["target-url"] ?? environment.url;
+      const targetValidation = validateServiceNowTargetUrl(environment, targetUrl);
+      const ticketDraft = buildTicketDraft({ template, user, summary });
+      const plan = evaluateQaSingleTicketSmokePlan({
+        draft: ticketDraft,
+        environment,
+        targetUrl,
+        targetValidation,
+        mappingOptions: {
+          requester: user,
+          contactType: "Self-service / manual paste",
+          location: "Demo location / sanitized"
+        },
+        approvalPhrase: parsed.flags["approval-phrase"],
+        language: parsed.flags.language ?? "en-US",
+        templatePreset: parsed.flags["template-preset"] ?? "standard-service-desk",
+        now: new Date()
+      });
+
+      return output(parsed, {
+        command: "qa smoke",
+        mode,
+        template,
+        plan,
+        safety: safetyEnvelope()
+      }, formatQaSmokePlan(plan));
     }
 
     if (namespace === "run") {
@@ -363,6 +404,28 @@ function formatBrowserSmoke(status: string, blockedReason?: string): string {
   ].join("\n");
 }
 
+function formatQaSmokePlan(plan: QaSingleTicketSmokePlan): string {
+  const lines = [
+    `Controlled QA single-ticket smoke: ${plan.status}`,
+    `Mode: ${plan.mode}`,
+    plan.targetHost ? `Target host: ${plan.targetHost}` : "Target host: not validated",
+    `Required approval phrase: ${plan.requiredApprovalPhrase}`,
+    `Gate decision: ${plan.gateDecision.reason}`
+  ];
+
+  if (plan.missingRequiredFields.length > 0) {
+    lines.push(`Missing required mappings: ${plan.missingRequiredFields.join(", ")}`);
+  }
+
+  lines.push(
+    plan.status === "ready-for-manual-fill"
+      ? "Ready for manual fill only. No ticket was created, saved, submitted, updated, closed, or written through ServiceNow API."
+      : "Blocked. No ticket was created, saved, submitted, updated, closed, or written through ServiceNow API."
+  );
+
+  return lines.join("\n");
+}
+
 function helpText(): string {
   return `Usage: sda <command> [options]
 
@@ -376,6 +439,7 @@ Commands:
   sda browser launch --mode <qa|dev> [--target-url <url>] [--browser-executable <path>] [--execute --confirm-no-write-launch] [--json]
   sda browser smoke [--target about:blank] [--browser-executable <path>] [--profile-root <path>] [--execute --confirm-no-write-launch] [--json]
   sda browser reset --mode <mock|qa|dev|production-shadow> [--json]
+  sda qa smoke --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> [--target-url <url>] [--approval-phrase <phrase>] [--language <lang>] [--template-preset <preset>] [--json]
   sda run --workflow <workflow_name> --input <json_file> --dry-run [--json]
 
 Safety:
