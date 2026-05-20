@@ -1,4 +1,4 @@
-import { type CSSProperties, type WheelEvent, useMemo, useState } from "react";
+import { type CSSProperties, type WheelEvent, useEffect, useMemo, useState } from "react";
 
 import { demoManualPasteScenarios, type ManualPasteScenario } from "@servicenow-automation/adapters/browser";
 import { generateMockTicketDraft } from "@servicenow-automation/ai";
@@ -735,6 +735,21 @@ export function App() {
   const [selectedEnvironmentMode, setSelectedEnvironmentMode] = useState<ServiceNowEnvironmentMode>(
     getDefaultServiceNowEnvironmentMode()
   );
+
+  useEffect(() => {
+    if (!settingsOpen) {
+      return undefined;
+    }
+
+    function closeSettingsOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setSettingsOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", closeSettingsOnEscape);
+    return () => window.removeEventListener("keydown", closeSettingsOnEscape);
+  }, [settingsOpen]);
   const [highSeverityState, setHighSeverityState] = useState<HighSeverityState>("normal");
   const [highSeverityAcknowledged, setHighSeverityAcknowledged] = useState(false);
   const [highSeverityMuted, setHighSeverityMuted] = useState(false);
@@ -1091,6 +1106,7 @@ export function App() {
             appZoomPercent={appZoomPercent}
             checkedFieldReviewItems={checkedFieldReviewItems}
             isOpen={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
             onPresetChange={selectTemplatePreset}
             onResetZoom={() => setAppZoomPercent(100)}
             onTemplateChange={updateTemplateField}
@@ -1139,6 +1155,7 @@ function SettingsSidebar({
   appZoomPercent,
   checkedFieldReviewItems,
   isOpen,
+  onClose,
   onPresetChange,
   onResetZoom,
   onTemplateChange,
@@ -1156,6 +1173,7 @@ function SettingsSidebar({
   appZoomPercent: number;
   checkedFieldReviewItems: string[];
   isOpen: boolean;
+  onClose: () => void;
   onPresetChange: (presetId: DraftTemplatePresetId) => void;
   onResetZoom: () => void;
   onTemplateChange: (fieldName: keyof DraftTemplateSettings, value: string) => void;
@@ -1178,8 +1196,18 @@ function SettingsSidebar({
     >
       <div className="settings-sidebar-inner">
         <header className="settings-sidebar-header">
-          <p className="eyebrow">Centralized settings</p>
-          <h3>Settings</h3>
+          <div>
+            <p className="eyebrow">Centralized settings</p>
+            <h3>Settings</h3>
+          </div>
+          <button
+            aria-label="Close settings panel"
+            className="settings-close-button"
+            type="button"
+            onClick={onClose}
+          >
+            ✕ Close
+          </button>
         </header>
 
         <DisplaySettingsPanel
@@ -1231,7 +1259,7 @@ function DisplaySettingsPanel({
   selectedTheme: DisplayTheme;
 }) {
   return (
-    <details className="display-settings-panel">
+    <details className="display-settings-panel" open>
       <summary>
         <span className="summary-label">⚙ Display Settings</span>
         <strong>{appZoomPercent}%</strong>

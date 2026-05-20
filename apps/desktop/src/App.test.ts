@@ -101,6 +101,8 @@ describe("App", () => {
 
     expect(output).toContain("⚙ Settings");
     expect(output).toContain('aria-label="Centralized settings"');
+    expect(settingsMarkup).toContain('aria-label="Close settings panel"');
+    expect(settingsMarkup).toContain("✕ Close");
     expect(settingsStart).toBeGreaterThan(-1);
     expect(settingsMarkup).toContain("⚙ Display Settings");
     expect(settingsMarkup).toContain("⚙ Templates / Settings");
@@ -124,8 +126,7 @@ describe("App", () => {
     expect(output).toContain("Auto-fit text areas");
     expect(output).toContain("Compact + visible resize handle");
     expect(output).toContain("Display settings are local React state only and are not persisted.");
-    expect(output).toContain('<details class="display-settings-panel">');
-    expect(output).not.toContain('class="display-settings-panel" open');
+    expect(output).toContain('<details class="display-settings-panel" open="">');
   });
 
   it("clamps local app zoom and maps Ctrl wheel direction", () => {
