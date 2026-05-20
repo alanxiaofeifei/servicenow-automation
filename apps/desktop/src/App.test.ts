@@ -38,6 +38,23 @@ describe("App", () => {
     expect(output).toContain("fake sanitized demo data only");
   });
 
+  it("renders the compact fake high severity alert simulator", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("High Severity Monitor Simulator");
+    expect(output).toContain("Normal");
+    expect(output).toContain("P2 Active");
+    expect(output).toContain("P1 Active");
+    expect(output).toContain("Acknowledge");
+    expect(output).toContain("Mute demo alerts");
+    expect(output).toContain("Fake simulator only — no ServiceNow polling or API calls");
+    expect(output).toContain("Fake count");
+    expect(output).toContain("Fake affected services");
+    expect(output).toContain("Demo service desk queue");
+    expect(output).toContain('<details class="high-severity-simulator">');
+    expect(output).not.toContain('class="high-severity-simulator" open');
+  });
+
   it("renders the Ticket Draft workspace controls and default VPN draft", () => {
     const output = renderAppMarkup();
 

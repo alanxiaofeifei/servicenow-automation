@@ -218,6 +218,105 @@ h3 {
   font-size: 0.84rem;
 }
 
+.high-severity-simulator {
+  margin: 0 0 14px;
+  border: 1px solid #d8c9af;
+  border-radius: 8px;
+  background: rgba(255, 253, 247, 0.72);
+}
+
+.high-severity-simulator summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  color: #2f2a23;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.severity-state-pill {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 4px 9px;
+  color: #244f45;
+  background: #e4f3e8;
+  font-size: 0.78rem;
+}
+
+.severity-state-pill.p2 {
+  color: #68430c;
+  background: #ffe8bf;
+}
+
+.severity-state-pill.p1 {
+  color: #7b271b;
+  background: #ffe1d9;
+}
+
+.high-severity-body {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(250px, 1fr) minmax(360px, 1.4fr) minmax(210px, 0.7fr);
+  gap: 10px;
+  align-items: center;
+  border-top: 1px solid #e2d4bc;
+  padding: 10px 12px 12px;
+}
+
+.simulator-safety-note {
+  margin: 0;
+  color: #68430c;
+  font-size: 0.84rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.severity-state-buttons,
+.severity-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.severity-state-buttons button,
+.severity-actions button {
+  border: 1px solid #d2bea0;
+  border-radius: 8px;
+  padding: 7px 9px;
+  color: #443729;
+  background: #fff9ed;
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.severity-state-buttons button.active,
+.severity-state-buttons button:hover,
+.severity-actions button:hover {
+  border-color: #2f756c;
+  color: #174f49;
+  background: #edf8f2;
+}
+
+.severity-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+}
+
+.severity-summary div {
+  min-width: 0;
+  border: 1px solid #e2d4bc;
+  border-radius: 8px;
+  padding: 7px 8px;
+  background: #fffaf0;
+}
+
+.severity-summary dd {
+  font-size: 0.84rem;
+}
+
 .environment-panel {
   margin: 0 0 16px;
   border: 1px solid #d9c8ac;
@@ -1129,11 +1228,13 @@ textarea:focus {
   .workspace-grid,
   .risk-control-gate,
   .runtime-safety-panel,
+  .high-severity-body,
   .field-reference-strip {
     grid-template-columns: 1fr;
   }
 
-  .runtime-safety-panel dl {
+  .runtime-safety-panel dl,
+  .severity-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1176,7 +1277,8 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
-  .runtime-safety-panel dl {
+  .runtime-safety-panel dl,
+  .severity-summary {
     grid-template-columns: 1fr;
   }
 

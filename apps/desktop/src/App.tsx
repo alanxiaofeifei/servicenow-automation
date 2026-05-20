@@ -24,6 +24,8 @@ const profile = loadDemoYageoProfile();
 
 type DemoQueueStatus = "New" | "Reviewed" | "Drafted" | "Done" | "Skipped";
 
+type HighSeverityState = "normal" | "p2" | "p1";
+
 type SourceChannel = "Teams message" | "Self-service ticket" | "ServiceNow Chat transcript" | "Shared mailbox item";
 
 type DemoQueueItem = {
@@ -67,6 +69,17 @@ type UiTranslations = {
   workspaceSubtitle: string;
   runtimeEyebrow: string;
   runtimeTitle: string;
+  highSeverityMonitor: {
+    title: string;
+    safetyNotice: string;
+    stateLabel: string;
+    countLabel: string;
+    affectedServicesLabel: string;
+    acknowledgedLabel: string;
+    mutedLabel: string;
+    acknowledgeAction: string;
+    muteAction: string;
+  };
   environmentEyebrow: string;
   environmentTitle: string;
   queueEyebrow: string;
@@ -117,6 +130,17 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
       "演示模式是确定性的。仅使用假脱敏数据；不连接 Teams、邮箱、ServiceNow Chat/API 或自助服务轮询。",
     runtimeEyebrow: "运行时 / 安全",
     runtimeTitle: "静态演示姿态",
+    highSeverityMonitor: {
+      title: "High Severity Monitor Simulator",
+      safetyNotice: "Fake simulator only — no ServiceNow polling or API calls",
+      stateLabel: "状态",
+      countLabel: "假告警数",
+      affectedServicesLabel: "假受影响服务",
+      acknowledgedLabel: "已确认",
+      mutedLabel: "演示静音",
+      acknowledgeAction: "Acknowledge",
+      muteAction: "Mute demo alerts"
+    },
     environmentEyebrow: "ServiceNow 环境模式",
     environmentTitle: "为本次运行选择最安全的目标。",
     queueEyebrow: "受理队列",
@@ -160,6 +184,17 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
       "Demo mode is deterministic. Fake sanitized intake only; no Teams, mailbox, ServiceNow Chat/API, or self-service polling connection is used.",
     runtimeEyebrow: "Runtime / Safety",
     runtimeTitle: "Static demo posture",
+    highSeverityMonitor: {
+      title: "High Severity Monitor Simulator",
+      safetyNotice: "Fake simulator only — no ServiceNow polling or API calls",
+      stateLabel: "State",
+      countLabel: "Fake count",
+      affectedServicesLabel: "Fake affected services",
+      acknowledgedLabel: "Acknowledged",
+      mutedLabel: "Muted",
+      acknowledgeAction: "Acknowledge",
+      muteAction: "Mute demo alerts"
+    },
     environmentEyebrow: "ServiceNow Environment Mode",
     environmentTitle: "Choose the safest target for this run.",
     queueEyebrow: "Intake Queue",
@@ -204,6 +239,17 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
       "El modo demo es determinista. Solo usa datos falsos y sanitizados; no conecta Teams, buzón, ServiceNow Chat/API ni sondeo de autoservicio.",
     runtimeEyebrow: "Ejecución / Seguridad",
     runtimeTitle: "Postura demo estática",
+    highSeverityMonitor: {
+      title: "High Severity Monitor Simulator",
+      safetyNotice: "Fake simulator only — no ServiceNow polling or API calls",
+      stateLabel: "Estado",
+      countLabel: "Conteo falso",
+      affectedServicesLabel: "Servicios falsos afectados",
+      acknowledgedLabel: "Reconocido",
+      mutedLabel: "Demo silenciada",
+      acknowledgeAction: "Acknowledge",
+      muteAction: "Mute demo alerts"
+    },
     environmentEyebrow: "Modo de entorno ServiceNow",
     environmentTitle: "Elige el destino más seguro para esta ejecución.",
     queueEyebrow: "Cola de entrada",
@@ -243,6 +289,27 @@ const runtimeSafetyStatuses = [
   { label: "Profile", value: "disposable/tool-owned model" },
   { label: "Data", value: "fake sanitized demo data only" }
 ];
+
+const highSeveritySimulatorStates: Record<
+  HighSeverityState,
+  { label: string; fakeCount: number; affectedServices: string[] }
+> = {
+  normal: {
+    label: "Normal",
+    fakeCount: 0,
+    affectedServices: ["Demo service desk queue"]
+  },
+  p2: {
+    label: "P2 Active",
+    fakeCount: 2,
+    affectedServices: ["Demo identity sign-in", "Demo remote access"]
+  },
+  p1: {
+    label: "P1 Active",
+    fakeCount: 4,
+    affectedServices: ["Demo network access", "Demo employee portal"]
+  }
+};
 
 const fieldReviewChecklistItems: FieldReviewChecklistItem[] = [
   { id: "source-channel-reviewed", label: "Source channel reviewed" },
@@ -339,6 +406,9 @@ export function App() {
   const [selectedEnvironmentMode, setSelectedEnvironmentMode] = useState<ServiceNowEnvironmentMode>(
     getDefaultServiceNowEnvironmentMode()
   );
+  const [highSeverityState, setHighSeverityState] = useState<HighSeverityState>("normal");
+  const [highSeverityAcknowledged, setHighSeverityAcknowledged] = useState(false);
+  const [highSeverityMuted, setHighSeverityMuted] = useState(false);
 
   const selectedEnvironment = getServiceNowEnvironmentConfig(selectedEnvironmentMode);
   const t = uiTranslations[language];
@@ -458,6 +528,19 @@ export function App() {
         </header>
 
         <RuntimeSafetyPanel t={t} />
+
+        <HighSeverityMonitorSimulator
+          acknowledged={highSeverityAcknowledged}
+          muted={highSeverityMuted}
+          selectedState={highSeverityState}
+          onAcknowledge={() => setHighSeverityAcknowledged(true)}
+          onMute={() => setHighSeverityMuted((current) => !current)}
+          onSelectedStateChange={(state) => {
+            setHighSeverityState(state);
+            setHighSeverityAcknowledged(false);
+          }}
+          t={t}
+        />
 
         <EnvironmentModePanel
           selectedMode={selectedEnvironmentMode}
@@ -624,6 +707,84 @@ function RuntimeSafetyPanel({ t }: { t: UiTranslations }) {
         ))}
       </dl>
     </aside>
+  );
+}
+
+function HighSeverityMonitorSimulator({
+  acknowledged,
+  muted,
+  onAcknowledge,
+  onMute,
+  onSelectedStateChange,
+  selectedState,
+  t
+}: {
+  acknowledged: boolean;
+  muted: boolean;
+  onAcknowledge: () => void;
+  onMute: () => void;
+  onSelectedStateChange: (state: HighSeverityState) => void;
+  selectedState: HighSeverityState;
+  t: UiTranslations;
+}) {
+  const selectedFakeState = highSeveritySimulatorStates[selectedState];
+
+  return (
+    <details className="high-severity-simulator">
+      <summary>
+        <span>{t.highSeverityMonitor.title}</span>
+        <strong className={`severity-state-pill ${selectedState}`}>{selectedFakeState.label}</strong>
+      </summary>
+
+      <div className="high-severity-body">
+        <p className="simulator-safety-note">{t.highSeverityMonitor.safetyNotice}</p>
+
+        <div className="severity-state-buttons" aria-label="Fake high severity states">
+          {(Object.keys(highSeveritySimulatorStates) as HighSeverityState[]).map((state) => (
+            <button
+              key={state}
+              className={state === selectedState ? "active" : undefined}
+              type="button"
+              onClick={() => onSelectedStateChange(state)}
+            >
+              {highSeveritySimulatorStates[state].label}
+            </button>
+          ))}
+        </div>
+
+        <dl className="severity-summary">
+          <div>
+            <dt>{t.highSeverityMonitor.stateLabel}</dt>
+            <dd>{selectedFakeState.label}</dd>
+          </div>
+          <div>
+            <dt>{t.highSeverityMonitor.countLabel}</dt>
+            <dd>{selectedFakeState.fakeCount}</dd>
+          </div>
+          <div>
+            <dt>{t.highSeverityMonitor.affectedServicesLabel}</dt>
+            <dd>{selectedFakeState.affectedServices.join(", ")}</dd>
+          </div>
+          <div>
+            <dt>{t.highSeverityMonitor.acknowledgedLabel}</dt>
+            <dd>{acknowledged ? "Yes" : "No"}</dd>
+          </div>
+          <div>
+            <dt>{t.highSeverityMonitor.mutedLabel}</dt>
+            <dd>{muted ? "On" : "Off"}</dd>
+          </div>
+        </dl>
+
+        <div className="severity-actions" aria-label="Fake high severity alert actions">
+          <button type="button" onClick={onAcknowledge}>
+            {t.highSeverityMonitor.acknowledgeAction}
+          </button>
+          <button type="button" onClick={onMute}>
+            {t.highSeverityMonitor.muteAction}
+          </button>
+        </div>
+      </div>
+    </details>
   );
 }
 
