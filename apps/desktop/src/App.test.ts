@@ -53,6 +53,16 @@ describe("App", () => {
     expect(output).toContain("Human review required before any ServiceNow action.");
   });
 
+  it("renders the project-extensible language selector options", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Interface language");
+    expect(output).toContain("Future languages can be added per project.");
+    expect(output).toContain("中文");
+    expect(output).toContain("English");
+    expect(output).toContain("Español");
+  });
+
   it("renders local safe draft copy actions and sanitized Markdown export text", () => {
     const output = renderAppMarkup();
 
@@ -116,13 +126,34 @@ describe("App", () => {
   it("renders a filled mock ServiceNow Incident form with disabled demo submit", () => {
     const output = renderAppMarkup();
 
-    expect(output).toContain("Mock ServiceNow Incident Form");
+    expect(output).toContain("Mock ServiceNow Incident Preview");
+    expect(output).toContain("Incident | New record — Mock preview");
+    expect(output).toContain("MOCK / Demo only");
     expect(output).toContain("Fill Mock ServiceNow Form");
     expect(output).toContain("Incident · QA/Dev rehearsal");
-    expect(output).toContain("Caller");
-    expect(output).toContain("Assignment Group");
+    expect(output).toContain("Requester");
+    expect(output).toContain("Category");
+    expect(output).toContain("Location");
+    expect(output).toContain("Channel");
+    expect(output).toContain("Impact");
+    expect(output).toContain("Urgency");
+    expect(output).toContain("Assignment group");
+    expect(output).toContain("Short description");
+    expect(output).toContain("Demo requester A");
+    expect(output).toContain("Teams message");
+    expect(output).not.toContain("Self-service / manual paste");
+    expect(output).toContain("Details");
+    expect(output).toContain("Notes");
+    expect(output).toContain("Related Search (mock only)");
+    expect(output).toContain("Save");
+    expect(output).toContain("Submit");
+    expect(output).toContain("Update");
+    expect(output).toContain("Close");
+    expect(output).toContain("Disabled / unavailable in demo mode");
     expect(output).toContain("VPN connection issue after password or MFA change");
+    expect(output).toContain("Save / Submit / Update / Close unavailable in demo mode");
     expect(output).toContain("Submit disabled in demo mode");
+    expect(output.match(/class=\"required-star\"/g)?.length ?? 0).toBe(8);
   });
 
   it("renders risk controls for no auto-submit/close and fill confirmation", () => {

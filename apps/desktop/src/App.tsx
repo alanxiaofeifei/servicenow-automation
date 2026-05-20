@@ -48,6 +48,189 @@ type PreparedCopyDraft = {
   text: string;
 };
 
+type LanguageCode = "zh-CN" | "en-US" | "es-ES";
+
+type UiTranslations = {
+  safetyTagline: string;
+  productEyebrow: string;
+  heroTitle: string;
+  heroSubtitle: string;
+  languageLabel: string;
+  languageHelper: string;
+  workflowEyebrow: string;
+  workflowStages: {
+    queue: string;
+    sourceReview: string;
+    ticketDraft: string;
+  };
+  workspaceTitle: string;
+  workspaceSubtitle: string;
+  runtimeEyebrow: string;
+  runtimeTitle: string;
+  environmentEyebrow: string;
+  environmentTitle: string;
+  queueEyebrow: string;
+  queueTitle: string;
+  sourceReviewEyebrow: string;
+  sourceReviewTitle: string;
+  capturedContextTitle: string;
+  editableDraftTitle: string;
+  kbMatchesTitle: string;
+  missingInfoTitle: string;
+  riskFlagsTitle: string;
+  copyEyebrow: string;
+  copyTitle: string;
+  checklistEyebrow: string;
+  checklistTitle: string;
+  mockEyebrow: string;
+  mockTitle: string;
+  mockSubtitle: string;
+  mockFillButton: string;
+  mockReadyStatus: string;
+  mockLockedStatus: string;
+  mockDisabledStatus: string;
+  mockDemoStamp: string;
+};
+
+const languageOptions: { code: LanguageCode; label: string }[] = [
+  { code: "zh-CN", label: "中文" },
+  { code: "en-US", label: "English" },
+  { code: "es-ES", label: "Español" }
+];
+
+const uiTranslations: Record<LanguageCode, UiTranslations> = {
+  "zh-CN": {
+    safetyTagline: "AI 仅生成草稿。必须人工审核并手动提交。",
+    productEyebrow: "现场试运行加速 P0",
+    heroTitle: "ServiceNow 自动化",
+    heroSubtitle: "人工把关的服务台工作台，用于审核脱敏队列项并准备可编辑的 Incident 草稿。",
+    languageLabel: "界面语言",
+    languageHelper: "每个项目可扩展更多语言。",
+    workflowEyebrow: "队列 → 来源审核 → TicketDraft",
+    workflowStages: {
+      queue: "队列",
+      sourceReview: "来源审核",
+      ticketDraft: "工单草稿"
+    },
+    workspaceTitle: "工单草稿工作台",
+    workspaceSubtitle:
+      "演示模式是确定性的。仅使用假脱敏数据；不连接 Teams、邮箱、ServiceNow Chat/API 或自助服务轮询。",
+    runtimeEyebrow: "运行时 / 安全",
+    runtimeTitle: "静态演示姿态",
+    environmentEyebrow: "ServiceNow 环境模式",
+    environmentTitle: "为本次运行选择最安全的目标。",
+    queueEyebrow: "受理队列",
+    queueTitle: "受理队列 — 仅假脱敏数据",
+    sourceReviewEyebrow: "来源审核",
+    sourceReviewTitle: "原始与清洗后的来源",
+    capturedContextTitle: "捕获上下文",
+    editableDraftTitle: "可编辑 Incident 草稿",
+    kbMatchesTitle: "KB 匹配",
+    missingInfoTitle: "缺失信息",
+    riskFlagsTitle: "风险标记",
+    copyEyebrow: "本地复制 / 导出",
+    copyTitle: "安全草稿操作",
+    checklistEyebrow: "传统字段审核",
+    checklistTitle: "Incident 字段依赖检查清单",
+    mockEyebrow: "Incident · QA/Dev 预演",
+    mockTitle: "Mock ServiceNow Incident 预览",
+    mockSubtitle: "该面板展示可编辑草稿如何映射到接近 ServiceNow 的 Incident 新建表单，仅用于演示。",
+    mockFillButton: "填充 Mock ServiceNow 表单",
+    mockReadyStatus: "已准备好 mock 填充",
+    mockLockedStatus: "审核确认前锁定填充动作",
+    mockDisabledStatus: "演示模式下 Save / Submit / Update / Close 不可用",
+    mockDemoStamp: "MOCK / 仅演示"
+  },
+  "en-US": {
+    safetyTagline: "AI drafts only. Human review and manual submit required.",
+    productEyebrow: "Field-trial accelerated P0",
+    heroTitle: "ServiceNow Automation",
+    heroSubtitle:
+      "Human-in-the-loop Service Desk workflow cockpit for reviewing sanitized queue items and preparing editable Incident drafts.",
+    languageLabel: "Interface language",
+    languageHelper: "Future languages can be added per project.",
+    workflowEyebrow: "Queue → Source Review → TicketDraft",
+    workflowStages: {
+      queue: "Queue",
+      sourceReview: "Source Review",
+      ticketDraft: "TicketDraft"
+    },
+    workspaceTitle: "Ticket Draft Workspace",
+    workspaceSubtitle:
+      "Demo mode is deterministic. Fake sanitized intake only; no Teams, mailbox, ServiceNow Chat/API, or self-service polling connection is used.",
+    runtimeEyebrow: "Runtime / Safety",
+    runtimeTitle: "Static demo posture",
+    environmentEyebrow: "ServiceNow Environment Mode",
+    environmentTitle: "Choose the safest target for this run.",
+    queueEyebrow: "Intake Queue",
+    queueTitle: "Intake Queue — fake sanitized data only",
+    sourceReviewEyebrow: "Source Review",
+    sourceReviewTitle: "Raw vs Cleaned Source",
+    capturedContextTitle: "Captured Context",
+    editableDraftTitle: "Editable Incident Draft",
+    kbMatchesTitle: "KB Matches",
+    missingInfoTitle: "Missing Info",
+    riskFlagsTitle: "Risk Flags",
+    copyEyebrow: "Local copy/export",
+    copyTitle: "Safe draft actions",
+    checklistEyebrow: "Legacy-inspired field review",
+    checklistTitle: "Incident field dependency checklist",
+    mockEyebrow: "Incident · QA/Dev rehearsal",
+    mockTitle: "Mock ServiceNow Incident Preview",
+    mockSubtitle:
+      "This panel shows how the editable draft would map into a ServiceNow-like Incident new-record form before QA/dev testing.",
+    mockFillButton: "Fill Mock ServiceNow Form",
+    mockReadyStatus: "Ready for mock fill",
+    mockLockedStatus: "Fill action locked until review confirmation",
+    mockDisabledStatus: "Save / Submit / Update / Close unavailable in demo mode",
+    mockDemoStamp: "MOCK / Demo only"
+  },
+  "es-ES": {
+    safetyTagline: "Solo borradores de IA. Se requiere revisión humana y envío manual.",
+    productEyebrow: "P0 acelerado para prueba de campo",
+    heroTitle: "Automatización de ServiceNow",
+    heroSubtitle:
+      "Cockpit de Service Desk con revisión humana para validar elementos sanitizados de la cola y preparar borradores editables de Incident.",
+    languageLabel: "Idioma de la interfaz",
+    languageHelper: "Se pueden añadir idiomas futuros por proyecto.",
+    workflowEyebrow: "Cola → Revisión de origen → TicketDraft",
+    workflowStages: {
+      queue: "Cola",
+      sourceReview: "Revisión de origen",
+      ticketDraft: "Borrador"
+    },
+    workspaceTitle: "Espacio de borrador de ticket",
+    workspaceSubtitle:
+      "El modo demo es determinista. Solo usa datos falsos y sanitizados; no conecta Teams, buzón, ServiceNow Chat/API ni sondeo de autoservicio.",
+    runtimeEyebrow: "Ejecución / Seguridad",
+    runtimeTitle: "Postura demo estática",
+    environmentEyebrow: "Modo de entorno ServiceNow",
+    environmentTitle: "Elige el destino más seguro para esta ejecución.",
+    queueEyebrow: "Cola de entrada",
+    queueTitle: "Cola de entrada — solo datos falsos sanitizados",
+    sourceReviewEyebrow: "Revisión de origen",
+    sourceReviewTitle: "Origen bruto vs. limpio",
+    capturedContextTitle: "Contexto capturado",
+    editableDraftTitle: "Borrador editable de Incident",
+    kbMatchesTitle: "Coincidencias KB",
+    missingInfoTitle: "Información faltante",
+    riskFlagsTitle: "Riesgos",
+    copyEyebrow: "Copia/exportación local",
+    copyTitle: "Acciones seguras del borrador",
+    checklistEyebrow: "Revisión de campos heredada",
+    checklistTitle: "Lista de dependencias de campos de Incident",
+    mockEyebrow: "Incident · Ensayo QA/Dev",
+    mockTitle: "Vista previa mock de ServiceNow Incident",
+    mockSubtitle:
+      "Este panel muestra cómo el borrador editable se asignaría a un formulario nuevo de Incident similar a ServiceNow antes de pruebas QA/dev.",
+    mockFillButton: "Rellenar formulario mock de ServiceNow",
+    mockReadyStatus: "Listo para relleno mock",
+    mockLockedStatus: "Relleno bloqueado hasta confirmar la revisión",
+    mockDisabledStatus: "Save / Submit / Update / Close no disponibles en modo demo",
+    mockDemoStamp: "MOCK / Solo demo"
+  }
+};
+
 const runtimeSafetyStatuses = [
   { label: "Demo mode", value: "ON" },
   { label: "Real ServiceNow", value: "OFF" },
@@ -139,6 +322,7 @@ const demoIntakeQueue: DemoQueueItem[] = [
 ];
 
 export function App() {
+  const [language, setLanguage] = useState<LanguageCode>("en-US");
   const [selectedScenarioId, setSelectedScenarioId] = useState<ManualPasteScenario["id"]>("vpn-issue");
   const [selectedQueueItemId, setSelectedQueueItemId] = useState(demoIntakeQueue[0].id);
   const [queueItems, setQueueItems] = useState<DemoQueueItem[]>(demoIntakeQueue);
@@ -157,6 +341,7 @@ export function App() {
   );
 
   const selectedEnvironment = getServiceNowEnvironmentConfig(selectedEnvironmentMode);
+  const t = uiTranslations[language];
   const draft = applyOverrides(initialDraft, fieldOverrides);
   const context = buildContextForQueueItem(selectedQueueItem);
   const sourceCleanup = normalizeSourceContextText({
@@ -239,45 +424,60 @@ export function App() {
   return (
     <main className="app-shell">
       <section className="hero" aria-labelledby="app-title">
-        <div className="safety-banner" role="status">
-          AI drafts only. Human review and manual submit required.
-        </div>
+        <header className="app-chrome">
+          <div className="safety-banner" role="status">
+            {t.safetyTagline}
+          </div>
+          <LanguageSelector language={language} onLanguageChange={setLanguage} t={t} />
+        </header>
 
         <div className="content">
-          <p className="eyebrow">Field-trial accelerated P0</p>
-          <h1 id="app-title">ServiceNow Automation</h1>
-          <p className="summary">
-            Human-in-the-loop Service Desk workflow cockpit for reviewing sanitized queue items and preparing editable Incident drafts.
-          </p>
+          <p className="eyebrow">{t.productEyebrow}</p>
+          <h1 id="app-title">{t.heroTitle}</h1>
+          <p className="summary">{t.heroSubtitle}</p>
         </div>
+
+        <nav className="stage-strip" aria-label={t.workflowEyebrow}>
+          <span>{t.workflowStages.queue}</span>
+          <span>{t.workflowStages.sourceReview}</span>
+          <span>{t.workflowStages.ticketDraft}</span>
+        </nav>
       </section>
 
       <section className="workspace" aria-labelledby="workspace-title">
         <header className="workspace-header">
           <div>
-            <p className="eyebrow">Queue → Source Review → TicketDraft</p>
-            <h2 id="workspace-title">Ticket Draft Workspace</h2>
+            <p className="eyebrow">{t.workflowEyebrow}</p>
+            <h2 id="workspace-title">{t.workspaceTitle}</h2>
             <p>
-              Demo mode is deterministic. Fake sanitized intake only; no Teams, mailbox, ServiceNow Chat/API, or self-service polling connection is used. No attachments, .msg/.eml parsing, live channel content, or external AI with real content is used.
+              {t.workspaceSubtitle} No attachments, .msg/.eml parsing, live channel content, or external AI with
+              real content is used.
             </p>
           </div>
           <div className="mode-pill">{selectedEnvironment.label} · MockAIProvider</div>
         </header>
 
-        <RuntimeSafetyPanel />
+        <RuntimeSafetyPanel t={t} />
 
         <EnvironmentModePanel
           selectedMode={selectedEnvironmentMode}
           onSelectedModeChange={setSelectedEnvironmentMode}
+          t={t}
         />
 
         <div className="queue-review-grid">
-          <DemoQueuePanel items={queueItems} selectedItemId={selectedQueueItem.id} onSelectItem={selectQueueItem} />
+          <DemoQueuePanel
+            items={queueItems}
+            selectedItemId={selectedQueueItem.id}
+            onSelectItem={selectQueueItem}
+            t={t}
+          />
           <SourceReviewPanel
             item={selectedQueueItem}
             onCreateIncidentDraft={createIncidentDraft}
             onMarkDone={(itemId) => updateQueueItemStatus(itemId, "Done")}
             onSkip={(itemId) => updateQueueItemStatus(itemId, "Skipped")}
+            t={t}
           />
         </div>
 
@@ -298,7 +498,7 @@ export function App() {
 
         <div className="workspace-grid">
           <section className="panel input-panel" aria-labelledby="captured-context-title">
-            <h3 id="captured-context-title">Captured Context</h3>
+            <h3 id="captured-context-title">{t.capturedContextTitle}</h3>
             <dl className="meta-list">
               <div>
                 <dt>Source</dt>
@@ -324,7 +524,7 @@ export function App() {
           </section>
 
           <section className="panel draft-panel" aria-labelledby="draft-title">
-            <h3 id="draft-title">Editable Incident Draft</h3>
+            <h3 id="draft-title">{t.editableDraftTitle}</h3>
             <DraftTextField label="Short Description" field={draft.shortDescription} onChange={(value) => updateField("shortDescription", value)} />
             <DraftTextField label="Description" field={draft.description} multiline onChange={(value) => updateField("description", value)} />
             <DraftTextField label="Work Notes" field={draft.workNotes} multiline onChange={(value) => updateField("workNotes", value)} />
@@ -332,6 +532,7 @@ export function App() {
               draft={draft}
               preparedCopyDraft={preparedCopyDraft}
               onPrepareCopyDraft={prepareCopyDraft}
+              t={t}
             />
 
             <div className="field-grid">
@@ -343,7 +544,7 @@ export function App() {
           </section>
 
           <section className="panel evidence-panel" aria-labelledby="evidence-title">
-            <h3 id="evidence-title">KB Matches</h3>
+            <h3 id="evidence-title">{t.kbMatchesTitle}</h3>
             <ul className="match-list">
               {draft.kbMatches.map((match) => (
                 <li key={match.articleId}>
@@ -354,14 +555,14 @@ export function App() {
               ))}
             </ul>
 
-            <h3>Missing Info</h3>
+            <h3>{t.missingInfoTitle}</h3>
             <ul className="compact-list">
               {draft.missingInfoQuestions.map((question) => (
                 <li key={question}>{question}</li>
               ))}
             </ul>
 
-            <h3>Risk Flags</h3>
+            <h3>{t.riskFlagsTitle}</h3>
             <ul className="compact-list risk-list">
               {draft.riskFlags.map((flag) => (
                 <li key={flag}>{flag}</li>
@@ -374,20 +575,45 @@ export function App() {
           checkedItemIds={checkedFieldReviewItems}
           items={fieldReviewChecklistItems}
           onToggleItem={toggleFieldReviewItem}
+          t={t}
         />
 
-        <MockServiceNowForm draft={draft} fillConfirmed={fillConfirmed} />
+        <MockServiceNowForm draft={draft} fillConfirmed={fillConfirmed} item={selectedQueueItem} t={t} />
       </section>
     </main>
   );
 }
 
-function RuntimeSafetyPanel() {
+function LanguageSelector({
+  language,
+  onLanguageChange,
+  t
+}: {
+  language: LanguageCode;
+  onLanguageChange: (language: LanguageCode) => void;
+  t: UiTranslations;
+}) {
+  return (
+    <label className="language-switcher">
+      <span>{t.languageLabel}</span>
+      <select value={language} onChange={(event) => onLanguageChange(event.currentTarget.value as LanguageCode)}>
+        {languageOptions.map((option) => (
+          <option key={option.code} value={option.code}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <small>{t.languageHelper}</small>
+    </label>
+  );
+}
+
+function RuntimeSafetyPanel({ t }: { t: UiTranslations }) {
   return (
     <aside className="runtime-safety-panel" aria-labelledby="runtime-safety-title">
       <div>
-        <p className="eyebrow">Runtime / Safety</p>
-        <h3 id="runtime-safety-title">Static demo posture</h3>
+        <p className="eyebrow">{t.runtimeEyebrow}</p>
+        <h3 id="runtime-safety-title">{t.runtimeTitle}</h3>
       </div>
       <dl>
         {runtimeSafetyStatuses.map((status) => (
@@ -404,19 +630,21 @@ function RuntimeSafetyPanel() {
 function DemoQueuePanel({
   items,
   onSelectItem,
-  selectedItemId
+  selectedItemId,
+  t
 }: {
   items: DemoQueueItem[];
   onSelectItem: (itemId: string) => void;
   selectedItemId: string;
+  t: UiTranslations;
 }) {
   const sortedItems = [...items].sort((left, right) => left.receivedAt.localeCompare(right.receivedAt));
 
   return (
     <section className="queue-panel" aria-labelledby="demo-queue-title">
       <header>
-        <p className="eyebrow">Intake Queue</p>
-        <h3 id="demo-queue-title">Intake Queue — fake sanitized data only</h3>
+        <p className="eyebrow">{t.queueEyebrow}</p>
+        <h3 id="demo-queue-title">{t.queueTitle}</h3>
       </header>
 
       <div className="queue-list" role="list">
@@ -443,12 +671,14 @@ function SourceReviewPanel({
   item,
   onCreateIncidentDraft,
   onMarkDone,
-  onSkip
+  onSkip,
+  t
 }: {
   item: DemoQueueItem;
   onCreateIncidentDraft: (itemId: string) => void;
   onMarkDone: (itemId: string) => void;
   onSkip: (itemId: string) => void;
+  t: UiTranslations;
 }) {
   const sourceCleanup = normalizeSourceContextText({
     sourceType: sourceTypeForQueueItem(item),
@@ -458,8 +688,8 @@ function SourceReviewPanel({
   return (
     <section className="source-review-panel" aria-labelledby="source-review-title">
       <header>
-        <p className="eyebrow">Source Review</p>
-        <h3 id="source-review-title">Raw vs Cleaned Source</h3>
+        <p className="eyebrow">{t.sourceReviewEyebrow}</p>
+        <h3 id="source-review-title">{t.sourceReviewTitle}</h3>
       </header>
 
       <dl className="meta-list review-meta">
@@ -566,11 +796,13 @@ function applyFieldOverride(field: FieldDraft, value: string | undefined): Field
 function DraftCopyActions({
   draft,
   onPrepareCopyDraft,
-  preparedCopyDraft
+  preparedCopyDraft,
+  t
 }: {
   draft: TicketDraft;
   onPrepareCopyDraft: (label: string, text: string) => void;
   preparedCopyDraft: PreparedCopyDraft | null;
+  t: UiTranslations;
 }) {
   const safeMarkdownDraft = buildSafeDraftMarkdown(draft);
   const fallbackText = preparedCopyDraft?.text ?? safeMarkdownDraft;
@@ -579,8 +811,8 @@ function DraftCopyActions({
     <section className="draft-copy-actions" aria-labelledby="draft-copy-actions-title">
       <div className="draft-copy-header">
         <div>
-          <p className="eyebrow">Local copy/export</p>
-          <h3 id="draft-copy-actions-title">Safe draft actions</h3>
+          <p className="eyebrow">{t.copyEyebrow}</p>
+          <h3 id="draft-copy-actions-title">{t.copyTitle}</h3>
         </div>
         <span role="status">{preparedCopyDraft?.confirmation ?? "Prepared copy text preview"}</span>
       </div>
@@ -661,10 +893,12 @@ function buildSafeDraftMarkdown(draft: TicketDraft): string {
 
 function EnvironmentModePanel({
   onSelectedModeChange,
-  selectedMode
+  selectedMode,
+  t
 }: {
   onSelectedModeChange: (mode: ServiceNowEnvironmentMode) => void;
   selectedMode: ServiceNowEnvironmentMode;
+  t: UiTranslations;
 }) {
   const selectedEnvironment = getServiceNowEnvironmentConfig(selectedMode);
 
@@ -672,8 +906,8 @@ function EnvironmentModePanel({
     <section className="environment-panel" aria-labelledby="environment-title">
       <header className="environment-header">
         <div>
-          <p className="eyebrow">ServiceNow Environment Mode</p>
-          <h3 id="environment-title">Choose the safest target for this run.</h3>
+          <p className="eyebrow">{t.environmentEyebrow}</p>
+          <h3 id="environment-title">{t.environmentTitle}</h3>
           <p>
             Start in mock mode, move to QA/dev only after review, and keep production validation shadow-only by default unless a separate safety review changes that boundary.
           </p>
@@ -841,18 +1075,20 @@ function RiskControlGate({
 function FieldReviewChecklist({
   checkedItemIds,
   items,
-  onToggleItem
+  onToggleItem,
+  t
 }: {
   checkedItemIds: string[];
   items: FieldReviewChecklistItem[];
   onToggleItem: (itemId: string) => void;
+  t: UiTranslations;
 }) {
   return (
     <section className="field-review-checklist" aria-labelledby="field-review-title">
       <header className="field-review-header">
         <div>
-          <p className="eyebrow">Legacy-inspired field review</p>
-          <h2 id="field-review-title">Incident field dependency checklist</h2>
+          <p className="eyebrow">{t.checklistEyebrow}</p>
+          <h2 id="field-review-title">{t.checklistTitle}</h2>
           <p>
             Ticket quality depends on field order and dependencies, not text generation alone. Review requester,
             location, channel, category, affected service, impact, urgency, priority, assignment, comments, and work
@@ -905,49 +1141,78 @@ function FieldReviewChecklist({
   );
 }
 
-function MockServiceNowForm({ draft, fillConfirmed }: { draft: TicketDraft; fillConfirmed: boolean }) {
+function MockServiceNowForm({
+  draft,
+  fillConfirmed,
+  item,
+  t
+}: {
+  draft: TicketDraft;
+  fillConfirmed: boolean;
+  item: DemoQueueItem;
+  t: UiTranslations;
+}) {
   return (
     <section className="mock-form-panel" aria-labelledby="mock-form-title">
       <header className="mock-form-header">
         <div>
-          <p className="eyebrow">Incident · QA/Dev rehearsal</p>
-          <h2 id="mock-form-title">Mock ServiceNow Incident Form</h2>
-          <p>
-            This panel shows how the editable draft would map into a ServiceNow-style Incident form before QA/dev testing.
-          </p>
+          <p className="eyebrow">{t.mockEyebrow}</p>
+          <h2 id="mock-form-title">{t.mockTitle}</h2>
+          <p>{t.mockSubtitle}</p>
         </div>
         <button className="fill-button" disabled={!fillConfirmed} type="button">
-          Fill Mock ServiceNow Form
+          {t.mockFillButton}
         </button>
       </header>
 
-      <div className="servicenow-frame" aria-label="Mock ServiceNow form fields">
+      <div className="servicenow-frame" aria-label="Mock ServiceNow Incident new record form fields">
         <div className="servicenow-toolbar">
-          <strong>Incident</strong>
-          <span>{fillConfirmed ? "Ready for mock fill" : "Fill action locked until review confirmation"}</span>
-          <span>Submit disabled in demo mode</span>
+          <div>
+            <strong>Incident | New record — Mock preview</strong>
+            <small>{t.mockDemoStamp}</small>
+          </div>
+          <span>{fillConfirmed ? t.mockReadyStatus : t.mockLockedStatus}</span>
+          <span>{t.mockDisabledStatus}</span>
+        </div>
+
+        <div className="servicenow-actionbar" aria-label="Disabled mock ServiceNow actions">
+          {["Save", "Submit", "Update", "Close"].map((action) => (
+            <button disabled key={action} type="button">
+              {action}
+            </button>
+          ))}
+          <span>Disabled / unavailable in demo mode</span>
+        </div>
+
+        <div className="servicenow-tabs" aria-label="Mock ServiceNow form sections">
+          <span className="active">Details</span>
+          <span>Notes</span>
+          <span>Related Search (mock only)</span>
         </div>
 
         <div className="mock-form-grid">
-          <MockFormField label="Caller" value="Demo User" />
-          <MockFormField label="Contact Type" value="Self-service / manual paste" />
-          <MockFormField label="Category" value={draft.category?.value ?? "Not set"} />
-          <MockFormField label="Subcategory" value={draft.subcategory?.value ?? "Not set"} />
-          <MockFormField label="Assignment Group" value={fieldValue(draft.assignmentGroup)} />
+          <MockFormField label="Requester" required value={item.requesterLabel} />
+          <MockFormField label="Category" required value={draft.category?.value ?? "Not set"} />
+          <MockFormField label="Location" required value="Demo location / sanitized" />
+          <MockFormField label="Channel" required value={item.sourceChannel} />
+          <MockFormField label="Impact" required value={fieldValue(draft.impact)} />
+          <MockFormField label="Urgency" required value={fieldValue(draft.urgency)} />
+          <MockFormField label="Assignment group" required value={fieldValue(draft.assignmentGroup)} />
           <MockFormField label="Priority" value={fieldValue(draft.priority)} />
-          <MockFormField label="Impact" value={fieldValue(draft.impact)} />
-          <MockFormField label="Urgency" value={fieldValue(draft.urgency)} />
         </div>
 
-        <MockFormField label="Short Description" value={draft.shortDescription.value} wide />
+        <MockFormField label="Short description" required value={draft.shortDescription.value} wide />
         <MockFormField label="Description" value={draft.description.value} wide multiline />
-        <MockFormField label="Work Notes" value={draft.workNotes.value} wide multiline />
+        <MockFormField label="Work notes" value={draft.workNotes.value} wide multiline />
 
         <div className="mock-submit-row">
           <button disabled type="button">
             Submit disabled in demo mode
           </button>
-          <span>Final ServiceNow submit must remain a deliberate human action.</span>
+          <span>
+            Final ServiceNow submit must remain a deliberate human action. No real record is saved, submitted,
+            updated, or closed.
+          </span>
         </div>
       </div>
     </section>
@@ -957,17 +1222,26 @@ function MockServiceNowForm({ draft, fillConfirmed }: { draft: TicketDraft; fill
 function MockFormField({
   label,
   multiline = false,
+  required = false,
   value,
   wide = false
 }: {
   label: string;
   multiline?: boolean;
+  required?: boolean;
   value: string;
   wide?: boolean;
 }) {
   return (
     <label className={wide ? "mock-form-field wide" : "mock-form-field"}>
-      <span>{label}</span>
+      <span>
+        {required ? (
+          <b aria-hidden="true" className="required-star">
+            *
+          </b>
+        ) : null}
+        {label}
+      </span>
       {multiline ? <textarea readOnly rows={4} value={value} /> : <input readOnly value={value} />}
     </label>
   );
