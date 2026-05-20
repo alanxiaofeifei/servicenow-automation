@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type CSSProperties, type WheelEvent, useMemo, useState } from "react";
 
 import { demoManualPasteScenarios, type ManualPasteScenario } from "@servicenow-automation/adapters/browser";
 import { generateMockTicketDraft } from "@servicenow-automation/ai";
@@ -25,6 +25,8 @@ const profile = loadDemoYageoProfile();
 type DemoQueueStatus = "New" | "Reviewed" | "Drafted" | "Done" | "Skipped";
 
 type HighSeverityState = "normal" | "p2" | "p1";
+
+type DisplayTheme = "warm" | "cool" | "night";
 
 type SourceChannel = "Teams message" | "Self-service ticket" | "ServiceNow Chat transcript" | "Shared mailbox item";
 
@@ -408,6 +410,28 @@ const highSeveritySimulatorStates: Record<
   }
 };
 
+const displayThemes: { id: DisplayTheme; label: string }[] = [
+  { id: "warm", label: "Warm" },
+  { id: "cool", label: "Cool" },
+  { id: "night", label: "Night" }
+];
+
+const minAppZoomPercent = 80;
+const maxAppZoomPercent = 130;
+const appZoomStepPercent = 10;
+
+export function clampAppZoomPercent(percent: number): number {
+  return Math.min(maxAppZoomPercent, Math.max(minAppZoomPercent, percent));
+}
+
+export function getNextAppZoomPercent(current: number, delta: number): number {
+  return clampAppZoomPercent(current + delta);
+}
+
+export function getCtrlWheelZoomDelta(deltaY: number): number {
+  return deltaY < 0 ? appZoomStepPercent : -appZoomStepPercent;
+}
+
 const fieldReviewChecklistItems: FieldReviewChecklistItem[] = [
   { id: "source-channel-reviewed", label: "Source channel reviewed" },
   { id: "requester-identified", label: "Requester identified" },
@@ -684,6 +708,8 @@ export function buildDemoQueueItems(
 
 export function App() {
   const [language, setLanguage] = useState<LanguageCode>("en-US");
+  const [displayTheme, setDisplayTheme] = useState<DisplayTheme>("warm");
+  const [appZoomPercent, setAppZoomPercent] = useState(100);
   const [selectedScenarioId, setSelectedScenarioId] = useState<ManualPasteScenario["id"]>("vpn-issue");
   const [selectedQueueItemId, setSelectedQueueItemId] = useState(demoQueueDefinitions[0].id);
   const [queueStatuses, setQueueStatuses] = useState<Partial<Record<string, DemoQueueStatus>>>({});
@@ -721,6 +747,23 @@ export function App() {
     sourceType: context.sourceType,
     rawText: context.rawText
   });
+  const appShellStyle = {
+    "--app-font-scale": appZoomPercent / 100,
+    zoom: appZoomPercent / 100
+  } as CSSProperties;
+
+  function changeAppZoom(delta: number) {
+    setAppZoomPercent((current) => getNextAppZoomPercent(current, delta));
+  }
+
+  function handleAppWheel(event: WheelEvent<HTMLElement>) {
+    if (!event.ctrlKey) {
+      return;
+    }
+
+    event.preventDefault();
+    changeAppZoom(getCtrlWheelZoomDelta(event.deltaY));
+  }
 
   function selectScenario(id: ManualPasteScenario["id"]) {
     const queueItem = queueItems.find((item) => item.scenarioId === id);
@@ -820,7 +863,13 @@ export function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main
+      className="app-shell"
+      data-theme={displayTheme}
+      data-zoom-percent={appZoomPercent}
+      onWheel={handleAppWheel}
+      style={appShellStyle}
+    >
       <section className="hero" aria-labelledby="app-title">
         <header className="app-chrome">
           <div className="safety-banner" role="status">
@@ -855,6 +904,15 @@ export function App() {
           </div>
           <div className="mode-pill">{selectedEnvironment.label} · MockAIProvider</div>
         </header>
+
+        <DisplaySettingsPanel
+          appZoomPercent={appZoomPercent}
+          onResetZoom={() => setAppZoomPercent(100)}
+          onThemeChange={setDisplayTheme}
+          onZoomIn={() => changeAppZoom(appZoomStepPercent)}
+          onZoomOut={() => changeAppZoom(-appZoomStepPercent)}
+          selectedTheme={displayTheme}
+        />
 
         <RuntimeSafetyPanel t={t} />
 
@@ -1034,6 +1092,70 @@ function LanguageSelector({
   );
 }
 
+function DisplaySettingsPanel({
+  appZoomPercent,
+  onResetZoom,
+  onThemeChange,
+  onZoomIn,
+  onZoomOut,
+  selectedTheme
+}: {
+  appZoomPercent: number;
+  onResetZoom: () => void;
+  onThemeChange: (theme: DisplayTheme) => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  selectedTheme: DisplayTheme;
+}) {
+  return (
+    <details className="display-settings-panel">
+      <summary>
+        <span className="summary-label">⚙ Display Settings</span>
+        <strong>{appZoomPercent}%</strong>
+        <span aria-hidden="true" className="details-indicator">
+          ▾
+        </span>
+      </summary>
+
+      <div className="display-settings-body">
+        <div className="display-setting-group">
+          <span>App zoom</span>
+          <div className="zoom-controls" aria-label="App zoom controls">
+            <button type="button" onClick={onZoomOut}>
+              −
+            </button>
+            <strong aria-label="Current app zoom">{appZoomPercent}%</strong>
+            <button type="button" onClick={onZoomIn}>
+              +
+            </button>
+            <button type="button" onClick={onResetZoom}>
+              Reset
+            </button>
+          </div>
+          <small>Ctrl + mouse wheel also changes the local app zoom.</small>
+        </div>
+
+        <div className="display-setting-group">
+          <span>Theme</span>
+          <div className="theme-controls" aria-label="Display theme options">
+            {displayThemes.map((theme) => (
+              <button
+                key={theme.id}
+                className={theme.id === selectedTheme ? "active" : undefined}
+                type="button"
+                onClick={() => onThemeChange(theme.id)}
+              >
+                {theme.label}
+              </button>
+            ))}
+          </div>
+          <small>Display settings are local React state only and are not persisted.</small>
+        </div>
+      </div>
+    </details>
+  );
+}
+
 function RuntimeSafetyPanel({ t }: { t: UiTranslations }) {
   return (
     <aside className="runtime-safety-panel" aria-labelledby="runtime-safety-title">
@@ -1155,18 +1277,24 @@ function DemoQueuePanel({
         {sortedItems.map((item) => (
           <button
             key={item.id}
-            className={item.id === selectedItemId ? "queue-item selected" : "queue-item"}
+            className={
+              item.id === selectedItemId ? "queue-item queue-item-card selected" : "queue-item queue-item-card"
+            }
             type="button"
             onClick={() => onSelectItem(item.id)}
           >
-            <span className="queue-time">{item.receivedAt}</span>
-            <strong>{item.subject}</strong>
-            <span>{item.requesterLabel}</span>
-            <span className="source-channel-badge">{item.sourceChannel}</span>
+            <div className="queue-item-main">
+              <span className="queue-time">{item.receivedAt}</span>
+              <strong>{item.subject}</strong>
+              <span>{item.requesterLabel}</span>
+            </div>
+            <div className="queue-item-meta">
+              <span className="source-channel-badge">{item.sourceChannel}</span>
+              <span className={`status-badge ${statusClassName(item.status)}`}>{item.status}</span>
+            </div>
             <span className="language-mode-line">
               {item.sourceLanguage} · {item.draftLanguageMode}
             </span>
-            <span className={`status-badge ${statusClassName(item.status)}`}>{item.status}</span>
           </button>
         ))}
       </div>
@@ -1508,8 +1636,11 @@ function TemplateSettingsPanel({
   return (
     <details className="template-settings-panel">
       <summary>
-        <span>Templates / Settings</span>
+        <span className="summary-label">⚙ Templates / Settings</span>
         <strong>{draftTemplatePresets.find((preset) => preset.id === selectedPresetId)?.label}</strong>
+        <span aria-hidden="true" className="details-indicator">
+          ▾
+        </span>
       </summary>
 
       <div className="template-settings-body">
@@ -1851,16 +1982,12 @@ function FieldReviewChecklist({
   t: UiTranslations;
 }) {
   return (
-    <section className="field-review-checklist" aria-labelledby="field-review-title">
-      <header className="field-review-header">
-        <div>
-          <p className="eyebrow">{t.checklistEyebrow}</p>
-          <h2 id="field-review-title">{t.checklistTitle}</h2>
-          <p>
-            Ticket quality depends on field order and dependencies, not text generation alone. Review requester,
-            location, channel, category, affected service, impact, urgency, priority, assignment, comments, and work
-            notes before any mock fill/copy.
-          </p>
+    <details className="field-review-checklist">
+      <summary>
+        <div className="field-review-summary-title">
+          <span className="eyebrow">{t.checklistEyebrow}</span>
+          <strong id="field-review-title">⚙ Optional field checklist / Team rules</strong>
+          <span>{t.checklistTitle}</span>
         </div>
         <div className="field-review-progress" aria-label="Field review progress">
           <strong>
@@ -1868,43 +1995,58 @@ function FieldReviewChecklist({
           </strong>
           <span>reviewed locally</span>
         </div>
-      </header>
+        <span aria-hidden="true" className="details-indicator">
+          ▾
+        </span>
+      </summary>
 
-      <div className="field-reference-strip" aria-label="Sanitized ServiceNow create form reference">
-        <div>
-          <span>Required/starred reference</span>
-          <p>Requester, Category, Location, Channel, Impact, Urgency, Assignment group, Short description</p>
+      <div className="field-review-body" aria-labelledby="field-review-title">
+        <p className="field-review-intro">
+          ServiceNow already enforces starred required fields at submit time. This local checklist is optional and
+          customizable for team process, field order, and draft quality before any mock fill/copy.
+        </p>
+        <p className="field-review-intro">
+          Ticket quality depends on field order and dependencies, not text generation alone. Review requester,
+          location, channel, category, affected service, impact, urgency, priority, assignment, comments, and work
+          notes before any mock fill/copy.
+        </p>
+
+        <div className="field-reference-strip" aria-label="Sanitized ServiceNow create form reference">
+          <div>
+            <span>Required/starred reference</span>
+            <p>Requester, Category, Location, Channel, Impact, Urgency, Assignment group, Short description</p>
+          </div>
+          <div>
+            <span>Supporting fields</span>
+            <p>
+              Description, Subcategory, Configuration item, Business service, Service offering, Priority, Assigned to,
+              Additional comments, Work notes, Related Search / Knowledge & Catalog
+            </p>
+          </div>
         </div>
-        <div>
-          <span>Supporting fields</span>
-          <p>
-            Description, Subcategory, Configuration item, Business service, Service offering, Priority, Assigned to,
-            Additional comments, Work notes, Related Search / Knowledge & Catalog
-          </p>
-        </div>
+
+        <ol className="field-review-list">
+          {items.map((item, index) => (
+            <li key={item.id}>
+              <label>
+                <span className="field-review-number">{index + 1}</span>
+                <input
+                  checked={checkedItemIds.includes(item.id)}
+                  type="checkbox"
+                  onChange={() => onToggleItem(item.id)}
+                />
+                <span>{item.label}</span>
+              </label>
+            </li>
+          ))}
+        </ol>
+
+        <p className="field-review-safety">
+          Demo checklist only. Local state only. No real ServiceNow field fill, Save, Submit, Update, Close, API call,
+          browser automation, DOM inspection, screenshots, HAR, traces, sessions, or storage export.
+        </p>
       </div>
-
-      <ol className="field-review-list">
-        {items.map((item, index) => (
-          <li key={item.id}>
-            <label>
-              <span className="field-review-number">{index + 1}</span>
-              <input
-                checked={checkedItemIds.includes(item.id)}
-                type="checkbox"
-                onChange={() => onToggleItem(item.id)}
-              />
-              <span>{item.label}</span>
-            </label>
-          </li>
-        ))}
-      </ol>
-
-      <p className="field-review-safety">
-        Demo checklist only. Local state only. No real ServiceNow field fill, Save, Submit, Update, Close, API call,
-        browser automation, DOM inspection, screenshots, HAR, traces, sessions, or storage export.
-      </p>
-    </section>
+    </details>
   );
 }
 

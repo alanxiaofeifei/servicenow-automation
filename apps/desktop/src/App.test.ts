@@ -7,7 +7,10 @@ import {
   applyDraftTemplates,
   buildDemoQueueItems,
   buildDraftForQueueItem,
-  draftTemplatePresets
+  clampAppZoomPercent,
+  draftTemplatePresets,
+  getCtrlWheelZoomDelta,
+  getNextAppZoomPercent
 } from "./App";
 
 function renderAppMarkup() {
@@ -79,7 +82,8 @@ describe("App", () => {
   it("renders local team template settings for Description and Work Notes", () => {
     const output = renderAppMarkup();
 
-    expect(output).toContain("Templates / Settings");
+    expect(output).toContain("⚙ Templates / Settings");
+    expect(output).toContain("▾");
     expect(output).toContain("Description template");
     expect(output).toContain("Work Notes template");
     expect(output).toContain("Local demo templates only — no external storage or ServiceNow write");
@@ -87,6 +91,35 @@ describe("App", () => {
     expect(output).toContain("Escalation-ready notes");
     expect(output).toContain('<details class="template-settings-panel">');
     expect(output).not.toContain('class="template-settings-panel" open');
+  });
+
+  it("renders local display settings with zoom and theme controls", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("⚙ Display Settings");
+    expect(output).toContain("100%");
+    expect(output).toContain('data-zoom-percent="100"');
+    expect(output).toContain("zoom:1");
+    expect(output).toContain("App zoom");
+    expect(output).toContain("Ctrl + mouse wheel also changes the local app zoom.");
+    expect(output).toContain("Reset");
+    expect(output).toContain("Warm");
+    expect(output).toContain("Cool");
+    expect(output).toContain("Night");
+    expect(output).toContain("Display settings are local React state only and are not persisted.");
+    expect(output).toContain('<details class="display-settings-panel">');
+    expect(output).not.toContain('class="display-settings-panel" open');
+  });
+
+  it("clamps local app zoom and maps Ctrl wheel direction", () => {
+    expect(clampAppZoomPercent(40)).toBe(80);
+    expect(clampAppZoomPercent(100)).toBe(100);
+    expect(clampAppZoomPercent(200)).toBe(130);
+    expect(getNextAppZoomPercent(100, 10)).toBe(110);
+    expect(getNextAppZoomPercent(80, -10)).toBe(80);
+    expect(getNextAppZoomPercent(130, 10)).toBe(130);
+    expect(getCtrlWheelZoomDelta(-120)).toBe(10);
+    expect(getCtrlWheelZoomDelta(120)).toBe(-10);
   });
 
   it("applies the default template around generated draft content", () => {
@@ -202,11 +235,12 @@ describe("App", () => {
     expect(output).toContain("Create Incident Draft");
     expect(output).toContain("Mark as Done");
     expect(output).toContain("Skip");
+    expect(output).toContain("queue-item-card");
   });
 
   it("renders exactly four FIFO intake items", () => {
     const output = renderAppMarkup();
-    const queueItemCount = output.match(/class=\"queue-item/g)?.length ?? 0;
+    const queueItemCount = output.match(/<button class=\"queue-item/g)?.length ?? 0;
     const teamsIndex = output.indexOf("Teams note: VPN connection issue after password reset");
     const selfServiceIndex = output.indexOf("Self-service request: Windows laptop slow after update");
     const chatIndex = output.indexOf("Chat transcript: account login issue after password change");
@@ -284,7 +318,10 @@ describe("App", () => {
     ];
 
     expect(output).toContain("Legacy-inspired field review");
+    expect(output).toContain("⚙ Optional field checklist / Team rules");
     expect(output).toContain("Incident field dependency checklist");
+    expect(output).toContain("ServiceNow already enforces starred required fields at submit time.");
+    expect(output).toContain("This local checklist is optional and customizable for team process");
     expect(output).toContain("Ticket quality depends on field order and dependencies, not text generation alone.");
     expect(output).toContain("Requester, Category, Location, Channel, Impact, Urgency, Assignment group, Short description");
     expect(output).toContain(
@@ -297,6 +334,8 @@ describe("App", () => {
     expect(output).toContain("Demo checklist only. Local state only.");
     expect(output).toContain("No real ServiceNow field fill, Save, Submit, Update, Close, API call");
     expect(output).toContain("browser automation, DOM inspection, screenshots, HAR, traces, sessions, or storage export.");
+    expect(output).toContain('<details class="field-review-checklist">');
+    expect(output).not.toContain('class="field-review-checklist" open');
   });
 
   it("renders ServiceNow environment modes and QA/dev safety boundaries", () => {
