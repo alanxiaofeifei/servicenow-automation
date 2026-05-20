@@ -93,12 +93,27 @@ describe("App", () => {
     expect(output).not.toContain('class="template-settings-panel" open');
   });
 
-  it("renders local display settings with zoom and theme controls", () => {
+  it("renders centralized settings with display, templates, and optional checklist controls", () => {
+    const output = renderAppMarkup();
+    const settingsStart = output.indexOf('id="app-settings-sidebar"');
+    const settingsEnd = output.indexOf("</aside>", settingsStart);
+    const settingsMarkup = output.slice(settingsStart, settingsEnd);
+
+    expect(output).toContain("⚙ Settings");
+    expect(output).toContain('aria-label="Centralized settings"');
+    expect(settingsStart).toBeGreaterThan(-1);
+    expect(settingsMarkup).toContain("⚙ Display Settings");
+    expect(settingsMarkup).toContain("⚙ Templates / Settings");
+    expect(settingsMarkup).toContain("⚙ Optional field checklist / Team rules");
+  });
+
+  it("renders local display settings with zoom, theme, and text field mode controls", () => {
     const output = renderAppMarkup();
 
     expect(output).toContain("⚙ Display Settings");
     expect(output).toContain("100%");
     expect(output).toContain('data-zoom-percent="100"');
+    expect(output).toContain('data-text-mode="auto-fit"');
     expect(output).toContain("zoom:1");
     expect(output).toContain("App zoom");
     expect(output).toContain("Ctrl + mouse wheel also changes the local app zoom.");
@@ -106,6 +121,8 @@ describe("App", () => {
     expect(output).toContain("Warm");
     expect(output).toContain("Cool");
     expect(output).toContain("Night");
+    expect(output).toContain("Auto-fit text areas");
+    expect(output).toContain("Compact + visible resize handle");
     expect(output).toContain("Display settings are local React state only and are not persisted.");
     expect(output).toContain('<details class="display-settings-panel">');
     expect(output).not.toContain('class="display-settings-panel" open');

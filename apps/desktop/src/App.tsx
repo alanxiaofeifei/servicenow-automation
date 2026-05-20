@@ -28,6 +28,8 @@ type HighSeverityState = "normal" | "p2" | "p1";
 
 type DisplayTheme = "warm" | "cool" | "night";
 
+type TextFieldDisplayMode = "auto-fit" | "compact-resize";
+
 type SourceChannel = "Teams message" | "Self-service ticket" | "ServiceNow Chat transcript" | "Shared mailbox item";
 
 type DemoQueueItem = {
@@ -710,6 +712,8 @@ export function App() {
   const [language, setLanguage] = useState<LanguageCode>("en-US");
   const [displayTheme, setDisplayTheme] = useState<DisplayTheme>("warm");
   const [appZoomPercent, setAppZoomPercent] = useState(100);
+  const [textFieldDisplayMode, setTextFieldDisplayMode] = useState<TextFieldDisplayMode>("auto-fit");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedScenarioId, setSelectedScenarioId] = useState<ManualPasteScenario["id"]>("vpn-issue");
   const [selectedQueueItemId, setSelectedQueueItemId] = useState(demoQueueDefinitions[0].id);
   const [queueStatuses, setQueueStatuses] = useState<Partial<Record<string, DemoQueueStatus>>>({});
@@ -866,6 +870,7 @@ export function App() {
     <main
       className="app-shell"
       data-theme={displayTheme}
+      data-text-mode={textFieldDisplayMode}
       data-zoom-percent={appZoomPercent}
       onWheel={handleAppWheel}
       style={appShellStyle}
@@ -875,7 +880,18 @@ export function App() {
           <div className="safety-banner" role="status">
             {t.safetyTagline}
           </div>
-          <LanguageSelector language={language} onLanguageChange={changeLanguage} t={t} />
+          <div className="top-toolbar">
+            <button
+              aria-controls="app-settings-sidebar"
+              aria-expanded={settingsOpen}
+              className="settings-toggle"
+              type="button"
+              onClick={() => setSettingsOpen((current) => !current)}
+            >
+              ⚙ Settings
+            </button>
+            <LanguageSelector language={language} onLanguageChange={changeLanguage} t={t} />
+          </div>
         </header>
 
         <div className="content">
@@ -905,164 +921,165 @@ export function App() {
           <div className="mode-pill">{selectedEnvironment.label} · MockAIProvider</div>
         </header>
 
-        <DisplaySettingsPanel
-          appZoomPercent={appZoomPercent}
-          onResetZoom={() => setAppZoomPercent(100)}
-          onThemeChange={setDisplayTheme}
-          onZoomIn={() => changeAppZoom(appZoomStepPercent)}
-          onZoomOut={() => changeAppZoom(-appZoomStepPercent)}
-          selectedTheme={displayTheme}
-        />
+        <div className="workspace-with-settings">
+          <div className="workflow-column">
+            <RuntimeSafetyPanel t={t} />
 
-        <RuntimeSafetyPanel t={t} />
-
-        <HighSeverityMonitorSimulator
-          acknowledged={highSeverityAcknowledged}
-          muted={highSeverityMuted}
-          selectedState={highSeverityState}
-          onAcknowledge={() => setHighSeverityAcknowledged(true)}
-          onMute={() => setHighSeverityMuted((current) => !current)}
-          onSelectedStateChange={(state) => {
-            setHighSeverityState(state);
-            setHighSeverityAcknowledged(false);
-          }}
-          t={t}
-        />
-
-        <EnvironmentModePanel
-          selectedMode={selectedEnvironmentMode}
-          onSelectedModeChange={setSelectedEnvironmentMode}
-          t={t}
-        />
-
-        <div className="queue-review-grid">
-          <DemoQueuePanel
-            items={queueItems}
-            selectedItemId={selectedQueueItem.id}
-            onSelectItem={selectQueueItem}
-            t={t}
-          />
-          <SourceReviewPanel
-            item={selectedQueueItem}
-            onCreateIncidentDraft={createIncidentDraft}
-            onMarkDone={(itemId) => updateQueueItemStatus(itemId, "Done")}
-            onSkip={(itemId) => updateQueueItemStatus(itemId, "Skipped")}
-            t={t}
-          />
-        </div>
-
-        <div className="scenario-bar" aria-label="Demo scenarios">
-          {demoManualPasteScenarios.map((scenario) => (
-            <button
-              key={scenario.id}
-              className={scenario.id === selectedScenarioId ? "scenario-button active" : "scenario-button"}
-              type="button"
-              onClick={() => selectScenario(scenario.id)}
-            >
-              {buttonLabelForScenario(scenario.id)}
-            </button>
-          ))}
-        </div>
-
-        <RiskControlGate fillConfirmed={fillConfirmed} onFillConfirmedChange={setFillConfirmed} />
-
-        <div className="workspace-grid">
-          <section className="panel input-panel" aria-labelledby="captured-context-title">
-            <h3 id="captured-context-title">{t.capturedContextTitle}</h3>
-            <dl className="meta-list">
-              <div>
-                <dt>Source</dt>
-                <dd>{context.sourceType}</dd>
-              </div>
-              <div>
-                <dt>Captured At</dt>
-                <dd>{context.capturedAt}</dd>
-              </div>
-              <div>
-                <dt>Profile</dt>
-                <dd>{profile.displayName}</dd>
-              </div>
-              <div>
-                <dt>Source Language</dt>
-                <dd>{selectedQueueItem.sourceLanguage}</dd>
-              </div>
-              <div>
-                <dt>Draft Language Mode</dt>
-                <dd>{selectedQueueItem.draftLanguageMode}</dd>
-              </div>
-            </dl>
-            <label className="field-block">
-              <span>Raw Text</span>
-              <textarea readOnly rows={8} value={context.rawText} />
-            </label>
-            <label className="field-block">
-              <span>Cleaned / Normalized Text</span>
-              <textarea readOnly rows={8} value={sourceCleanup.normalizedText} />
-            </label>
-          </section>
-
-          <section className="panel draft-panel" aria-labelledby="draft-title">
-            <h3 id="draft-title">{t.editableDraftTitle}</h3>
-            <TemplateSettingsPanel
-              selectedPresetId={selectedTemplatePresetId}
-              settings={draftTemplateSettings}
-              onPresetChange={selectTemplatePreset}
-              onTemplateChange={updateTemplateField}
-            />
-            <DraftTextField label="Short Description" field={draft.shortDescription} onChange={(value) => updateField("shortDescription", value)} />
-            <DraftTextField label="Description" field={draft.description} multiline onChange={(value) => updateField("description", value)} />
-            <DraftTextField label="Work Notes" field={draft.workNotes} multiline onChange={(value) => updateField("workNotes", value)} />
-            <DraftCopyActions
-              draft={draft}
-              preparedCopyDraft={preparedCopyDraft}
-              onPrepareCopyDraft={prepareCopyDraft}
+            <HighSeverityMonitorSimulator
+              acknowledged={highSeverityAcknowledged}
+              muted={highSeverityMuted}
+              selectedState={highSeverityState}
+              onAcknowledge={() => setHighSeverityAcknowledged(true)}
+              onMute={() => setHighSeverityMuted((current) => !current)}
+              onSelectedStateChange={(state) => {
+                setHighSeverityState(state);
+                setHighSeverityAcknowledged(false);
+              }}
               t={t}
             />
 
-            <div className="field-grid">
-              <ReadOnlyField label="Category" field={draft.category} />
-              <ReadOnlyField label="Subcategory" field={draft.subcategory} />
-              <ReadOnlyField label="Assignment Group" field={draft.assignmentGroup} />
-              <ReadOnlyField label="Priority" field={draft.priority} />
+            <EnvironmentModePanel
+              selectedMode={selectedEnvironmentMode}
+              onSelectedModeChange={setSelectedEnvironmentMode}
+              t={t}
+            />
+
+            <div className="queue-review-grid">
+              <DemoQueuePanel
+                items={queueItems}
+                selectedItemId={selectedQueueItem.id}
+                onSelectItem={selectQueueItem}
+                t={t}
+              />
+              <SourceReviewPanel
+                item={selectedQueueItem}
+                onCreateIncidentDraft={createIncidentDraft}
+                onMarkDone={(itemId) => updateQueueItemStatus(itemId, "Done")}
+                onSkip={(itemId) => updateQueueItemStatus(itemId, "Skipped")}
+                t={t}
+              />
             </div>
-          </section>
 
-          <section className="panel evidence-panel" aria-labelledby="evidence-title">
-            <h3 id="evidence-title">{t.kbMatchesTitle}</h3>
-            <ul className="match-list">
-              {draft.kbMatches.map((match) => (
-                <li key={match.articleId}>
-                  <strong>{match.title}</strong>
-                  <span>Score {Math.round(match.score * 100)}%</span>
-                  <p>{match.excerpt}</p>
-                </li>
+            <div className="scenario-bar" aria-label="Demo scenarios">
+              {demoManualPasteScenarios.map((scenario) => (
+                <button
+                  key={scenario.id}
+                  className={scenario.id === selectedScenarioId ? "scenario-button active" : "scenario-button"}
+                  type="button"
+                  onClick={() => selectScenario(scenario.id)}
+                >
+                  {buttonLabelForScenario(scenario.id)}
+                </button>
               ))}
-            </ul>
+            </div>
 
-            <h3>{t.missingInfoTitle}</h3>
-            <ul className="compact-list">
-              {draft.missingInfoQuestions.map((question) => (
-                <li key={question}>{question}</li>
-              ))}
-            </ul>
+            <RiskControlGate fillConfirmed={fillConfirmed} onFillConfirmedChange={setFillConfirmed} />
 
-            <h3>{t.riskFlagsTitle}</h3>
-            <ul className="compact-list risk-list">
-              {draft.riskFlags.map((flag) => (
-                <li key={flag}>{flag}</li>
-              ))}
-            </ul>
-          </section>
+            <div className="workspace-grid">
+              <section className="panel input-panel" aria-labelledby="captured-context-title">
+                <h3 id="captured-context-title">{t.capturedContextTitle}</h3>
+                <dl className="meta-list">
+                  <div>
+                    <dt>Source</dt>
+                    <dd>{context.sourceType}</dd>
+                  </div>
+                  <div>
+                    <dt>Captured At</dt>
+                    <dd>{context.capturedAt}</dd>
+                  </div>
+                  <div>
+                    <dt>Profile</dt>
+                    <dd>{profile.displayName}</dd>
+                  </div>
+                  <div>
+                    <dt>Source Language</dt>
+                    <dd>{selectedQueueItem.sourceLanguage}</dd>
+                  </div>
+                  <div>
+                    <dt>Draft Language Mode</dt>
+                    <dd>{selectedQueueItem.draftLanguageMode}</dd>
+                  </div>
+                </dl>
+                <label className="field-block">
+                  <span>Raw Text</span>
+                  <textarea readOnly rows={8} value={context.rawText} />
+                </label>
+                <label className="field-block">
+                  <span>Cleaned / Normalized Text</span>
+                  <textarea readOnly rows={8} value={sourceCleanup.normalizedText} />
+                </label>
+              </section>
+
+              <section className="panel draft-panel" aria-labelledby="draft-title">
+                <h3 id="draft-title">{t.editableDraftTitle}</h3>
+                <DraftTextField label="Short Description" field={draft.shortDescription} onChange={(value) => updateField("shortDescription", value)} />
+                <DraftTextField label="Description" field={draft.description} multiline onChange={(value) => updateField("description", value)} />
+                <DraftTextField label="Work Notes" field={draft.workNotes} multiline onChange={(value) => updateField("workNotes", value)} />
+                <DraftCopyActions
+                  draft={draft}
+                  preparedCopyDraft={preparedCopyDraft}
+                  onPrepareCopyDraft={prepareCopyDraft}
+                  t={t}
+                />
+
+                <div className="field-grid">
+                  <ReadOnlyField label="Category" field={draft.category} />
+                  <ReadOnlyField label="Subcategory" field={draft.subcategory} />
+                  <ReadOnlyField label="Assignment Group" field={draft.assignmentGroup} />
+                  <ReadOnlyField label="Priority" field={draft.priority} />
+                </div>
+              </section>
+
+              <section className="panel evidence-panel" aria-labelledby="evidence-title">
+                <h3 id="evidence-title">{t.kbMatchesTitle}</h3>
+                <ul className="match-list">
+                  {draft.kbMatches.map((match) => (
+                    <li key={match.articleId}>
+                      <strong>{match.title}</strong>
+                      <span>Score {Math.round(match.score * 100)}%</span>
+                      <p>{match.excerpt}</p>
+                    </li>
+                  ))}
+                </ul>
+
+                <h3>{t.missingInfoTitle}</h3>
+                <ul className="compact-list">
+                  {draft.missingInfoQuestions.map((question) => (
+                    <li key={question}>{question}</li>
+                  ))}
+                </ul>
+
+                <h3>{t.riskFlagsTitle}</h3>
+                <ul className="compact-list risk-list">
+                  {draft.riskFlags.map((flag) => (
+                    <li key={flag}>{flag}</li>
+                  ))}
+                </ul>
+              </section>
+            </div>
+
+            <MockServiceNowForm draft={draft} fillConfirmed={fillConfirmed} item={selectedQueueItem} t={t} />
+          </div>
+
+          <SettingsSidebar
+            appZoomPercent={appZoomPercent}
+            checkedFieldReviewItems={checkedFieldReviewItems}
+            isOpen={settingsOpen}
+            onPresetChange={selectTemplatePreset}
+            onResetZoom={() => setAppZoomPercent(100)}
+            onTemplateChange={updateTemplateField}
+            onTextFieldModeChange={setTextFieldDisplayMode}
+            onThemeChange={setDisplayTheme}
+            onToggleChecklistItem={toggleFieldReviewItem}
+            onZoomIn={() => changeAppZoom(appZoomStepPercent)}
+            onZoomOut={() => changeAppZoom(-appZoomStepPercent)}
+            selectedTemplatePresetId={selectedTemplatePresetId}
+            selectedTextFieldMode={textFieldDisplayMode}
+            selectedTheme={displayTheme}
+            templateSettings={draftTemplateSettings}
+            t={t}
+          />
         </div>
-
-        <FieldReviewChecklist
-          checkedItemIds={checkedFieldReviewItems}
-          items={fieldReviewChecklistItems}
-          onToggleItem={toggleFieldReviewItem}
-          t={t}
-        />
-
-        <MockServiceNowForm draft={draft} fillConfirmed={fillConfirmed} item={selectedQueueItem} t={t} />
       </section>
     </main>
   );
@@ -1092,19 +1109,99 @@ function LanguageSelector({
   );
 }
 
+function SettingsSidebar({
+  appZoomPercent,
+  checkedFieldReviewItems,
+  isOpen,
+  onPresetChange,
+  onResetZoom,
+  onTemplateChange,
+  onTextFieldModeChange,
+  onThemeChange,
+  onToggleChecklistItem,
+  onZoomIn,
+  onZoomOut,
+  selectedTemplatePresetId,
+  selectedTextFieldMode,
+  selectedTheme,
+  templateSettings,
+  t
+}: {
+  appZoomPercent: number;
+  checkedFieldReviewItems: string[];
+  isOpen: boolean;
+  onPresetChange: (presetId: DraftTemplatePresetId) => void;
+  onResetZoom: () => void;
+  onTemplateChange: (fieldName: keyof DraftTemplateSettings, value: string) => void;
+  onTextFieldModeChange: (mode: TextFieldDisplayMode) => void;
+  onThemeChange: (theme: DisplayTheme) => void;
+  onToggleChecklistItem: (itemId: string) => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  selectedTemplatePresetId: DraftTemplatePresetId;
+  selectedTextFieldMode: TextFieldDisplayMode;
+  selectedTheme: DisplayTheme;
+  templateSettings: DraftTemplateSettings;
+  t: UiTranslations;
+}) {
+  return (
+    <aside
+      aria-label="Centralized settings"
+      className={isOpen ? "settings-sidebar" : "settings-sidebar collapsed"}
+      id="app-settings-sidebar"
+    >
+      <div className="settings-sidebar-inner">
+        <header className="settings-sidebar-header">
+          <p className="eyebrow">Centralized settings</p>
+          <h3>Settings</h3>
+        </header>
+
+        <DisplaySettingsPanel
+          appZoomPercent={appZoomPercent}
+          onResetZoom={onResetZoom}
+          onTextFieldModeChange={onTextFieldModeChange}
+          onThemeChange={onThemeChange}
+          onZoomIn={onZoomIn}
+          onZoomOut={onZoomOut}
+          selectedTextFieldMode={selectedTextFieldMode}
+          selectedTheme={selectedTheme}
+        />
+
+        <TemplateSettingsPanel
+          selectedPresetId={selectedTemplatePresetId}
+          settings={templateSettings}
+          onPresetChange={onPresetChange}
+          onTemplateChange={onTemplateChange}
+        />
+
+        <FieldReviewChecklist
+          checkedItemIds={checkedFieldReviewItems}
+          items={fieldReviewChecklistItems}
+          onToggleItem={onToggleChecklistItem}
+          t={t}
+        />
+      </div>
+    </aside>
+  );
+}
+
 function DisplaySettingsPanel({
   appZoomPercent,
   onResetZoom,
+  onTextFieldModeChange,
   onThemeChange,
   onZoomIn,
   onZoomOut,
+  selectedTextFieldMode,
   selectedTheme
 }: {
   appZoomPercent: number;
   onResetZoom: () => void;
+  onTextFieldModeChange: (mode: TextFieldDisplayMode) => void;
   onThemeChange: (theme: DisplayTheme) => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
+  selectedTextFieldMode: TextFieldDisplayMode;
   selectedTheme: DisplayTheme;
 }) {
   return (
@@ -1145,11 +1242,40 @@ function DisplaySettingsPanel({
                 type="button"
                 onClick={() => onThemeChange(theme.id)}
               >
+                <span className={`theme-swatch ${theme.id}`} aria-hidden="true" />
                 {theme.label}
               </button>
             ))}
           </div>
           <small>Display settings are local React state only and are not persisted.</small>
+        </div>
+
+        <div className="display-setting-group text-display-setting">
+          <span>Text fields</span>
+          <div className="text-mode-controls" aria-label="Text field display mode">
+            <label>
+              <input
+                checked={selectedTextFieldMode === "auto-fit"}
+                name="text-field-display-mode"
+                type="radio"
+                onChange={() => onTextFieldModeChange("auto-fit")}
+              />
+              <span>Auto-fit text areas</span>
+            </label>
+            <label>
+              <input
+                checked={selectedTextFieldMode === "compact-resize"}
+                name="text-field-display-mode"
+                type="radio"
+                onChange={() => onTextFieldModeChange("compact-resize")}
+              />
+              <span>Compact + visible resize handle</span>
+            </label>
+          </div>
+          <small>
+            Auto-fit gives long content more room. Compact mode keeps fields shorter and shows a stronger bottom-right
+            resize affordance.
+          </small>
         </div>
       </div>
     </details>
