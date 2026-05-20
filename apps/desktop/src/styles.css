@@ -1138,6 +1138,183 @@ details[open] > summary .details-indicator {
   background: #245d56;
 }
 
+.workflow-preview-panel {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 18px;
+  border: 1px solid #b9d2c8;
+  border-radius: 12px;
+  padding: 14px;
+  background: #f8fcf8;
+  box-shadow: 0 10px 28px rgba(55, 78, 61, 0.08);
+}
+
+.workflow-preview-header,
+.excel-row-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.workflow-preview-header p,
+.excel-row-header p,
+.workflow-mini-panel p,
+.work-notes-plan-panel p {
+  margin: 7px 0 0;
+  color: #52655b;
+  line-height: 1.45;
+  font-weight: 740;
+}
+
+.workflow-channel-pair,
+.workflow-preview-grid,
+.routing-stage-grid,
+.workflow-preview-text-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  gap: 10px;
+}
+
+.workflow-channel-pair {
+  min-width: min(430px, 100%);
+}
+
+.workflow-channel-pair div,
+.workflow-mini-panel,
+.routing-stage-grid article,
+.excel-row-grid div {
+  border: 1px solid #d7e2dc;
+  border-radius: 8px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.workflow-channel-pair span,
+.workflow-field-list dt,
+.routing-stage-grid dt,
+.excel-row-grid dt {
+  display: block;
+  color: #617066;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.workflow-channel-pair strong,
+.workflow-mini-panel strong,
+.workflow-field-list dd,
+.routing-stage-grid dd,
+.excel-row-grid dd {
+  margin: 4px 0 0;
+  color: #243b36;
+  font-weight: 850;
+}
+
+.workflow-stage-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workflow-stage-list li {
+  border: 1px solid #cfe0d8;
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: #214f49;
+  background: #eef8f2;
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.workflow-mini-panel h4,
+.routing-plan-panel h4,
+.work-notes-plan-panel h4,
+.excel-row-preview-panel h4,
+.routing-stage-grid h5 {
+  margin: 0;
+  color: #263b35;
+  letter-spacing: 0;
+}
+
+.workflow-mini-panel h4,
+.routing-plan-panel h4,
+.work-notes-plan-panel h4,
+.excel-row-preview-panel h4 {
+  font-size: 0.96rem;
+}
+
+.routing-stage-grid h5 {
+  font-size: 0.9rem;
+}
+
+.workflow-field-list,
+.routing-stage-grid dl,
+.excel-row-grid {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.routing-plan-panel,
+.work-notes-plan-panel,
+.excel-row-preview-panel {
+  border: 1px solid #d7e2dc;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.workflow-warning {
+  border: 1px solid #d09231;
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: #68430c;
+  background: #fff4dc;
+}
+
+.excel-copy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.excel-copy-actions button {
+  border: 1px solid #2f756c;
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: #174f49;
+  background: #ffffff;
+  font-weight: 900;
+}
+
+.excel-copy-actions button:hover {
+  color: #fffef7;
+  background: #2f756c;
+}
+
+.excel-row-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
+}
+
+.workflow-preview-text-grid {
+  margin-top: 10px;
+}
+
+.workflow-preview-text-grid .field-block {
+  margin-bottom: 0;
+}
+
+.app-shell[data-text-mode="auto-fit"] .workflow-preview-text-grid textarea {
+  min-height: 7rem;
+}
+
 .workspace-grid {
   display: grid;
   grid-template-columns: minmax(240px, 0.8fr) minmax(300px, 1.2fr) minmax(240px, 0.85fr);

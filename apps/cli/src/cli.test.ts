@@ -121,6 +121,51 @@ describe("sda CLI", () => {
     expect(payload.safety.noExternalActionPerformed).toBe(true);
   });
 
+  it("previews the real Service Desk workflow with Excel dry-run row JSON", async () => {
+    const result = await runCli([
+      "workflow",
+      "preview",
+      "--template",
+      "vpn_troubleshooting",
+      "--user",
+      "Demo User",
+      "--summary",
+      "VPN issue",
+      "--source",
+      "Teams message",
+      "--dry-run",
+      "--json"
+    ], { cwd });
+    const payload = JSON.parse(result.stdout);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.command).toBe("workflow preview");
+    expect(payload.dryRun).toBe(true);
+    expect(payload.preview.mappedServiceNowChannel).toBe("Chat");
+    expect(payload.preview.excelDryRunRowPreview.row["Dry-run Result"]).toContain("Preview only");
+    expect(payload.preview.workNotesPlan.warning).toContain("Save is a real write action");
+    expect(payload.safety.noExternalActionPerformed).toBe(true);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+  });
+
+  it("requires --dry-run for workflow preview", async () => {
+    const result = await runCli([
+      "workflow",
+      "preview",
+      "--template",
+      "vpn_troubleshooting",
+      "--user",
+      "Demo User",
+      "--summary",
+      "VPN issue",
+      "--source",
+      "Teams message"
+    ], { cwd });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("sda workflow preview requires --dry-run");
+  });
+
   it("prints a browser session launch plan for QA without launching a browser", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-browser-plan-"));
 

@@ -11,10 +11,13 @@ import {
   type ServiceNowEnvironmentMode
 } from "@servicenow-automation/profiles";
 import {
+  buildServiceDeskWorkflowPreview,
   evaluateQaSingleTicketSmokePlan,
   type CapturedContext,
+  type FieldDraft,
   type KnowledgeMatch,
   type QaSingleTicketSmokePlan,
+  type RawIntakeSource,
   type TicketDraft
 } from "@servicenow-automation/core";
 
@@ -108,6 +111,47 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
         notes,
         safety: safetyEnvelope()
       }, notes.workNotes);
+    }
+
+    if (namespace === "workflow" && action === "preview") {
+      if (!parsed.dryRun) {
+        return fail("sda workflow preview requires --dry-run. It is a local report/workflow preview only.");
+      }
+
+      const template = requiredFlag(parsed, "template", "workflow preview");
+      const user = requiredFlag(parsed, "user", "workflow preview");
+      const summary = requiredFlag(parsed, "summary", "workflow preview");
+      const source = parseRawIntakeSource(requiredFlag(parsed, "source", "workflow preview"));
+      const ticketDraft = buildTicketDraft({ template, user, summary });
+      const finalAssignmentGroup = draftFieldValue(ticketDraft.assignmentGroup);
+      const preview = buildServiceDeskWorkflowPreview({
+        createdAt: "2026-05-18 12:00",
+        rawIntakeSource: source,
+        requesterDisplay: user,
+        languageOrServiceDeskTeam: `${parsed.flags.language ?? "en-US"} / ${profile.defaultAssignmentGroup}`,
+        issueType: "Incident",
+        draft: ticketDraft,
+        serviceDeskOwnerTeam: profile.defaultAssignmentGroup,
+        finalAssignmentGroup,
+        finalAssignmentReason: `Local ${draftFieldValue(ticketDraft.category)} / ${draftFieldValue(ticketDraft.subcategory)} mapping from sanitized CLI draft.`,
+        handlingStatus: "New",
+        confirmationState: {
+          status: "Needs confirmation",
+          summary: "Confirm requester, impact, urgency, and missing troubleshooting details before any real handling."
+        }
+      });
+
+      return output(parsed, {
+        command: "workflow preview",
+        dryRun: true,
+        template,
+        preview,
+        safety: safetyEnvelope({
+          noServiceNowWrite: true,
+          noExcelWrite: true,
+          noGraphWrite: true
+        })
+      }, formatWorkflowPreview(preview.mappedServiceNowChannel, preview.csvRow));
     }
 
     if (namespace === "browser" && action === "plan") {
@@ -333,6 +377,26 @@ function parseEnvironmentMode(value: string): ServiceNowEnvironmentMode {
   throw new Error(`Unknown ServiceNow environment mode: ${value}`);
 }
 
+function parseRawIntakeSource(value: string): RawIntakeSource {
+  const allowedSources: RawIntakeSource[] = [
+    "Teams message",
+    "ServiceNow Chat transcript",
+    "Shared mailbox item",
+    "Phone call",
+    "Self-service ticket",
+    "teams_web",
+    "servicenow_chat",
+    "outlook_web",
+    "outlook_classic",
+    "servicenow_self_service",
+    "manual_paste"
+  ];
+  if (allowedSources.includes(value as RawIntakeSource)) {
+    return value as RawIntakeSource;
+  }
+  throw new Error(`Unknown workflow intake source: ${value}`);
+}
+
 function output(parsed: ParsedFlags, payload: unknown, text: string): CliResult {
   if (parsed.json) {
     return ok(`${JSON.stringify(payload, null, 2)}\n`);
@@ -361,6 +425,9 @@ function baseSafetyEnvelope() {
     realServiceNowApiCalled: false,
     browserAutomationCalled: false,
     browserProcessLaunched: false,
+    noServiceNowWrite: true,
+    noExcelWrite: true,
+    noGraphWrite: true,
     productionWriteAllowed: false,
     message: "Draft/preview only. The CLI does not submit, save, close, or update real ServiceNow records."
   };
@@ -379,6 +446,14 @@ function formatTicketDraft(ticketDraft: TicketDraft): string {
     `Short description: ${ticketDraft.shortDescription.value}`,
     `Work notes: ${ticketDraft.workNotes.value}`,
     "Safety: draft/preview only; no external action performed."
+  ].join("\n");
+}
+
+function formatWorkflowPreview(channel: string, csvRow: string): string {
+  return [
+    `Workflow preview: ServiceNow channel ${channel}`,
+    `CSV row: ${csvRow}`,
+    "Safety: local dry-run only; no ServiceNow, Excel, or Graph write performed."
   ].join("\n");
 }
 
@@ -426,6 +501,10 @@ function formatQaSmokePlan(plan: QaSingleTicketSmokePlan): string {
   return lines.join("\n");
 }
 
+function draftFieldValue(field: FieldDraft | undefined): string {
+  return field?.value ?? "Not set";
+}
+
 function helpText(): string {
   return `Usage: sda <command> [options]
 
@@ -439,6 +518,7 @@ Commands:
   sda browser launch --mode <qa|dev> [--target-url <url>] [--browser-executable <path>] [--execute --confirm-no-write-launch] [--json]
   sda browser smoke [--target about:blank] [--browser-executable <path>] [--profile-root <path>] [--execute --confirm-no-write-launch] [--json]
   sda browser reset --mode <mock|qa|dev|production-shadow> [--json]
+  sda workflow preview --template <template> --user <sanitized_user> --summary <sanitized_summary> --source <source> --dry-run [--json]
   sda qa smoke --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> [--target-url <url>] [--approval-phrase <phrase>] [--language <lang>] [--template-preset <preset>] [--json]
   sda run --workflow <workflow_name> --input <json_file> --dry-run [--json]
 

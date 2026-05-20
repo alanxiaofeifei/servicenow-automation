@@ -14,11 +14,13 @@ import {
 } from "@servicenow-automation/profiles";
 import {
   CapturedContextSchema,
+  buildServiceDeskWorkflowPreview,
   evaluateQaSingleTicketSmokePlan,
   normalizeSourceContextText,
   type CapturedContext,
   type FieldDraft,
   type QaSingleTicketSmokePlan,
+  type ServiceDeskWorkflowPreview,
   type SourceType,
   type TicketDraft
 } from "@servicenow-automation/core";
@@ -765,6 +767,22 @@ export function App() {
   const t = uiTranslations[language];
   const templatedDraft = applyDraftTemplates(initialDraft, draftTemplateSettings);
   const draft = applyOverrides(templatedDraft, fieldOverrides);
+  const serviceDeskWorkflowPreview = buildServiceDeskWorkflowPreview({
+    createdAt: selectedQueueItem.receivedAt,
+    rawIntakeSource: selectedQueueItem.sourceChannel,
+    requesterDisplay: selectedQueueItem.requesterLabel,
+    languageOrServiceDeskTeam: `${selectedQueueItem.sourceLanguage} / ${profile.defaultAssignmentGroup}`,
+    issueType: "Incident",
+    draft,
+    serviceDeskOwnerTeam: profile.defaultAssignmentGroup,
+    finalAssignmentGroup: fieldValue(draft.assignmentGroup),
+    finalAssignmentReason: `Local ${fieldValue(draft.category)} / ${fieldValue(draft.subcategory)} mapping from sanitized draft fields.`,
+    handlingStatus: selectedQueueItem.status,
+    confirmationState: {
+      status: "Needs confirmation",
+      summary: "Confirm requester, impact, urgency, and missing troubleshooting details before any real handling."
+    }
+  });
   const qaSmokeTargetUrl = selectedEnvironment.url;
   const qaSmokeTargetValidation = validateServiceNowTargetUrl(selectedEnvironment, qaSmokeTargetUrl);
   const qaSmokePlan = evaluateQaSingleTicketSmokePlan({
@@ -995,6 +1013,11 @@ export function App() {
                 t={t}
               />
             </div>
+
+            <ServiceDeskWorkflowPanel
+              preview={serviceDeskWorkflowPreview}
+              onPrepareCopyDraft={prepareCopyDraft}
+            />
 
             <div className="scenario-bar" aria-label="Demo scenarios">
               {demoManualPasteScenarios.map((scenario) => (
@@ -1566,6 +1589,156 @@ function SourceReviewPanel({
           Skip
         </button>
       </div>
+    </section>
+  );
+}
+
+function ServiceDeskWorkflowPanel({
+  onPrepareCopyDraft,
+  preview
+}: {
+  onPrepareCopyDraft: (label: string, text: string) => void;
+  preview: ServiceDeskWorkflowPreview;
+}) {
+  const row = preview.excelDryRunRowPreview.row;
+
+  return (
+    <section className="workflow-preview-panel" aria-labelledby="workflow-preview-title">
+      <header className="workflow-preview-header">
+        <div>
+          <p className="eyebrow">Workflow Stage</p>
+          <h3 id="workflow-preview-title">Service Desk workflow preview</h3>
+          <p>{preview.safety.message}</p>
+        </div>
+        <div className="workflow-channel-pair" aria-label="Raw intake source and mapped ServiceNow channel">
+          <div>
+            <span>Raw Intake Source</span>
+            <strong>{preview.rawIntakeSource}</strong>
+          </div>
+          <div>
+            <span>ServiceNow Channel</span>
+            <strong>{preview.mappedServiceNowChannel}</strong>
+          </div>
+        </div>
+      </header>
+
+      <ol className="workflow-stage-list">
+        {preview.workflowStages.map((stage) => (
+          <li key={stage}>{stage}</li>
+        ))}
+      </ol>
+
+      <div className="workflow-preview-grid">
+        <section className="workflow-mini-panel" aria-labelledby="contact-confirmation-title">
+          <h4 id="contact-confirmation-title">Contact / confirmation state</h4>
+          <strong>{preview.confirmationState.status}</strong>
+          <p>{preview.confirmationState.summary}</p>
+        </section>
+
+        <section className="workflow-mini-panel" aria-labelledby="incident-mapping-title">
+          <h4 id="incident-mapping-title">Incident draft field mapping</h4>
+          <dl className="workflow-field-list">
+            <div>
+              <dt>Issue Type</dt>
+              <dd>Incident</dd>
+            </div>
+            <div>
+              <dt>Category</dt>
+              <dd>{preview.incidentDraftMapping.category}</dd>
+            </div>
+            <div>
+              <dt>Subcategory</dt>
+              <dd>{preview.incidentDraftMapping.subcategory}</dd>
+            </div>
+            <div>
+              <dt>Priority</dt>
+              <dd>{preview.incidentDraftMapping.priority}</dd>
+            </div>
+          </dl>
+        </section>
+      </div>
+
+      <section className="routing-plan-panel" aria-labelledby="routing-plan-title">
+        <h4 id="routing-plan-title">Routing Plan</h4>
+        <div className="routing-stage-grid">
+          <article>
+            <h5>Stage 1 — Service Desk Handling</h5>
+            <dl>
+              <div>
+                <dt>Owner team</dt>
+                <dd>{preview.routingPlan.stage1.ownerTeam}</dd>
+              </div>
+              <div>
+                <dt>Status</dt>
+                <dd>{preview.routingPlan.stage1.status}</dd>
+              </div>
+              <div>
+                <dt>Action</dt>
+                <dd>{preview.routingPlan.stage1.action}</dd>
+              </div>
+            </dl>
+          </article>
+          <article>
+            <h5>Stage 2 — Final Assignment</h5>
+            <dl>
+              <div>
+                <dt>Final assignment group</dt>
+                <dd>{preview.routingPlan.stage2.assignmentGroup}</dd>
+              </div>
+              <div>
+                <dt>Reason</dt>
+                <dd>{preview.routingPlan.stage2.reason}</dd>
+              </div>
+            </dl>
+          </article>
+        </div>
+      </section>
+
+      <section className="work-notes-plan-panel" aria-labelledby="work-notes-plan-title">
+        <h4 id="work-notes-plan-title">Work Notes Plan</h4>
+        <p>{preview.workNotesPlan.summary}</p>
+        <p className="workflow-warning">{preview.workNotesPlan.warning}</p>
+      </section>
+
+      <section className="excel-row-preview-panel" aria-labelledby="excel-row-preview-title">
+        <div className="excel-row-header">
+          <div>
+            <h4 id="excel-row-preview-title">Excel Dry-run Row Preview</h4>
+            <p>{preview.excelDryRunRowPreview.safetyCopy}</p>
+          </div>
+          <div className="excel-copy-actions" aria-label="Local workflow copy actions">
+            <button type="button" onClick={() => onPrepareCopyDraft("workflow CSV row", preview.csvRow)}>
+              Copy CSV Row
+            </button>
+            <button
+              type="button"
+              onClick={() => onPrepareCopyDraft("workflow Markdown summary", preview.markdownSummary)}
+            >
+              Copy Markdown Summary
+            </button>
+          </div>
+        </div>
+
+        <dl className="excel-row-grid">
+          {Object.entries(row).map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+
+        <div className="workflow-preview-text-grid">
+          <label className="field-block">
+            <span>Local CSV Row</span>
+            <textarea readOnly rows={3} value={preview.csvRow} />
+          </label>
+          <label className="field-block">
+            <span>Local Markdown Summary</span>
+            <textarea readOnly rows={3} value={preview.markdownSummary} />
+          </label>
+        </div>
+      </section>
     </section>
   );
 }

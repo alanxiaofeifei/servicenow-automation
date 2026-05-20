@@ -256,6 +256,34 @@ describe("App", () => {
     expect(output).toContain("queue-item-card");
   });
 
+  it("renders the local Service Desk workflow and Excel dry-run row preview", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Workflow Stage");
+    expect(output).toContain("Intake received");
+    expect(output).toContain("Contact / confirmation");
+    expect(output).toContain("Incident draft prepared");
+    expect(output).toContain("Service Desk ownership / team handling");
+    expect(output).toContain("Final support group routing");
+    expect(output).toContain("Work Notes plan");
+    expect(output).toContain("Excel dry-run row");
+    expect(output).toContain("Raw Intake Source");
+    expect(output).toContain("ServiceNow Channel");
+    expect(output).toContain("Teams message");
+    expect(output).toContain("Chat");
+    expect(output).toContain("Routing Plan");
+    expect(output).toContain("Stage 1 — Service Desk Handling");
+    expect(output).toContain("Stage 2 — Final Assignment");
+    expect(output).toContain("Save is a real write action");
+    expect(output).toContain("Excel Dry-run Row Preview");
+    expect(output).toContain(
+      "This row is generated locally from the reviewed draft. No workbook is connected or written."
+    );
+    expect(output).toContain("Copy CSV Row");
+    expect(output).toContain("Copy Markdown Summary");
+    expect(output).toContain("No real ServiceNow, Excel workbook, Graph, browser, API, mailbox, Teams, or portal write is performed.");
+  });
+
   it("renders exactly four FIFO intake items", () => {
     const output = renderAppMarkup();
     const queueItemCount = output.match(/<button class=\"queue-item/g)?.length ?? 0;
