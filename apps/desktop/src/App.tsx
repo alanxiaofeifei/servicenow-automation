@@ -70,6 +70,20 @@ type PreparedCopyDraft = {
   text: string;
 };
 
+type DraftTemplatePresetId = "standard-service-desk" | "escalation-ready-notes";
+
+type DraftTemplatePreset = {
+  id: DraftTemplatePresetId;
+  label: string;
+  descriptionTemplate: string;
+  workNotesTemplate: string;
+};
+
+export type DraftTemplateSettings = {
+  descriptionTemplate: string;
+  workNotesTemplate: string;
+};
+
 export type LanguageCode = "zh-CN" | "zh-TW" | "en-US" | "es-ES";
 
 type UiTranslations = {
@@ -416,6 +430,51 @@ const fieldReviewChecklistItems: FieldReviewChecklistItem[] = [
   { id: "human-confirmation-before-mock-fill", label: "Human confirmation before any mock fill/copy" }
 ];
 
+export const draftTemplatePresets: DraftTemplatePreset[] = [
+  {
+    id: "standard-service-desk",
+    label: "Standard Service Desk",
+    descriptionTemplate: [
+      "Intake summary",
+      "{{draft_content}}",
+      "",
+      "Review notes",
+      "- Verify requester, source channel, impact, urgency, and category before any manual action.",
+      "- Keep customer-visible text separate from internal Work Notes."
+    ].join("\n"),
+    workNotesTemplate: [
+      "Internal triage notes",
+      "{{draft_content}}",
+      "",
+      "Next checks",
+      "- Confirm the current symptom, recent change, timestamp, and affected scope.",
+      "- Use only fake sanitized demo data in this local preview."
+    ].join("\n")
+  },
+  {
+    id: "escalation-ready-notes",
+    label: "Escalation-ready notes",
+    descriptionTemplate: [
+      "Issue summary for review",
+      "{{draft_content}}",
+      "",
+      "Escalation context",
+      "- Capture business impact, affected access or device scope, and any immediate workaround.",
+      "- Do not include secrets, credentials, real ticket numbers, or real customer identifiers."
+    ].join("\n"),
+    workNotesTemplate: [
+      "Escalation-ready internal notes",
+      "{{draft_content}}",
+      "",
+      "Handoff checklist",
+      "- Record completed checks, remaining unknowns, reproduction details, and sanitized evidence.",
+      "- Human reviewer decides whether escalation is appropriate."
+    ].join("\n")
+  }
+];
+
+const defaultDraftTemplatePreset = draftTemplatePresets[0];
+
 const unsupportedFallbackMode = "Unsupported-language fallback: source language + English bilingual draft";
 
 const demoQueueDefinitions: DemoQueueDefinition[] = [
@@ -645,10 +704,18 @@ export function App() {
   const [highSeverityState, setHighSeverityState] = useState<HighSeverityState>("normal");
   const [highSeverityAcknowledged, setHighSeverityAcknowledged] = useState(false);
   const [highSeverityMuted, setHighSeverityMuted] = useState(false);
+  const [selectedTemplatePresetId, setSelectedTemplatePresetId] = useState<DraftTemplatePresetId>(
+    defaultDraftTemplatePreset.id
+  );
+  const [draftTemplateSettings, setDraftTemplateSettings] = useState<DraftTemplateSettings>({
+    descriptionTemplate: defaultDraftTemplatePreset.descriptionTemplate,
+    workNotesTemplate: defaultDraftTemplatePreset.workNotesTemplate
+  });
 
   const selectedEnvironment = getServiceNowEnvironmentConfig(selectedEnvironmentMode);
   const t = uiTranslations[language];
-  const draft = applyOverrides(initialDraft, fieldOverrides);
+  const templatedDraft = applyDraftTemplates(initialDraft, draftTemplateSettings);
+  const draft = applyOverrides(templatedDraft, fieldOverrides);
   const context = buildContextForQueueItem(selectedQueueItem);
   const sourceCleanup = normalizeSourceContextText({
     sourceType: context.sourceType,
@@ -713,6 +780,23 @@ export function App() {
 
   function updateField(fieldName: keyof TicketDraft, value: string) {
     setFieldOverrides((current) => ({ ...current, [fieldName]: value }));
+  }
+
+  function selectTemplatePreset(presetId: DraftTemplatePresetId) {
+    const preset = draftTemplatePresets.find((item) => item.id === presetId);
+    if (!preset) {
+      return;
+    }
+
+    setSelectedTemplatePresetId(preset.id);
+    setDraftTemplateSettings({
+      descriptionTemplate: preset.descriptionTemplate,
+      workNotesTemplate: preset.workNotesTemplate
+    });
+  }
+
+  function updateTemplateField(fieldName: keyof DraftTemplateSettings, value: string) {
+    setDraftTemplateSettings((current) => ({ ...current, [fieldName]: value }));
   }
 
   function toggleFieldReviewItem(itemId: string) {
@@ -861,6 +945,12 @@ export function App() {
 
           <section className="panel draft-panel" aria-labelledby="draft-title">
             <h3 id="draft-title">{t.editableDraftTitle}</h3>
+            <TemplateSettingsPanel
+              selectedPresetId={selectedTemplatePresetId}
+              settings={draftTemplateSettings}
+              onPresetChange={selectTemplatePreset}
+              onTemplateChange={updateTemplateField}
+            />
             <DraftTextField label="Short Description" field={draft.shortDescription} onChange={(value) => updateField("shortDescription", value)} />
             <DraftTextField label="Description" field={draft.description} multiline onChange={(value) => updateField("description", value)} />
             <DraftTextField label="Work Notes" field={draft.workNotes} multiline onChange={(value) => updateField("workNotes", value)} />
@@ -1371,8 +1461,103 @@ function applyOverrides(draft: TicketDraft, overrides: Record<string, string>): 
   };
 }
 
+export function applyDraftTemplates(draft: TicketDraft, settings: DraftTemplateSettings): TicketDraft {
+  return {
+    ...draft,
+    description: {
+      ...draft.description,
+      value: applyTemplateText(settings.descriptionTemplate, draft.description.value),
+      evidence: `${draft.description.evidence ?? "Generated locally."} Team template applied locally.`
+    },
+    workNotes: {
+      ...draft.workNotes,
+      value: applyTemplateText(settings.workNotesTemplate, draft.workNotes.value),
+      evidence: `${draft.workNotes.evidence ?? "Generated locally."} Team template applied locally.`
+    }
+  };
+}
+
+function applyTemplateText(template: string, sourceDraftContent: string): string {
+  const normalizedTemplate = template.trim();
+  if (!normalizedTemplate) {
+    return sourceDraftContent;
+  }
+
+  if (normalizedTemplate.includes("{{draft_content}}")) {
+    return normalizedTemplate.replaceAll("{{draft_content}}", sourceDraftContent);
+  }
+
+  return [normalizedTemplate, "", "Source draft content", sourceDraftContent].join("\n");
+}
+
 function applyFieldOverride(field: FieldDraft, value: string | undefined): FieldDraft {
   return value === undefined ? field : { ...field, value };
+}
+
+function TemplateSettingsPanel({
+  onPresetChange,
+  onTemplateChange,
+  selectedPresetId,
+  settings
+}: {
+  onPresetChange: (presetId: DraftTemplatePresetId) => void;
+  onTemplateChange: (fieldName: keyof DraftTemplateSettings, value: string) => void;
+  selectedPresetId: DraftTemplatePresetId;
+  settings: DraftTemplateSettings;
+}) {
+  return (
+    <details className="template-settings-panel">
+      <summary>
+        <span>Templates / Settings</span>
+        <strong>{draftTemplatePresets.find((preset) => preset.id === selectedPresetId)?.label}</strong>
+      </summary>
+
+      <div className="template-settings-body">
+        <p className="template-safety-copy">
+          Local demo templates only — no external storage or ServiceNow write.
+        </p>
+
+        <div className="field-block template-preset-field">
+          <span>Template preset</span>
+          <div className="template-preset-buttons" aria-label="Template presets">
+            {draftTemplatePresets.map((preset) => (
+              <button
+                key={preset.id}
+                className={preset.id === selectedPresetId ? "active" : undefined}
+                type="button"
+                onClick={() => onPresetChange(preset.id)}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          <small>Switching presets replaces both local template text areas.</small>
+        </div>
+
+        <div className="template-editor-grid">
+          <label className="field-block">
+            <span>Description template</span>
+            <textarea
+              rows={6}
+              value={settings.descriptionTemplate}
+              onChange={(event) => onTemplateChange("descriptionTemplate", event.currentTarget.value)}
+            />
+            <small>{"Use {{draft_content}} to place the generated language-aware Description."}</small>
+          </label>
+
+          <label className="field-block">
+            <span>Work Notes template</span>
+            <textarea
+              rows={6}
+              value={settings.workNotesTemplate}
+              onChange={(event) => onTemplateChange("workNotesTemplate", event.currentTarget.value)}
+            />
+            <small>{"Use {{draft_content}} to place the generated language-aware Work Notes."}</small>
+          </label>
+        </div>
+      </div>
+    </details>
+  );
 }
 
 function DraftCopyActions({

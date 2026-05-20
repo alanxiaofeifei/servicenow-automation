@@ -710,7 +710,8 @@ dd {
 }
 
 input,
-textarea {
+textarea,
+.field-block select {
   width: 100%;
   border: 1px solid #d8c8ae;
   border-radius: 8px;
@@ -723,7 +724,8 @@ textarea {
 }
 
 input:focus,
-textarea:focus {
+textarea:focus,
+.field-block select:focus {
   border-color: #ad6a1f;
   box-shadow: 0 0 0 3px rgba(191, 122, 48, 0.18);
 }
@@ -735,6 +737,85 @@ textarea:focus {
 }
 
 .field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.template-settings-panel {
+  margin: 14px 0;
+  border: 1px solid #d8c8ae;
+  border-radius: 8px;
+  background: #fff8eb;
+}
+
+.template-settings-panel summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  color: #302920;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.template-settings-panel summary strong {
+  flex: 0 0 auto;
+  border: 1px solid #bdd6cc;
+  border-radius: 999px;
+  padding: 4px 9px;
+  color: #214f49;
+  background: #eef8f2;
+  font-size: 0.78rem;
+}
+
+.template-settings-body {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid #e3d3b8;
+  padding: 12px;
+}
+
+.template-safety-copy {
+  margin: 0;
+  border: 1px solid #d09231;
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: #68430c;
+  background: #fff4dc;
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.template-preset-field,
+.template-editor-grid .field-block {
+  margin-bottom: 0;
+}
+
+.template-preset-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.template-preset-buttons button {
+  border: 1px solid #d2bea0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #443729;
+  background: #fffdf7;
+  font-weight: 900;
+}
+
+.template-preset-buttons button.active,
+.template-preset-buttons button:hover {
+  border-color: #2f756c;
+  color: #174f49;
+  background: #edf8f2;
+}
+
+.template-editor-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
@@ -1294,6 +1375,7 @@ textarea:focus {
 
   .queue-item,
   .draft-copy-button-grid,
+  .template-editor-grid,
   .review-actions,
   .review-meta {
     grid-template-columns: 1fr;

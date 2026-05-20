@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { App, buildDemoQueueItems, buildDraftForQueueItem } from "./App";
+import {
+  App,
+  applyDraftTemplates,
+  buildDemoQueueItems,
+  buildDraftForQueueItem,
+  draftTemplatePresets
+} from "./App";
 
 function renderAppMarkup() {
   return renderToStaticMarkup(createElement(App));
@@ -68,6 +74,37 @@ describe("App", () => {
     expect(output).toContain("KB Matches");
     expect(output).toContain("VPN connectivity troubleshooting");
     expect(output).toContain("Human review required before any ServiceNow action.");
+  });
+
+  it("renders local team template settings for Description and Work Notes", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Templates / Settings");
+    expect(output).toContain("Description template");
+    expect(output).toContain("Work Notes template");
+    expect(output).toContain("Local demo templates only — no external storage or ServiceNow write");
+    expect(output).toContain("Standard Service Desk");
+    expect(output).toContain("Escalation-ready notes");
+    expect(output).toContain('<details class="template-settings-panel">');
+    expect(output).not.toContain('class="template-settings-panel" open');
+  });
+
+  it("applies the default template around generated draft content", () => {
+    const queue = buildDemoQueueItems("en-US");
+    const vpnItem = queue.find((item) => item.id === "demo-teams-vpn");
+
+    expect(vpnItem).toBeDefined();
+
+    const baseDraft = buildDraftForQueueItem(vpnItem!);
+    const templatedDraft = applyDraftTemplates(baseDraft, {
+      descriptionTemplate: draftTemplatePresets[0].descriptionTemplate,
+      workNotesTemplate: draftTemplatePresets[0].workNotesTemplate
+    });
+
+    expect(templatedDraft.description.value).toContain("Intake summary");
+    expect(templatedDraft.description.value).toContain("User reports a VPN connectivity problem");
+    expect(templatedDraft.workNotes.value).toContain("Internal triage notes");
+    expect(templatedDraft.workNotes.value).toContain("Initial triage: confirm internet without VPN");
   });
 
   it("renders the project-extensible language selector options", () => {
