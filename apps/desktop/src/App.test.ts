@@ -11,11 +11,15 @@ import {
   clampAppZoomPercent,
   draftTemplatePresets,
   getCtrlWheelZoomDelta,
-  getNextAppZoomPercent
+  getNextAppZoomPercent,
+  type LanguageCode
 } from "./App";
 
-function renderAppMarkup() {
-  return renderToStaticMarkup(createElement(App));
+type TestableAppProps = { initialLanguage?: LanguageCode };
+const TestableApp = App as unknown as (props: TestableAppProps) => ReturnType<typeof App>;
+
+function renderAppMarkup(initialLanguage?: LanguageCode) {
+  return renderToStaticMarkup(createElement(TestableApp, { initialLanguage }));
 }
 
 describe("App", () => {
@@ -113,6 +117,80 @@ describe("App", () => {
     expect(settingsMarkup).toContain("⚙ Optional field checklist / Team rules");
   });
 
+  it("renders localized settings, templates, environments, and mock ServiceNow chrome for zh-CN", () => {
+    const output = renderAppMarkup("zh-CN");
+    const settingsStart = output.indexOf('id="app-settings-sidebar"');
+    const settingsEnd = output.indexOf("</aside>", settingsStart);
+    const settingsMarkup = output.slice(settingsStart, settingsEnd);
+
+    expect(output).toContain("⚙ 设置");
+    expect(output).toContain('aria-label="集中设置"');
+    expect(settingsMarkup).toContain("集中设置");
+    expect(settingsMarkup).toContain('aria-label="关闭设置面板"');
+    expect(settingsMarkup).toContain("✕ 关闭");
+    expect(settingsMarkup).toContain("⚙ 显示设置");
+    expect(settingsMarkup).toContain("应用缩放");
+    expect(settingsMarkup).toContain("重置");
+    expect(settingsMarkup).toContain("主题");
+    expect(settingsMarkup).toContain("暖色");
+    expect(settingsMarkup).toContain("冷色");
+    expect(settingsMarkup).not.toContain("Night");
+    expect(settingsMarkup).toContain("文本字段");
+    expect(settingsMarkup).toContain("自动适应文本框");
+    expect(settingsMarkup).toContain("紧凑 + 显示缩放手柄");
+    expect(settingsMarkup).toContain("⚙ 模板 / 设置");
+    expect(settingsMarkup).toContain("本地演示模板");
+    expect(settingsMarkup).toContain("模板预设");
+    expect(settingsMarkup).toContain("标准服务台");
+    expect(settingsMarkup).toContain("升级准备备注");
+    expect(settingsMarkup).toContain("描述模板");
+    expect(settingsMarkup).toContain("工作备注模板");
+    expect(settingsMarkup).toContain("受理摘要");
+    expect(settingsMarkup).toContain("内部排查备注");
+    expect(settingsMarkup).toContain("⚙ 可选字段检查清单 / 团队规则");
+    expect(settingsMarkup).toContain('aria-label="字段审核进度"');
+    expect(settingsMarkup).toContain("已本地审核");
+    expect(settingsMarkup).toContain("ServiceNow 会在提交时强制检查带星号的必填字段");
+    expect(settingsMarkup).toContain("请求者、类别、地点、渠道、影响、紧急度、分配组、短描述");
+    expect(settingsMarkup).toContain("来源渠道已审核");
+    expect(settingsMarkup).toContain("真实 ServiceNow 字段填充、Save、Submit、Update、Close");
+    expect(settingsMarkup).not.toContain("Optional field checklist / Team rules");
+    expect(settingsMarkup).not.toContain("reviewed locally");
+    expect(settingsMarkup).not.toContain("Subcategory selected if needed");
+    expect(settingsMarkup).not.toContain("Configuration item / affected service checked");
+    expect(settingsMarkup).not.toContain("Priority reviewed as derived value");
+    expect(settingsMarkup).not.toContain("Human confirmation before any mock fill/copy");
+
+    expect(output).toContain("Mock 演示");
+    expect(output).toContain("QA 测试环境");
+    expect(output).toContain("开发测试环境");
+    expect(output).toContain("生产影子模式");
+    expect(output).toContain("当前模式");
+    expect(output).toContain("完整 ServiceNow URL 已为隐私隐藏");
+    expect(output).toContain("凭据策略");
+    expect(output).toContain("无需凭据");
+    expect(output).toContain("必须手动登录");
+    expect(output).toContain("提交策略");
+    expect(output).toContain("仅影子模式");
+
+    expect(output).toContain("Incident | 新记录 — Mock 预览");
+    expect(output).toContain("禁用 / 演示模式不可用");
+    expect(output).toContain("详情");
+    expect(output).toContain("备注");
+    expect(output).toContain("相关搜索（仅 mock）");
+    expect(output).toContain("请求者");
+    expect(output).toContain("类别");
+    expect(output).toContain("地点");
+    expect(output).toContain("渠道");
+    expect(output).toContain("影响");
+    expect(output).toContain("紧急度");
+    expect(output).toContain("分配组");
+    expect(output).toContain("短描述");
+    expect(output).toContain("描述");
+    expect(output).toContain("工作备注");
+    expect(output).toContain("演示模式下提交被禁用");
+  });
+
   it("renders local display settings with zoom, theme, and text field mode controls", () => {
     const output = renderAppMarkup();
 
@@ -126,7 +204,7 @@ describe("App", () => {
     expect(output).toContain("Reset");
     expect(output).toContain("Warm");
     expect(output).toContain("Cool");
-    expect(output).toContain("Night");
+    expect(output).not.toContain("Night");
     expect(output).toContain("Auto-fit text areas");
     expect(output).toContain("Compact + visible resize handle");
     expect(output).toContain("Display settings are local React state only and are not persisted.");

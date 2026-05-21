@@ -31,7 +31,7 @@ type DemoQueueStatus = "New" | "Reviewed" | "Drafted" | "Done" | "Skipped";
 
 type HighSeverityState = "normal" | "p2" | "p1";
 
-type DisplayTheme = "warm" | "cool" | "night";
+type DisplayTheme = "warm" | "cool";
 
 type TextFieldDisplayMode = "auto-fit" | "compact-resize";
 
@@ -74,8 +74,26 @@ type DemoQueueDefinition = {
   content: Record<LanguageCode, DemoQueueContent>;
 };
 
+type FieldReviewChecklistItemId =
+  | "source-channel-reviewed"
+  | "requester-identified"
+  | "location-checked"
+  | "channel-selected"
+  | "short-description-reviewed"
+  | "description-reviewed"
+  | "category-selected"
+  | "subcategory-selected-if-needed"
+  | "ci-affected-service-checked"
+  | "impact-checked"
+  | "urgency-checked"
+  | "priority-reviewed-derived"
+  | "assignment-group-reviewed"
+  | "work-notes-prepared"
+  | "comments-separated"
+  | "human-confirmation-before-mock-fill";
+
 type FieldReviewChecklistItem = {
-  id: string;
+  id: FieldReviewChecklistItemId;
   label: string;
 };
 
@@ -144,6 +162,18 @@ type UiTranslations = {
   copyTitle: string;
   checklistEyebrow: string;
   checklistTitle: string;
+  checklistSummaryLabel: string;
+  checklistProgressAria: string;
+  checklistReviewedLocally: string;
+  checklistIntroRequired: string;
+  checklistIntroQuality: string;
+  checklistReferenceAria: string;
+  checklistRequiredReferenceLabel: string;
+  checklistRequiredReferenceFields: string;
+  checklistSupportingFieldsLabel: string;
+  checklistSupportingFields: string;
+  checklistSafetyCopy: string;
+  checklistItemLabels: Record<FieldReviewChecklistItemId, string>;
   mockEyebrow: string;
   mockTitle: string;
   mockSubtitle: string;
@@ -160,6 +190,150 @@ export const languageOptions: { code: LanguageCode; label: string }[] = [
   { code: "zh-TW", label: "繁中（台灣）" },
   { code: "es-ES", label: "Español" }
 ];
+
+const englishFieldReviewChecklistTranslations = {
+  checklistSummaryLabel: "⚙ Optional field checklist / Team rules",
+  checklistProgressAria: "Field review progress",
+  checklistReviewedLocally: "reviewed locally",
+  checklistIntroRequired:
+    "ServiceNow already enforces starred required fields at submit time. This local checklist is optional and customizable for team process, field order, and draft quality before any mock fill/copy.",
+  checklistIntroQuality:
+    "Ticket quality depends on field order and dependencies, not text generation alone. Review requester, location, channel, category, affected service, impact, urgency, priority, assignment, comments, and work notes before any mock fill/copy.",
+  checklistReferenceAria: "Sanitized ServiceNow create form reference",
+  checklistRequiredReferenceLabel: "Required/starred reference",
+  checklistRequiredReferenceFields: "Requester, Category, Location, Channel, Impact, Urgency, Assignment group, Short description",
+  checklistSupportingFieldsLabel: "Supporting fields",
+  checklistSupportingFields:
+    "Description, Subcategory, Configuration item, Business service, Service offering, Priority, Assigned to, Additional comments, Work notes, Related Search / Knowledge & Catalog",
+  checklistSafetyCopy:
+    "Demo checklist only. Local state only. No real ServiceNow field fill, Save, Submit, Update, Close, API call, browser automation, DOM inspection, screenshots, HAR, traces, sessions, or storage export.",
+  checklistItemLabels: {
+    "source-channel-reviewed": "Source channel reviewed",
+    "requester-identified": "Requester identified",
+    "location-checked": "Location checked",
+    "channel-selected": "Channel selected",
+    "short-description-reviewed": "Short description generated/reviewed",
+    "description-reviewed": "Description generated/reviewed",
+    "category-selected": "Category selected",
+    "subcategory-selected-if-needed": "Subcategory selected if needed",
+    "ci-affected-service-checked": "Configuration item / affected service checked",
+    "impact-checked": "Impact checked",
+    "urgency-checked": "Urgency checked",
+    "priority-reviewed-derived": "Priority reviewed as derived value",
+    "assignment-group-reviewed": "Assignment group suggested/reviewed",
+    "work-notes-prepared": "Work notes prepared",
+    "comments-separated": "Customer-visible comments separated from internal Work Notes",
+    "human-confirmation-before-mock-fill": "Human confirmation before any mock fill/copy"
+  }
+};
+
+const zhCnFieldReviewChecklistTranslations = {
+  checklistSummaryLabel: "⚙ 可选字段检查清单 / 团队规则",
+  checklistProgressAria: "字段审核进度",
+  checklistReviewedLocally: "已本地审核",
+  checklistIntroRequired:
+    "ServiceNow 会在提交时强制检查带星号的必填字段。这个本地清单是可选项，可按团队流程、字段顺序和草稿质量要求自定义，并用于任何 mock 填充/复制前的检查。",
+  checklistIntroQuality:
+    "工单质量不仅取决于文本生成，还取决于字段顺序和依赖关系。在任何 mock 填充/复制前，请审核请求者、地点、渠道、类别、受影响服务、影响、紧急度、优先级、分配、评论和工作备注。",
+  checklistReferenceAria: "脱敏的 ServiceNow 新建表单参考",
+  checklistRequiredReferenceLabel: "必填/星号字段参考",
+  checklistRequiredReferenceFields: "请求者、类别、地点、渠道、影响、紧急度、分配组、短描述",
+  checklistSupportingFieldsLabel: "辅助字段",
+  checklistSupportingFields:
+    "描述、子类别、配置项、业务服务、服务项、优先级、指派给、附加评论、工作备注、相关搜索 / 知识库与目录",
+  checklistSafetyCopy:
+    "仅演示检查清单。仅本地状态。不会执行真实 ServiceNow 字段填充、Save、Submit、Update、Close、API 调用、浏览器自动化、DOM 检查、截图、HAR、trace、session 或 storage 导出。",
+  checklistItemLabels: {
+    "source-channel-reviewed": "来源渠道已审核",
+    "requester-identified": "请求者已识别",
+    "location-checked": "地点已检查",
+    "channel-selected": "渠道已选择",
+    "short-description-reviewed": "短描述已生成/审核",
+    "description-reviewed": "描述已生成/审核",
+    "category-selected": "类别已选择",
+    "subcategory-selected-if-needed": "需要时已选择子类别",
+    "ci-affected-service-checked": "配置项 / 受影响服务已检查",
+    "impact-checked": "影响已检查",
+    "urgency-checked": "紧急度已检查",
+    "priority-reviewed-derived": "优先级作为派生值已审核",
+    "assignment-group-reviewed": "分配组建议已审核",
+    "work-notes-prepared": "工作备注已准备",
+    "comments-separated": "面向客户的评论已与内部工作备注分开",
+    "human-confirmation-before-mock-fill": "任何 mock 填充/复制前已获得人工确认"
+  }
+};
+
+const zhTwFieldReviewChecklistTranslations = {
+  checklistSummaryLabel: "⚙ 可選欄位檢查清單 / 團隊規則",
+  checklistProgressAria: "欄位審核進度",
+  checklistReviewedLocally: "已本地審核",
+  checklistIntroRequired:
+    "ServiceNow 會在提交時強制檢查帶星號的必填欄位。此本地清單是可選項，可依團隊流程、欄位順序與草稿品質要求自訂，並用於任何 mock 填入/複製前的檢查。",
+  checklistIntroQuality:
+    "工單品質不只取決於文字產生，也取決於欄位順序與相依關係。在任何 mock 填入/複製前，請審核請求者、地點、管道、類別、受影響服務、影響、緊急度、優先順序、指派、留言與工作備註。",
+  checklistReferenceAria: "去識別化的 ServiceNow 新增表單參考",
+  checklistRequiredReferenceLabel: "必填/星號欄位參考",
+  checklistRequiredReferenceFields: "請求者、類別、地點、管道、影響、緊急度、指派群組、短描述",
+  checklistSupportingFieldsLabel: "輔助欄位",
+  checklistSupportingFields:
+    "描述、子類別、設定項目、業務服務、服務項目、優先順序、指派給、附加留言、工作備註、相關搜尋 / 知識庫與目錄",
+  checklistSafetyCopy:
+    "僅示範檢查清單。僅本地狀態。不會執行真實 ServiceNow 欄位填入、Save、Submit、Update、Close、API 呼叫、瀏覽器自動化、DOM 檢查、截圖、HAR、trace、session 或 storage 匯出。",
+  checklistItemLabels: {
+    "source-channel-reviewed": "來源管道已審核",
+    "requester-identified": "請求者已識別",
+    "location-checked": "地點已檢查",
+    "channel-selected": "管道已選擇",
+    "short-description-reviewed": "短描述已產生/審核",
+    "description-reviewed": "描述已產生/審核",
+    "category-selected": "類別已選擇",
+    "subcategory-selected-if-needed": "需要時已選擇子類別",
+    "ci-affected-service-checked": "設定項目 / 受影響服務已檢查",
+    "impact-checked": "影響已檢查",
+    "urgency-checked": "緊急度已檢查",
+    "priority-reviewed-derived": "優先順序作為衍生值已審核",
+    "assignment-group-reviewed": "指派群組建議已審核",
+    "work-notes-prepared": "工作備註已準備",
+    "comments-separated": "面向客戶的留言已與內部工作備註分開",
+    "human-confirmation-before-mock-fill": "任何 mock 填入/複製前已獲得人工確認"
+  }
+};
+
+const esFieldReviewChecklistTranslations = {
+  checklistSummaryLabel: "⚙ Lista opcional de campos / reglas del equipo",
+  checklistProgressAria: "Progreso de revisión de campos",
+  checklistReviewedLocally: "revisados localmente",
+  checklistIntroRequired:
+    "ServiceNow ya valida los campos obligatorios con asterisco al enviar. Esta lista local es opcional y personalizable para el proceso del equipo, el orden de campos y la calidad del borrador antes de cualquier relleno/copia mock.",
+  checklistIntroQuality:
+    "La calidad del ticket depende del orden y las dependencias de campos, no solo de la generación de texto. Revisa solicitante, ubicación, canal, categoría, servicio afectado, impacto, urgencia, prioridad, asignación, comentarios y notas de trabajo antes de cualquier relleno/copia mock.",
+  checklistReferenceAria: "Referencia sanitizada del formulario de creación de ServiceNow",
+  checklistRequiredReferenceLabel: "Referencia obligatoria/con asterisco",
+  checklistRequiredReferenceFields: "Solicitante, Categoría, Ubicación, Canal, Impacto, Urgencia, Grupo de asignación, Descripción breve",
+  checklistSupportingFieldsLabel: "Campos de apoyo",
+  checklistSupportingFields:
+    "Descripción, Subcategoría, Elemento de configuración, Servicio de negocio, Oferta de servicio, Prioridad, Asignado a, Comentarios adicionales, Notas de trabajo, Búsqueda relacionada / Conocimiento y catálogo",
+  checklistSafetyCopy:
+    "Lista demo solamente. Estado local solamente. Sin relleno real de campos ServiceNow, Save, Submit, Update, Close, llamada API, automatización de navegador, inspección DOM, capturas, HAR, trazas, sesiones ni exportación de almacenamiento.",
+  checklistItemLabels: {
+    "source-channel-reviewed": "Canal de origen revisado",
+    "requester-identified": "Solicitante identificado",
+    "location-checked": "Ubicación revisada",
+    "channel-selected": "Canal seleccionado",
+    "short-description-reviewed": "Descripción breve generada/revisada",
+    "description-reviewed": "Descripción generada/revisada",
+    "category-selected": "Categoría seleccionada",
+    "subcategory-selected-if-needed": "Subcategoría seleccionada si hace falta",
+    "ci-affected-service-checked": "Elemento de configuración / servicio afectado revisado",
+    "impact-checked": "Impacto revisado",
+    "urgency-checked": "Urgencia revisada",
+    "priority-reviewed-derived": "Prioridad revisada como valor derivado",
+    "assignment-group-reviewed": "Grupo de asignación sugerido/revisado",
+    "work-notes-prepared": "Notas de trabajo preparadas",
+    "comments-separated": "Comentarios visibles al cliente separados de Work Notes internas",
+    "human-confirmation-before-mock-fill": "Confirmación humana antes de cualquier relleno/copia mock"
+  }
+};
 
 const uiTranslations: Record<LanguageCode, UiTranslations> = {
   "zh-CN": {
@@ -208,6 +382,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     copyTitle: "安全草稿操作",
     checklistEyebrow: "传统字段审核",
     checklistTitle: "Incident 字段依赖检查清单",
+    ...zhCnFieldReviewChecklistTranslations,
     mockEyebrow: "Incident · QA/Dev 预演",
     mockTitle: "Mock ServiceNow Incident 预览",
     mockSubtitle: "该面板展示可编辑草稿如何映射到接近 ServiceNow 的 Incident 新建表单，仅用于演示。",
@@ -264,6 +439,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     copyTitle: "Safe draft actions",
     checklistEyebrow: "Legacy-inspired field review",
     checklistTitle: "Incident field dependency checklist",
+    ...englishFieldReviewChecklistTranslations,
     mockEyebrow: "Incident · QA/Dev rehearsal",
     mockTitle: "Mock ServiceNow Incident Preview",
     mockSubtitle:
@@ -320,6 +496,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     copyTitle: "安全草稿操作",
     checklistEyebrow: "傳統欄位審核",
     checklistTitle: "Incident 欄位相依檢查清單",
+    ...zhTwFieldReviewChecklistTranslations,
     mockEyebrow: "Incident · QA/Dev 預演",
     mockTitle: "Mock ServiceNow Incident 預覽",
     mockSubtitle: "此面板展示可編輯草稿如何對應到近似 ServiceNow 的 Incident 新增表單，僅供示範。",
@@ -376,6 +553,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     copyTitle: "Acciones seguras del borrador",
     checklistEyebrow: "Revisión de campos heredada",
     checklistTitle: "Lista de dependencias de campos de Incident",
+    ...esFieldReviewChecklistTranslations,
     mockEyebrow: "Incident · Ensayo QA/Dev",
     mockTitle: "Vista previa mock de ServiceNow Incident",
     mockSubtitle:
@@ -422,11 +600,347 @@ const highSeveritySimulatorStates: Record<
   }
 };
 
-const displayThemes: { id: DisplayTheme; label: string }[] = [
-  { id: "warm", label: "Warm" },
-  { id: "cool", label: "Cool" },
-  { id: "night", label: "Night" }
-];
+const displayThemes: { id: DisplayTheme }[] = [{ id: "warm" }, { id: "cool" }];
+
+type EnvironmentLocalizedCopy = {
+  label: string;
+  description: string;
+  safetyLabel: string;
+  safetyNotes: string[];
+};
+
+type UiChromeTranslations = {
+  settingsButton: string;
+  noAttachmentsCopy: string;
+  settingsSidebar: {
+    ariaLabel: string;
+    eyebrow: string;
+    title: string;
+    closeAriaLabel: string;
+    closeButton: string;
+  };
+  displaySettings: {
+    title: string;
+    appZoom: string;
+    zoomControlsAria: string;
+    currentZoomAria: string;
+    reset: string;
+    ctrlWheelCopy: string;
+    theme: string;
+    themeOptionsAria: string;
+    themeLabels: Record<DisplayTheme, string>;
+    localStateCopy: string;
+    textFields: string;
+    textFieldModeAria: string;
+    autoFit: string;
+    compactResize: string;
+    textModeHelper: string;
+  };
+  templateSettings: {
+    title: string;
+    safetyCopy: string;
+    presetLabel: string;
+    presetAria: string;
+    switchCopy: string;
+    descriptionTemplate: string;
+    workNotesTemplate: string;
+    descriptionHelper: string;
+    workNotesHelper: string;
+  };
+  environment: {
+    panelCopy: string;
+    currentMode: string;
+    selectorAria: string;
+    selected: string;
+    noTargetUrl: string;
+    urlHidden: string;
+    noRawClickableLink: string;
+    credentialPolicy: string;
+    manualLoginRequired: string;
+    noCredentialsRequired: string;
+    ignoredLocalRuntimePath: string;
+    submitPolicy: string;
+    explicitApprovalRequired: string;
+    noRealSubmit: string;
+    configs: Record<ServiceNowEnvironmentMode, EnvironmentLocalizedCopy>;
+  };
+  mockForm: {
+    frameAria: string;
+    toolbarTitle: string;
+    actionbarAria: string;
+    actions: Record<"save" | "submit" | "update" | "close", string>;
+    disabledUnavailable: string;
+    tabsAria: string;
+    details: string;
+    notes: string;
+    relatedSearch: string;
+    fields: {
+      requester: string;
+      category: string;
+      location: string;
+      channel: string;
+      impact: string;
+      urgency: string;
+      assignmentGroup: string;
+      priority: string;
+      shortDescription: string;
+      description: string;
+      workNotes: string;
+    };
+    submitDisabled: string;
+    finalSubmitCopy: string;
+    notSet: string;
+  };
+};
+
+const englishChromeTranslations: UiChromeTranslations = {
+  settingsButton: "⚙ Settings",
+  noAttachmentsCopy:
+    "No attachments, .msg/.eml parsing, live channel content, or external AI with real content is used.",
+  settingsSidebar: {
+    ariaLabel: "Centralized settings",
+    eyebrow: "Centralized settings",
+    title: "Settings",
+    closeAriaLabel: "Close settings panel",
+    closeButton: "✕ Close"
+  },
+  displaySettings: {
+    title: "⚙ Display Settings",
+    appZoom: "App zoom",
+    zoomControlsAria: "App zoom controls",
+    currentZoomAria: "Current app zoom",
+    reset: "Reset",
+    ctrlWheelCopy: "Ctrl + mouse wheel also changes the local app zoom.",
+    theme: "Theme",
+    themeOptionsAria: "Display theme options",
+    themeLabels: { warm: "Warm", cool: "Cool" },
+    localStateCopy: "Display settings are local React state only and are not persisted.",
+    textFields: "Text fields",
+    textFieldModeAria: "Text field display mode",
+    autoFit: "Auto-fit text areas",
+    compactResize: "Compact + visible resize handle",
+    textModeHelper:
+      "Auto-fit gives long content more room. Compact mode keeps fields shorter and shows a stronger bottom-right resize affordance."
+  },
+  templateSettings: {
+    title: "⚙ Templates / Settings",
+    safetyCopy: "Local demo templates only — no external storage or ServiceNow write.",
+    presetLabel: "Template preset",
+    presetAria: "Template presets",
+    switchCopy: "Switching presets replaces both local template text areas.",
+    descriptionTemplate: "Description template",
+    workNotesTemplate: "Work Notes template",
+    descriptionHelper: "Use {{draft_content}} to place the generated language-aware Description.",
+    workNotesHelper: "Use {{draft_content}} to place the generated language-aware Work Notes."
+  },
+  environment: {
+    panelCopy:
+      "Start in mock mode, move to QA/dev only after review, and keep production validation shadow-only by default unless a separate safety review changes that boundary.",
+    currentMode: "Current mode",
+    selectorAria: "ServiceNow environment modes",
+    selected: "Selected",
+    noTargetUrl: "No target URL configured",
+    urlHidden: "Full ServiceNow URL hidden for privacy",
+    noRawClickableLink: "No raw clickable QA/dev link. Controlled browser launch requires URL allowlist and #22 RealActionGate.",
+    credentialPolicy: "Credential policy",
+    manualLoginRequired: "Manual login required",
+    noCredentialsRequired: "No credentials required",
+    ignoredLocalRuntimePath: "Ignored local runtime path",
+    submitPolicy: "Submit policy",
+    explicitApprovalRequired: "Explicit approval required before real QA/dev submit",
+    noRealSubmit: "No real submit from this mode",
+    configs: {
+      mock: {
+        label: "Mock Demo",
+        description: "Offline deterministic demo using ManualPasteAdapter, MockAIProvider, demo KB, and mock form fill.",
+        safetyLabel: "MOCK — Safe demo",
+        safetyNotes: [
+          "No ServiceNow login is required.",
+          "Submit remains disabled in demo mode.",
+          "Use this mode for portfolio walkthroughs and quick regression checks."
+        ]
+      },
+      qa: {
+        label: "QA Test Environment",
+        description: "Authorized ServiceNow QA target for controlled test-ticket rehearsal after mock workflow is stable.",
+        safetyLabel: "QA — No write until #22",
+        safetyNotes: [
+          "Manual login required. Credentials are never stored in source code.",
+          "Browser sessions stay in ignored local runtime folders.",
+          "Any real QA/dev submit requires explicit Alan approval."
+        ]
+      },
+      dev: {
+        label: "Development Test Environment",
+        description: "Reserved for an authorized ServiceNow dev instance if one is provided.",
+        safetyLabel: "DEV — No write until #22",
+        safetyNotes: [
+          "Manual login required. Credentials are never stored in source code.",
+          "Browser sessions stay in ignored local runtime folders.",
+          "Any real QA/dev submit requires explicit Alan approval."
+        ]
+      },
+      "production-shadow": {
+        label: "Production Shadow Mode",
+        description: "Strictly monitored production comparison mode for personally controlled validation only.",
+        safetyLabel: "NO SUBMIT · NO UPDATE · NO CLOSE",
+        safetyNotes: [
+          "Production remains shadow-only by default.",
+          "No production submit, close, or update path is implemented.",
+          "Compare generated drafts with manual handling; do not auto-write production records.",
+          "Escalate to a separate safety review before any production write capability is considered."
+        ]
+      }
+    }
+  },
+  mockForm: {
+    frameAria: "Mock ServiceNow Incident new record form fields",
+    toolbarTitle: "Incident | New record — Mock preview",
+    actionbarAria: "Disabled mock ServiceNow actions",
+    actions: { save: "Save", submit: "Submit", update: "Update", close: "Close" },
+    disabledUnavailable: "Disabled / unavailable in demo mode",
+    tabsAria: "Mock ServiceNow form sections",
+    details: "Details",
+    notes: "Notes",
+    relatedSearch: "Related Search (mock only)",
+    fields: {
+      requester: "Requester",
+      category: "Category",
+      location: "Location",
+      channel: "Channel",
+      impact: "Impact",
+      urgency: "Urgency",
+      assignmentGroup: "Assignment group",
+      priority: "Priority",
+      shortDescription: "Short description",
+      description: "Description",
+      workNotes: "Work notes"
+    },
+    submitDisabled: "Submit disabled in demo mode",
+    finalSubmitCopy:
+      "Final ServiceNow submit must remain a deliberate human action. No real record is saved, submitted, updated, or closed.",
+    notSet: "Not set"
+  }
+};
+
+const uiChromeTranslations: Record<LanguageCode, UiChromeTranslations> = {
+  "en-US": englishChromeTranslations,
+  "zh-CN": {
+    ...englishChromeTranslations,
+    settingsButton: "⚙ 设置",
+    noAttachmentsCopy: "不会使用附件、.msg/.eml 解析、实时渠道内容，也不会使用带真实内容的外部 AI。",
+    settingsSidebar: {
+      ariaLabel: "集中设置",
+      eyebrow: "集中设置",
+      title: "设置",
+      closeAriaLabel: "关闭设置面板",
+      closeButton: "✕ 关闭"
+    },
+    displaySettings: {
+      ...englishChromeTranslations.displaySettings,
+      title: "⚙ 显示设置",
+      appZoom: "应用缩放",
+      zoomControlsAria: "应用缩放控制",
+      currentZoomAria: "当前应用缩放",
+      reset: "重置",
+      ctrlWheelCopy: "Ctrl + 鼠标滚轮也会调整本地应用缩放。",
+      theme: "主题",
+      themeOptionsAria: "显示主题选项",
+      themeLabels: { warm: "暖色", cool: "冷色" },
+      localStateCopy: "显示设置只是本地 React 状态，不会持久化。",
+      textFields: "文本字段",
+      textFieldModeAria: "文本字段显示模式",
+      autoFit: "自动适应文本框",
+      compactResize: "紧凑 + 显示缩放手柄",
+      textModeHelper: "自动适应会给长内容更多空间；紧凑模式会保持字段较短，并显示更明显的右下角缩放提示。"
+    },
+    templateSettings: {
+      ...englishChromeTranslations.templateSettings,
+      title: "⚙ 模板 / 设置",
+      safetyCopy: "本地演示模板，仅本地保存；不会写入外部存储或 ServiceNow。",
+      presetLabel: "模板预设",
+      presetAria: "模板预设",
+      switchCopy: "切换预设会替换两个本地模板文本框。",
+      descriptionTemplate: "描述模板",
+      workNotesTemplate: "工作备注模板",
+      descriptionHelper: "使用 {{draft_content}} 放置按语言生成的描述内容。",
+      workNotesHelper: "使用 {{draft_content}} 放置按语言生成的工作备注。"
+    },
+    environment: {
+      ...englishChromeTranslations.environment,
+      panelCopy: "先从 mock 模式开始；通过审核后再进入 QA/dev；生产验证默认保持影子模式，除非单独安全评审改变边界。",
+      currentMode: "当前模式",
+      selectorAria: "ServiceNow 环境模式",
+      selected: "已选择",
+      noTargetUrl: "未配置目标 URL",
+      urlHidden: "完整 ServiceNow URL 已为隐私隐藏",
+      noRawClickableLink: "不显示原始可点击 QA/dev 链接。受控浏览器启动需要 URL allowlist 和 #22 RealActionGate。",
+      credentialPolicy: "凭据策略",
+      manualLoginRequired: "必须手动登录",
+      noCredentialsRequired: "无需凭据",
+      ignoredLocalRuntimePath: "已忽略的本地运行目录",
+      submitPolicy: "提交策略",
+      explicitApprovalRequired: "真实 QA/dev 提交前必须明确批准",
+      noRealSubmit: "此模式不会真实提交",
+      configs: {
+        mock: {
+          label: "Mock 演示",
+          description: "离线确定性演示：使用 ManualPasteAdapter、MockAIProvider、演示 KB 和 mock 表单填充。",
+          safetyLabel: "MOCK — 安全演示",
+          safetyNotes: ["不需要 ServiceNow 登录。", "演示模式下 Submit 保持禁用。", "用于作品集演示和快速回归检查。"]
+        },
+        qa: {
+          label: "QA 测试环境",
+          description: "授权的 ServiceNow QA 目标，用于 mock 工作流稳定后的受控测试工单预演。",
+          safetyLabel: "QA — #22 前不写入",
+          safetyNotes: ["必须手动登录。凭据绝不写入源码。", "浏览器会话保留在已忽略的本地运行目录。", "任何真实 QA/dev 提交都需要 Alan 明确批准。"]
+        },
+        dev: {
+          label: "开发测试环境",
+          description: "如果提供了授权的 ServiceNow dev 实例，则预留给该实例。",
+          safetyLabel: "DEV — #22 前不写入",
+          safetyNotes: ["必须手动登录。凭据绝不写入源码。", "浏览器会话保留在已忽略的本地运行目录。", "任何真实 QA/dev 提交都需要 Alan 明确批准。"]
+        },
+        "production-shadow": {
+          label: "生产影子模式",
+          description: "严格监控的生产对比模式，仅用于个人受控验证。",
+          safetyLabel: "不提交 · 不更新 · 不关闭",
+          safetyNotes: ["生产默认保持仅影子模式。", "没有实现生产提交、关闭或更新路径。", "只对比生成草稿与人工处理；不要自动写入生产记录。", "考虑任何生产写入能力前必须升级到单独安全评审。"]
+        }
+      }
+    },
+    mockForm: {
+      ...englishChromeTranslations.mockForm,
+      frameAria: "Mock ServiceNow Incident 新记录表单字段",
+      toolbarTitle: "Incident | 新记录 — Mock 预览",
+      actionbarAria: "已禁用的 mock ServiceNow 操作",
+      actions: { save: "保存", submit: "提交", update: "更新", close: "关闭" },
+      disabledUnavailable: "禁用 / 演示模式不可用",
+      tabsAria: "Mock ServiceNow 表单分区",
+      details: "详情",
+      notes: "备注",
+      relatedSearch: "相关搜索（仅 mock）",
+      fields: {
+        requester: "请求者",
+        category: "类别",
+        location: "地点",
+        channel: "渠道",
+        impact: "影响",
+        urgency: "紧急度",
+        assignmentGroup: "分配组",
+        priority: "优先级",
+        shortDescription: "短描述",
+        description: "描述",
+        workNotes: "工作备注"
+      },
+      submitDisabled: "演示模式下提交被禁用",
+      finalSubmitCopy: "最终 ServiceNow 提交必须始终是人工有意操作。不会保存、提交、更新或关闭真实记录。",
+      notSet: "未设置"
+    }
+  },
+  "zh-TW": englishChromeTranslations,
+  "es-ES": englishChromeTranslations
+};
 
 const minAppZoomPercent = 80;
 const maxAppZoomPercent = 130;
@@ -466,50 +980,188 @@ const fieldReviewChecklistItems: FieldReviewChecklistItem[] = [
   { id: "human-confirmation-before-mock-fill", label: "Human confirmation before any mock fill/copy" }
 ];
 
-export const draftTemplatePresets: DraftTemplatePreset[] = [
-  {
-    id: "standard-service-desk",
-    label: "Standard Service Desk",
-    descriptionTemplate: [
-      "Intake summary",
-      "{{draft_content}}",
-      "",
-      "Review notes",
-      "- Verify requester, source channel, impact, urgency, and category before any manual action.",
-      "- Keep customer-visible text separate from internal Work Notes."
-    ].join("\n"),
-    workNotesTemplate: [
-      "Internal triage notes",
-      "{{draft_content}}",
-      "",
-      "Next checks",
-      "- Confirm the current symptom, recent change, timestamp, and affected scope.",
-      "- Use only fake sanitized demo data in this local preview."
-    ].join("\n")
-  },
-  {
-    id: "escalation-ready-notes",
-    label: "Escalation-ready notes",
-    descriptionTemplate: [
-      "Issue summary for review",
-      "{{draft_content}}",
-      "",
-      "Escalation context",
-      "- Capture business impact, affected access or device scope, and any immediate workaround.",
-      "- Do not include secrets, credentials, real ticket numbers, or real customer identifiers."
-    ].join("\n"),
-    workNotesTemplate: [
-      "Escalation-ready internal notes",
-      "{{draft_content}}",
-      "",
-      "Handoff checklist",
-      "- Record completed checks, remaining unknowns, reproduction details, and sanitized evidence.",
-      "- Human reviewer decides whether escalation is appropriate."
-    ].join("\n")
-  }
-];
+const draftTemplatePresetsByLanguage: Record<LanguageCode, DraftTemplatePreset[]> = {
+  "en-US": [
+    {
+      id: "standard-service-desk",
+      label: "Standard Service Desk",
+      descriptionTemplate: [
+        "Intake summary",
+        "{{draft_content}}",
+        "",
+        "Review notes",
+        "- Verify requester, source channel, impact, urgency, and category before any manual action.",
+        "- Keep customer-visible text separate from internal Work Notes."
+      ].join("\n"),
+      workNotesTemplate: [
+        "Internal triage notes",
+        "{{draft_content}}",
+        "",
+        "Next checks",
+        "- Confirm the current symptom, recent change, timestamp, and affected scope.",
+        "- Use only fake sanitized demo data in this local preview."
+      ].join("\n")
+    },
+    {
+      id: "escalation-ready-notes",
+      label: "Escalation-ready notes",
+      descriptionTemplate: [
+        "Issue summary for review",
+        "{{draft_content}}",
+        "",
+        "Escalation context",
+        "- Capture business impact, affected access or device scope, and any immediate workaround.",
+        "- Do not include secrets, credentials, real ticket numbers, or real customer identifiers."
+      ].join("\n"),
+      workNotesTemplate: [
+        "Escalation-ready internal notes",
+        "{{draft_content}}",
+        "",
+        "Handoff checklist",
+        "- Record completed checks, remaining unknowns, reproduction details, and sanitized evidence.",
+        "- Human reviewer decides whether escalation is appropriate."
+      ].join("\n")
+    }
+  ],
+  "zh-CN": [
+    {
+      id: "standard-service-desk",
+      label: "标准服务台",
+      descriptionTemplate: [
+        "受理摘要",
+        "{{draft_content}}",
+        "",
+        "审核备注",
+        "- 在任何手动操作前确认请求者、来源渠道、影响、紧急度和类别。",
+        "- 将面向客户的内容与内部工作备注分开。"
+      ].join("\n"),
+      workNotesTemplate: [
+        "内部排查备注",
+        "{{draft_content}}",
+        "",
+        "下一步检查",
+        "- 确认当前症状、最近变更、时间点和影响范围。",
+        "- 本地预览仅使用假的脱敏演示数据。"
+      ].join("\n")
+    },
+    {
+      id: "escalation-ready-notes",
+      label: "升级准备备注",
+      descriptionTemplate: [
+        "待审核问题摘要",
+        "{{draft_content}}",
+        "",
+        "升级上下文",
+        "- 捕获业务影响、受影响访问或设备范围，以及任何临时绕行方案。",
+        "- 不包含密钥、凭据、真实工单号或真实客户标识。"
+      ].join("\n"),
+      workNotesTemplate: [
+        "可升级内部备注",
+        "{{draft_content}}",
+        "",
+        "交接检查清单",
+        "- 记录已完成检查、剩余未知项、复现细节和脱敏证据。",
+        "- 由人工审核者决定是否升级。"
+      ].join("\n")
+    }
+  ],
+  "zh-TW": [
+    {
+      id: "standard-service-desk",
+      label: "標準服務台",
+      descriptionTemplate: [
+        "受理摘要",
+        "{{draft_content}}",
+        "",
+        "審核備註",
+        "- 在任何手動操作前確認請求者、來源管道、影響、緊急度和類別。",
+        "- 將客戶可見內容與內部 Work Notes 分開。"
+      ].join("\n"),
+      workNotesTemplate: [
+        "內部排查備註",
+        "{{draft_content}}",
+        "",
+        "下一步檢查",
+        "- 確認目前症狀、最近變更、時間點和影響範圍。",
+        "- 本地預覽僅使用假的去識別化示範資料。"
+      ].join("\n")
+    },
+    {
+      id: "escalation-ready-notes",
+      label: "升級準備備註",
+      descriptionTemplate: [
+        "待審核問題摘要",
+        "{{draft_content}}",
+        "",
+        "升級脈絡",
+        "- 擷取業務影響、受影響存取或設備範圍，以及任何暫時替代方案。",
+        "- 不包含密鑰、憑證、真實工單號或真實客戶識別資訊。"
+      ].join("\n"),
+      workNotesTemplate: [
+        "可升級內部備註",
+        "{{draft_content}}",
+        "",
+        "交接檢查清單",
+        "- 記錄已完成檢查、剩餘未知項、重現細節和去識別化證據。",
+        "- 由人工審核者決定是否升級。"
+      ].join("\n")
+    }
+  ],
+  "es-ES": [
+    {
+      id: "standard-service-desk",
+      label: "Service Desk estándar",
+      descriptionTemplate: [
+        "Resumen de entrada",
+        "{{draft_content}}",
+        "",
+        "Notas de revisión",
+        "- Verificar solicitante, canal de origen, impacto, urgencia y categoría antes de cualquier acción manual.",
+        "- Separar el texto visible para cliente de las Work Notes internas."
+      ].join("\n"),
+      workNotesTemplate: [
+        "Notas internas de triaje",
+        "{{draft_content}}",
+        "",
+        "Siguientes comprobaciones",
+        "- Confirmar síntoma actual, cambio reciente, marca de tiempo y alcance afectado.",
+        "- Usar solo datos demo falsos y sanitizados en esta vista local."
+      ].join("\n")
+    },
+    {
+      id: "escalation-ready-notes",
+      label: "Notas listas para escalación",
+      descriptionTemplate: [
+        "Resumen del problema para revisión",
+        "{{draft_content}}",
+        "",
+        "Contexto de escalación",
+        "- Capturar impacto de negocio, alcance de acceso/dispositivo afectado y workaround inmediato.",
+        "- No incluir secretos, credenciales, números reales de ticket ni identificadores reales de cliente."
+      ].join("\n"),
+      workNotesTemplate: [
+        "Notas internas listas para escalación",
+        "{{draft_content}}",
+        "",
+        "Lista de traspaso",
+        "- Registrar comprobaciones completadas, incógnitas restantes, detalles de reproducción y evidencia sanitizada.",
+        "- La persona revisora decide si corresponde escalar."
+      ].join("\n")
+    }
+  ]
+};
 
-const defaultDraftTemplatePreset = draftTemplatePresets[0];
+export const draftTemplatePresets = draftTemplatePresetsByLanguage["en-US"];
+
+function getDraftTemplatePresets(language: LanguageCode): DraftTemplatePreset[] {
+  return draftTemplatePresetsByLanguage[language] ?? draftTemplatePresets;
+}
+
+function getDraftTemplatePreset(language: LanguageCode, presetId: DraftTemplatePresetId): DraftTemplatePreset {
+  return getDraftTemplatePresets(language).find((preset) => preset.id === presetId) ?? getDraftTemplatePresets(language)[0];
+}
+
+const defaultDraftTemplatePreset = getDraftTemplatePreset("en-US", "standard-service-desk");
 
 const unsupportedFallbackMode = "Unsupported-language fallback: source language + English bilingual draft";
 
@@ -809,8 +1461,12 @@ export function buildDemoQueueItems(
   });
 }
 
-export function App() {
-  const [language, setLanguage] = useState<LanguageCode>("en-US");
+export type AppProps = {
+  initialLanguage?: LanguageCode;
+};
+
+export function App({ initialLanguage = "en-US" }: AppProps = {}) {
+  const [language, setLanguage] = useState<LanguageCode>(initialLanguage);
   const [displayTheme, setDisplayTheme] = useState<DisplayTheme>("warm");
   const [appZoomPercent, setAppZoomPercent] = useState(100);
   const [textFieldDisplayMode, setTextFieldDisplayMode] = useState<TextFieldDisplayMode>("auto-fit");
@@ -854,13 +1510,18 @@ export function App() {
   const [selectedTemplatePresetId, setSelectedTemplatePresetId] = useState<DraftTemplatePresetId>(
     defaultDraftTemplatePreset.id
   );
-  const [draftTemplateSettings, setDraftTemplateSettings] = useState<DraftTemplateSettings>({
-    descriptionTemplate: defaultDraftTemplatePreset.descriptionTemplate,
-    workNotesTemplate: defaultDraftTemplatePreset.workNotesTemplate
+  const [draftTemplateSettings, setDraftTemplateSettings] = useState<DraftTemplateSettings>(() => {
+    const initialPreset = getDraftTemplatePreset(initialLanguage, defaultDraftTemplatePreset.id);
+    return {
+      descriptionTemplate: initialPreset.descriptionTemplate,
+      workNotesTemplate: initialPreset.workNotesTemplate
+    };
   });
 
   const selectedEnvironment = getServiceNowEnvironmentConfig(selectedEnvironmentMode);
   const t = uiTranslations[language];
+  const chrome = uiChromeTranslations[language];
+  const selectedEnvironmentDisplay = chrome.environment.configs[selectedEnvironmentMode];
   const templatedDraft = applyDraftTemplates(initialDraft, draftTemplateSettings);
   const draft = applyOverrides(templatedDraft, fieldOverrides);
   const serviceDeskWorkflowPreview = buildServiceDeskWorkflowPreview({
@@ -978,7 +1639,12 @@ export function App() {
   }
 
   function changeLanguage(nextLanguage: LanguageCode) {
+    const localizedPreset = getDraftTemplatePreset(nextLanguage, selectedTemplatePresetId);
     setLanguage(nextLanguage);
+    setDraftTemplateSettings({
+      descriptionTemplate: localizedPreset.descriptionTemplate,
+      workNotesTemplate: localizedPreset.workNotesTemplate
+    });
     setFieldOverrides({});
     setPreparedCopyDraft(null);
     setFillConfirmed(false);
@@ -990,11 +1656,7 @@ export function App() {
   }
 
   function selectTemplatePreset(presetId: DraftTemplatePresetId) {
-    const preset = draftTemplatePresets.find((item) => item.id === presetId);
-    if (!preset) {
-      return;
-    }
-
+    const preset = getDraftTemplatePreset(language, presetId);
     setSelectedTemplatePresetId(preset.id);
     setDraftTemplateSettings({
       descriptionTemplate: preset.descriptionTemplate,
@@ -1048,7 +1710,7 @@ export function App() {
               type="button"
               onClick={() => setSettingsOpen((current) => !current)}
             >
-              ⚙ Settings
+              {chrome.settingsButton}
             </button>
             <LanguageSelector language={language} onLanguageChange={changeLanguage} t={t} />
           </div>
@@ -1073,12 +1735,11 @@ export function App() {
             <p className="eyebrow">{t.workflowEyebrow}</p>
             <h2 id="workspace-title">{t.workspaceTitle}</h2>
             <p>
-              {t.workspaceSubtitle} No attachments, .msg/.eml parsing, live channel content, or external AI with
-              real content is used.
+              {t.workspaceSubtitle} {chrome.noAttachmentsCopy}
             </p>
             <p className="language-simulation-note">{t.languageSimulationNotice}</p>
           </div>
-          <div className="mode-pill">{selectedEnvironment.label} · MockAIProvider</div>
+          <div className="mode-pill">{selectedEnvironmentDisplay.label} · MockAIProvider</div>
         </header>
 
         <div className="workspace-with-settings">
@@ -1101,6 +1762,7 @@ export function App() {
             <EnvironmentModePanel
               selectedMode={selectedEnvironmentMode}
               onSelectedModeChange={setSelectedEnvironmentMode}
+              chrome={chrome}
               t={t}
             />
 
@@ -1223,7 +1885,7 @@ export function App() {
               </section>
             </div>
 
-            <MockServiceNowForm draft={draft} fillConfirmed={fillConfirmed} item={selectedQueueItem} t={t} />
+            <MockServiceNowForm draft={draft} fillConfirmed={fillConfirmed} item={selectedQueueItem} chrome={chrome} t={t} />
             <ControlledQaSingleTicketSmokePanel
               approvalPhrase={qaSmokeApprovalPhrase}
               plan={qaSmokePlan}
@@ -1248,6 +1910,8 @@ export function App() {
             selectedTextFieldMode={textFieldDisplayMode}
             selectedTheme={displayTheme}
             templateSettings={draftTemplateSettings}
+            chrome={chrome}
+            language={language}
             t={t}
           />
         </div>
@@ -1297,6 +1961,8 @@ function SettingsSidebar({
   selectedTextFieldMode,
   selectedTheme,
   templateSettings,
+  chrome,
+  language,
   t
 }: {
   appZoomPercent: number;
@@ -1315,27 +1981,29 @@ function SettingsSidebar({
   selectedTextFieldMode: TextFieldDisplayMode;
   selectedTheme: DisplayTheme;
   templateSettings: DraftTemplateSettings;
+  chrome: UiChromeTranslations;
+  language: LanguageCode;
   t: UiTranslations;
 }) {
   return (
     <aside
-      aria-label="Centralized settings"
+      aria-label={chrome.settingsSidebar.ariaLabel}
       className={isOpen ? "settings-sidebar" : "settings-sidebar collapsed"}
       id="app-settings-sidebar"
     >
       <div className="settings-sidebar-inner">
         <header className="settings-sidebar-header">
           <div>
-            <p className="eyebrow">Centralized settings</p>
-            <h3>Settings</h3>
+            <p className="eyebrow">{chrome.settingsSidebar.eyebrow}</p>
+            <h3>{chrome.settingsSidebar.title}</h3>
           </div>
           <button
-            aria-label="Close settings panel"
+            aria-label={chrome.settingsSidebar.closeAriaLabel}
             className="settings-close-button"
             type="button"
             onClick={onClose}
           >
-            ✕ Close
+            {chrome.settingsSidebar.closeButton}
           </button>
         </header>
 
@@ -1348,11 +2016,14 @@ function SettingsSidebar({
           onZoomOut={onZoomOut}
           selectedTextFieldMode={selectedTextFieldMode}
           selectedTheme={selectedTheme}
+          chrome={chrome}
         />
 
         <TemplateSettingsPanel
           selectedPresetId={selectedTemplatePresetId}
           settings={templateSettings}
+          chrome={chrome}
+          language={language}
           onPresetChange={onPresetChange}
           onTemplateChange={onTemplateChange}
         />
@@ -1376,7 +2047,8 @@ function DisplaySettingsPanel({
   onZoomIn,
   onZoomOut,
   selectedTextFieldMode,
-  selectedTheme
+  selectedTheme,
+  chrome
 }: {
   appZoomPercent: number;
   onResetZoom: () => void;
@@ -1386,11 +2058,12 @@ function DisplaySettingsPanel({
   onZoomOut: () => void;
   selectedTextFieldMode: TextFieldDisplayMode;
   selectedTheme: DisplayTheme;
+  chrome: UiChromeTranslations;
 }) {
   return (
     <details className="display-settings-panel" open>
       <summary>
-        <span className="summary-label">⚙ Display Settings</span>
+        <span className="summary-label">{chrome.displaySettings.title}</span>
         <strong>{appZoomPercent}%</strong>
         <span aria-hidden="true" className="details-indicator">
           ▾
@@ -1399,25 +2072,25 @@ function DisplaySettingsPanel({
 
       <div className="display-settings-body">
         <div className="display-setting-group">
-          <span>App zoom</span>
-          <div className="zoom-controls" aria-label="App zoom controls">
+          <span>{chrome.displaySettings.appZoom}</span>
+          <div className="zoom-controls" aria-label={chrome.displaySettings.zoomControlsAria}>
             <button type="button" onClick={onZoomOut}>
               −
             </button>
-            <strong aria-label="Current app zoom">{appZoomPercent}%</strong>
+            <strong aria-label={chrome.displaySettings.currentZoomAria}>{appZoomPercent}%</strong>
             <button type="button" onClick={onZoomIn}>
               +
             </button>
             <button type="button" onClick={onResetZoom}>
-              Reset
+              {chrome.displaySettings.reset}
             </button>
           </div>
-          <small>Ctrl + mouse wheel also changes the local app zoom.</small>
+          <small>{chrome.displaySettings.ctrlWheelCopy}</small>
         </div>
 
         <div className="display-setting-group">
-          <span>Theme</span>
-          <div className="theme-controls" aria-label="Display theme options">
+          <span>{chrome.displaySettings.theme}</span>
+          <div className="theme-controls" aria-label={chrome.displaySettings.themeOptionsAria}>
             {displayThemes.map((theme) => (
               <button
                 key={theme.id}
@@ -1426,16 +2099,16 @@ function DisplaySettingsPanel({
                 onClick={() => onThemeChange(theme.id)}
               >
                 <span className={`theme-swatch ${theme.id}`} aria-hidden="true" />
-                {theme.label}
+                {chrome.displaySettings.themeLabels[theme.id]}
               </button>
             ))}
           </div>
-          <small>Display settings are local React state only and are not persisted.</small>
+          <small>{chrome.displaySettings.localStateCopy}</small>
         </div>
 
         <div className="display-setting-group text-display-setting">
-          <span>Text fields</span>
-          <div className="text-mode-controls" aria-label="Text field display mode">
+          <span>{chrome.displaySettings.textFields}</span>
+          <div className="text-mode-controls" aria-label={chrome.displaySettings.textFieldModeAria}>
             <label>
               <input
                 checked={selectedTextFieldMode === "auto-fit"}
@@ -1443,7 +2116,7 @@ function DisplaySettingsPanel({
                 type="radio"
                 onChange={() => onTextFieldModeChange("auto-fit")}
               />
-              <span>Auto-fit text areas</span>
+              <span>{chrome.displaySettings.autoFit}</span>
             </label>
             <label>
               <input
@@ -1452,13 +2125,10 @@ function DisplaySettingsPanel({
                 type="radio"
                 onChange={() => onTextFieldModeChange("compact-resize")}
               />
-              <span>Compact + visible resize handle</span>
+              <span>{chrome.displaySettings.compactResize}</span>
             </label>
           </div>
-          <small>
-            Auto-fit gives long content more room. Compact mode keeps fields shorter and shows a stronger bottom-right
-            resize affordance.
-          </small>
+          <small>{chrome.displaySettings.textModeHelper}</small>
         </div>
       </div>
     </details>
@@ -2087,32 +2757,37 @@ function TemplateSettingsPanel({
   onPresetChange,
   onTemplateChange,
   selectedPresetId,
-  settings
+  settings,
+  chrome,
+  language
 }: {
   onPresetChange: (presetId: DraftTemplatePresetId) => void;
   onTemplateChange: (fieldName: keyof DraftTemplateSettings, value: string) => void;
   selectedPresetId: DraftTemplatePresetId;
   settings: DraftTemplateSettings;
+  chrome: UiChromeTranslations;
+  language: LanguageCode;
 }) {
+  const presets = getDraftTemplatePresets(language);
+  const selectedPreset = getDraftTemplatePreset(language, selectedPresetId);
+
   return (
     <details className="template-settings-panel">
       <summary>
-        <span className="summary-label">⚙ Templates / Settings</span>
-        <strong>{draftTemplatePresets.find((preset) => preset.id === selectedPresetId)?.label}</strong>
+        <span className="summary-label">{chrome.templateSettings.title}</span>
+        <strong>{selectedPreset.label}</strong>
         <span aria-hidden="true" className="details-indicator">
           ▾
         </span>
       </summary>
 
       <div className="template-settings-body">
-        <p className="template-safety-copy">
-          Local demo templates only — no external storage or ServiceNow write.
-        </p>
+        <p className="template-safety-copy">{chrome.templateSettings.safetyCopy}</p>
 
         <div className="field-block template-preset-field">
-          <span>Template preset</span>
-          <div className="template-preset-buttons" aria-label="Template presets">
-            {draftTemplatePresets.map((preset) => (
+          <span>{chrome.templateSettings.presetLabel}</span>
+          <div className="template-preset-buttons" aria-label={chrome.templateSettings.presetAria}>
+            {presets.map((preset) => (
               <button
                 key={preset.id}
                 className={preset.id === selectedPresetId ? "active" : undefined}
@@ -2123,28 +2798,28 @@ function TemplateSettingsPanel({
               </button>
             ))}
           </div>
-          <small>Switching presets replaces both local template text areas.</small>
+          <small>{chrome.templateSettings.switchCopy}</small>
         </div>
 
         <div className="template-editor-grid">
           <label className="field-block">
-            <span>Description template</span>
+            <span>{chrome.templateSettings.descriptionTemplate}</span>
             <textarea
               rows={6}
               value={settings.descriptionTemplate}
               onChange={(event) => onTemplateChange("descriptionTemplate", event.currentTarget.value)}
             />
-            <small>{"Use {{draft_content}} to place the generated language-aware Description."}</small>
+            <small>{chrome.templateSettings.descriptionHelper}</small>
           </label>
 
           <label className="field-block">
-            <span>Work Notes template</span>
+            <span>{chrome.templateSettings.workNotesTemplate}</span>
             <textarea
               rows={6}
               value={settings.workNotesTemplate}
               onChange={(event) => onTemplateChange("workNotesTemplate", event.currentTarget.value)}
             />
-            <small>{"Use {{draft_content}} to place the generated language-aware Work Notes."}</small>
+            <small>{chrome.templateSettings.workNotesHelper}</small>
           </label>
         </div>
       </div>
@@ -2251,15 +2926,17 @@ function buildSafeDraftMarkdown(draft: TicketDraft): string {
 
 
 function EnvironmentModePanel({
+  chrome,
   onSelectedModeChange,
   selectedMode,
   t
 }: {
+  chrome: UiChromeTranslations;
   onSelectedModeChange: (mode: ServiceNowEnvironmentMode) => void;
   selectedMode: ServiceNowEnvironmentMode;
   t: UiTranslations;
 }) {
-  const selectedEnvironment = getServiceNowEnvironmentConfig(selectedMode);
+  const selectedEnvironmentCopy = chrome.environment.configs[selectedMode];
 
   return (
     <section className="environment-panel" aria-labelledby="environment-title">
@@ -2267,17 +2944,15 @@ function EnvironmentModePanel({
         <div>
           <p className="eyebrow">{t.environmentEyebrow}</p>
           <h3 id="environment-title">{t.environmentTitle}</h3>
-          <p>
-            Start in mock mode, move to QA/dev only after review, and keep production validation shadow-only by default unless a separate safety review changes that boundary.
-          </p>
+          <p>{chrome.environment.panelCopy}</p>
         </div>
         <div className="environment-current">
-          <span>Current mode</span>
-          <strong>{selectedEnvironment.label}</strong>
+          <span>{chrome.environment.currentMode}</span>
+          <strong>{selectedEnvironmentCopy.label}</strong>
         </div>
       </header>
 
-      <div className="environment-selector" aria-label="ServiceNow environment modes">
+      <div className="environment-selector" aria-label={chrome.environment.selectorAria}>
         {serviceNowEnvironmentConfigs.map((config) => (
           <button
             key={config.mode}
@@ -2285,82 +2960,73 @@ function EnvironmentModePanel({
             type="button"
             onClick={() => onSelectedModeChange(config.mode)}
           >
-            {config.label}
+            {chrome.environment.configs[config.mode].label}
           </button>
         ))}
       </div>
 
       <div className="environment-grid">
         {serviceNowEnvironmentConfigs.map((config) => (
-          <EnvironmentCard config={config} key={config.mode} selected={config.mode === selectedMode} />
+          <EnvironmentCard config={config} key={config.mode} selected={config.mode === selectedMode} chrome={chrome} />
         ))}
       </div>
     </section>
   );
 }
 
-function EnvironmentCard({ config, selected }: { config: ServiceNowEnvironmentConfig; selected: boolean }) {
-  const safetyLabel = getEnvironmentSafetyLabel(config);
+function EnvironmentCard({
+  chrome,
+  config,
+  selected
+}: {
+  chrome: UiChromeTranslations;
+  config: ServiceNowEnvironmentConfig;
+  selected: boolean;
+}) {
+  const environmentCopy = chrome.environment.configs[config.mode];
 
   return (
     <article className={selected ? "environment-card selected" : "environment-card"}>
       <div className="environment-card-title-row">
-        <h4>{config.label}</h4>
-        <span>{safetyLabel}</span>
-        {selected ? <span>Selected</span> : null}
+        <h4>{environmentCopy.label}</h4>
+        <span>{environmentCopy.safetyLabel}</span>
+        {selected ? <span>{chrome.environment.selected}</span> : null}
       </div>
-      <p>{config.description}</p>
+      <p>{environmentCopy.description}</p>
       {config.url ? (
         <div className="environment-target-safety">
-          <code>Full ServiceNow URL hidden for privacy</code>
-          <small>No raw clickable QA/dev link. Controlled browser launch requires URL allowlist and #22 RealActionGate.</small>
+          <code>{chrome.environment.urlHidden}</code>
+          <small>{chrome.environment.noRawClickableLink}</small>
         </div>
       ) : (
-        <code>No target URL configured</code>
+        <code>{chrome.environment.noTargetUrl}</code>
       )}
       <dl>
         <div>
-          <dt>Credential policy</dt>
+          <dt>{chrome.environment.credentialPolicy}</dt>
           <dd>
             <code>{config.credentialPolicy}</code>
-            {config.credentialPolicy === "manual-login-only" ? " · Manual login required" : " · No credentials required"}
+            {config.credentialPolicy === "manual-login-only"
+              ? ` · ${chrome.environment.manualLoginRequired}`
+              : ` · ${chrome.environment.noCredentialsRequired}`}
           </dd>
         </div>
         <div>
-          <dt>Ignored local runtime path</dt>
+          <dt>{chrome.environment.ignoredLocalRuntimePath}</dt>
           <dd>{config.localRuntimeDirectory}</dd>
         </div>
         <div>
-          <dt>Submit policy</dt>
-          <dd>
-            {config.allowsRealSubmit
-              ? "Explicit approval required before real QA/dev submit"
-              : "No real submit from this mode"}
-          </dd>
+          <dt>{chrome.environment.submitPolicy}</dt>
+          <dd>{config.allowsRealSubmit ? chrome.environment.explicitApprovalRequired : chrome.environment.noRealSubmit}</dd>
         </div>
       </dl>
       <ul>
-        {config.safetyNotes.map((note) => (
+        {environmentCopy.safetyNotes.map((note) => (
           <li key={note}>{note}</li>
         ))}
       </ul>
     </article>
   );
-}
-
-function getEnvironmentSafetyLabel(config: ServiceNowEnvironmentConfig): string {
-  switch (config.mode) {
-    case "mock":
-      return "MOCK — Safe demo";
-    case "qa":
-      return "QA — No write until #22";
-    case "dev":
-      return "DEV — No write until #22";
-    case "production-shadow":
-      return "NO SUBMIT · NO UPDATE · NO CLOSE";
-    default:
-      return config.shadowOnly ? "Shadow-only" : "Requires review";
-  }
 }
 
 function DraftTextField({
@@ -2447,14 +3113,14 @@ function FieldReviewChecklist({
       <summary>
         <div className="field-review-summary-title">
           <span className="eyebrow">{t.checklistEyebrow}</span>
-          <strong id="field-review-title">⚙ Optional field checklist / Team rules</strong>
+          <strong id="field-review-title">{t.checklistSummaryLabel}</strong>
           <span>{t.checklistTitle}</span>
         </div>
-        <div className="field-review-progress" aria-label="Field review progress">
+        <div className="field-review-progress" aria-label={t.checklistProgressAria}>
           <strong>
             {checkedItemIds.length}/{items.length}
           </strong>
-          <span>reviewed locally</span>
+          <span>{t.checklistReviewedLocally}</span>
         </div>
         <span aria-hidden="true" className="details-indicator">
           ▾
@@ -2462,27 +3128,17 @@ function FieldReviewChecklist({
       </summary>
 
       <div className="field-review-body" aria-labelledby="field-review-title">
-        <p className="field-review-intro">
-          ServiceNow already enforces starred required fields at submit time. This local checklist is optional and
-          customizable for team process, field order, and draft quality before any mock fill/copy.
-        </p>
-        <p className="field-review-intro">
-          Ticket quality depends on field order and dependencies, not text generation alone. Review requester,
-          location, channel, category, affected service, impact, urgency, priority, assignment, comments, and work
-          notes before any mock fill/copy.
-        </p>
+        <p className="field-review-intro">{t.checklistIntroRequired}</p>
+        <p className="field-review-intro">{t.checklistIntroQuality}</p>
 
-        <div className="field-reference-strip" aria-label="Sanitized ServiceNow create form reference">
+        <div className="field-reference-strip" aria-label={t.checklistReferenceAria}>
           <div>
-            <span>Required/starred reference</span>
-            <p>Requester, Category, Location, Channel, Impact, Urgency, Assignment group, Short description</p>
+            <span>{t.checklistRequiredReferenceLabel}</span>
+            <p>{t.checklistRequiredReferenceFields}</p>
           </div>
           <div>
-            <span>Supporting fields</span>
-            <p>
-              Description, Subcategory, Configuration item, Business service, Service offering, Priority, Assigned to,
-              Additional comments, Work notes, Related Search / Knowledge & Catalog
-            </p>
+            <span>{t.checklistSupportingFieldsLabel}</span>
+            <p>{t.checklistSupportingFields}</p>
           </div>
         </div>
 
@@ -2496,32 +3152,34 @@ function FieldReviewChecklist({
                   type="checkbox"
                   onChange={() => onToggleItem(item.id)}
                 />
-                <span>{item.label}</span>
+                <span>{t.checklistItemLabels[item.id] ?? item.label}</span>
               </label>
             </li>
           ))}
         </ol>
 
-        <p className="field-review-safety">
-          Demo checklist only. Local state only. No real ServiceNow field fill, Save, Submit, Update, Close, API call,
-          browser automation, DOM inspection, screenshots, HAR, traces, sessions, or storage export.
-        </p>
+        <p className="field-review-safety">{t.checklistSafetyCopy}</p>
       </div>
     </details>
   );
 }
 
 function MockServiceNowForm({
+  chrome,
   draft,
   fillConfirmed,
   item,
   t
 }: {
+  chrome: UiChromeTranslations;
   draft: TicketDraft;
   fillConfirmed: boolean;
   item: DemoQueueItem;
   t: UiTranslations;
 }) {
+  const mockForm = chrome.mockForm;
+  const notSet = mockForm.notSet;
+
   return (
     <section className="mock-form-panel" aria-labelledby="mock-form-title">
       <header className="mock-form-header">
@@ -2535,54 +3193,51 @@ function MockServiceNowForm({
         </button>
       </header>
 
-      <div className="servicenow-frame" aria-label="Mock ServiceNow Incident new record form fields">
+      <div className="servicenow-frame" aria-label={mockForm.frameAria}>
         <div className="servicenow-toolbar">
           <div>
-            <strong>Incident | New record — Mock preview</strong>
+            <strong>{mockForm.toolbarTitle}</strong>
             <small>{t.mockDemoStamp}</small>
           </div>
           <span>{fillConfirmed ? t.mockReadyStatus : t.mockLockedStatus}</span>
           <span>{t.mockDisabledStatus}</span>
         </div>
 
-        <div className="servicenow-actionbar" aria-label="Disabled mock ServiceNow actions">
-          {["Save", "Submit", "Update", "Close"].map((action) => (
-            <button disabled key={action} type="button">
-              {action}
+        <div className="servicenow-actionbar" aria-label={mockForm.actionbarAria}>
+          {Object.entries(mockForm.actions).map(([actionId, actionLabel]) => (
+            <button disabled key={actionId} type="button">
+              {actionLabel}
             </button>
           ))}
-          <span>Disabled / unavailable in demo mode</span>
+          <span>{mockForm.disabledUnavailable}</span>
         </div>
 
-        <div className="servicenow-tabs" aria-label="Mock ServiceNow form sections">
-          <span className="active">Details</span>
-          <span>Notes</span>
-          <span>Related Search (mock only)</span>
+        <div className="servicenow-tabs" aria-label={mockForm.tabsAria}>
+          <span className="active">{mockForm.details}</span>
+          <span>{mockForm.notes}</span>
+          <span>{mockForm.relatedSearch}</span>
         </div>
 
         <div className="mock-form-grid">
-          <MockFormField label="Requester" required value={item.requesterLabel} />
-          <MockFormField label="Category" required value={draft.category?.value ?? "Not set"} />
-          <MockFormField label="Location" required value="Demo location / sanitized" />
-          <MockFormField label="Channel" required value={item.sourceChannel} />
-          <MockFormField label="Impact" required value={fieldValue(draft.impact)} />
-          <MockFormField label="Urgency" required value={fieldValue(draft.urgency)} />
-          <MockFormField label="Assignment group" required value={fieldValue(draft.assignmentGroup)} />
-          <MockFormField label="Priority" value={fieldValue(draft.priority)} />
+          <MockFormField label={mockForm.fields.requester} required value={item.requesterLabel} />
+          <MockFormField label={mockForm.fields.category} required value={draft.category?.value ?? notSet} />
+          <MockFormField label={mockForm.fields.location} required value="Demo location / sanitized" />
+          <MockFormField label={mockForm.fields.channel} required value={item.sourceChannel} />
+          <MockFormField label={mockForm.fields.impact} required value={fieldValue(draft.impact, notSet)} />
+          <MockFormField label={mockForm.fields.urgency} required value={fieldValue(draft.urgency, notSet)} />
+          <MockFormField label={mockForm.fields.assignmentGroup} required value={fieldValue(draft.assignmentGroup, notSet)} />
+          <MockFormField label={mockForm.fields.priority} value={fieldValue(draft.priority, notSet)} />
         </div>
 
-        <MockFormField label="Short description" required value={draft.shortDescription.value} wide />
-        <MockFormField label="Description" value={draft.description.value} wide multiline />
-        <MockFormField label="Work notes" value={draft.workNotes.value} wide multiline />
+        <MockFormField label={mockForm.fields.shortDescription} required value={draft.shortDescription.value} wide />
+        <MockFormField label={mockForm.fields.description} value={draft.description.value} wide multiline />
+        <MockFormField label={mockForm.fields.workNotes} value={draft.workNotes.value} wide multiline />
 
         <div className="mock-submit-row">
           <button disabled type="button">
-            Submit disabled in demo mode
+            {mockForm.submitDisabled}
           </button>
-          <span>
-            Final ServiceNow submit must remain a deliberate human action. No real record is saved, submitted,
-            updated, or closed.
-          </span>
+          <span>{mockForm.finalSubmitCopy}</span>
         </div>
       </div>
     </section>
@@ -2748,8 +3403,8 @@ function MockFormField({
   );
 }
 
-function fieldValue(field: FieldDraft | undefined): string {
-  return field?.value ?? "Not set";
+function fieldValue(field: FieldDraft | undefined, fallback = "Not set"): string {
+  return field?.value ?? fallback;
 }
 
 function statusClassName(status: DemoQueueStatus): string {
