@@ -2005,6 +2005,32 @@ textarea:focus,
   overflow-wrap: anywhere;
 }
 
+.qa-smoke-write-action-select {
+  display: block;
+}
+
+.qa-smoke-write-action-select select {
+  width: 100%;
+  border: 1px solid #cbd8d4;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fffdf8;
+  color: #263b45;
+  font-weight: 850;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .qa-smoke-approval {
   display: grid;
   gap: 5px;

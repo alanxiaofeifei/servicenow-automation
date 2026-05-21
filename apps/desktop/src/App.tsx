@@ -19,6 +19,7 @@ import {
   normalizeSourceContextText,
   type CapturedContext,
   type FieldDraft,
+  type QaManualFillWriteAction,
   type QaSingleTicketSmokePlan,
   type ServiceDeskWorkflowPreview,
   type SourceType,
@@ -1463,9 +1464,22 @@ export function buildDemoQueueItems(
 
 export type AppProps = {
   initialLanguage?: LanguageCode;
+  initialQaSmokeWriteAction?: QaManualFillWriteAction;
+  initialQaSmokeApprovalPhrase?: string;
 };
 
-export function App({ initialLanguage = "en-US" }: AppProps = {}) {
+export function updateQaSmokeWriteActionSelection(nextAction: QaManualFillWriteAction) {
+  return {
+    writeAction: nextAction,
+    approvalPhrase: ""
+  };
+}
+
+export function App({
+  initialLanguage = "en-US",
+  initialQaSmokeWriteAction = "submit_incident",
+  initialQaSmokeApprovalPhrase = ""
+}: AppProps = {}) {
   const [language, setLanguage] = useState<LanguageCode>(initialLanguage);
   const [displayTheme, setDisplayTheme] = useState<DisplayTheme>("warm");
   const [appZoomPercent, setAppZoomPercent] = useState(100);
@@ -1484,7 +1498,8 @@ export function App({ initialLanguage = "en-US" }: AppProps = {}) {
   const [fieldOverrides, setFieldOverrides] = useState<Record<string, string>>({});
   const [preparedCopyDraft, setPreparedCopyDraft] = useState<PreparedCopyDraft | null>(null);
   const [fillConfirmed, setFillConfirmed] = useState(false);
-  const [qaSmokeApprovalPhrase, setQaSmokeApprovalPhrase] = useState("");
+  const [qaSmokeApprovalPhrase, setQaSmokeApprovalPhrase] = useState(initialQaSmokeApprovalPhrase);
+  const [qaSmokeWriteAction, setQaSmokeWriteAction] = useState<QaManualFillWriteAction>(initialQaSmokeWriteAction);
   const [checkedFieldReviewItems, setCheckedFieldReviewItems] = useState<string[]>([]);
   const [selectedEnvironmentMode, setSelectedEnvironmentMode] = useState<ServiceNowEnvironmentMode>(
     getDefaultServiceNowEnvironmentMode()
@@ -1562,6 +1577,7 @@ export function App({ initialLanguage = "en-US" }: AppProps = {}) {
       contactType: selectedQueueItem.sourceChannel,
       location: "Demo location / sanitized"
     },
+    writeAction: qaSmokeWriteAction,
     approvalPhrase: qaSmokeApprovalPhrase,
     language,
     templatePreset: selectedTemplatePresetId,
@@ -1888,8 +1904,14 @@ export function App({ initialLanguage = "en-US" }: AppProps = {}) {
             <MockServiceNowForm draft={draft} fillConfirmed={fillConfirmed} item={selectedQueueItem} chrome={chrome} t={t} />
             <ControlledQaSingleTicketSmokePanel
               approvalPhrase={qaSmokeApprovalPhrase}
+              onWriteActionChange={(nextAction) => {
+                const nextSelection = updateQaSmokeWriteActionSelection(nextAction);
+                setQaSmokeWriteAction(nextSelection.writeAction);
+                setQaSmokeApprovalPhrase(nextSelection.approvalPhrase);
+              }}
               plan={qaSmokePlan}
               onApprovalPhraseChange={setQaSmokeApprovalPhrase}
+              writeAction={qaSmokeWriteAction}
             />
           </div>
 
@@ -3247,10 +3269,14 @@ function MockServiceNowForm({
 function ControlledQaSingleTicketSmokePanel({
   approvalPhrase,
   onApprovalPhraseChange,
+  onWriteActionChange,
+  writeAction,
   plan
 }: {
   approvalPhrase: string;
   onApprovalPhraseChange: (value: string) => void;
+  onWriteActionChange: (value: QaManualFillWriteAction) => void;
+  writeAction: QaManualFillWriteAction;
   plan: QaSingleTicketSmokePlan;
 }) {
   const statusText =
@@ -3284,7 +3310,23 @@ function ControlledQaSingleTicketSmokePanel({
           <strong>{plan.targetHost ?? "not available"}</strong>
         </div>
         <div>
-          <span>Required approval phrase for submit_incident</span>
+          <span>Requested write action</span>
+          <label className="qa-smoke-write-action-select">
+            <span className="sr-only">Requested write action</span>
+            <select
+              value={writeAction}
+              onChange={(event) => onWriteActionChange(event.currentTarget.value as QaManualFillWriteAction)}
+            >
+              {plan.writeActionApprovalPhrases.map((item) => (
+                <option key={item.action} value={item.action}>
+                  {item.label} — {item.action}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div>
+          <span>Required approval phrase for selected action</span>
           <code>{plan.requiredApprovalPhrase}</code>
         </div>
       </div>

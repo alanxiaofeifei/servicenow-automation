@@ -12,14 +12,16 @@ import {
   draftTemplatePresets,
   getCtrlWheelZoomDelta,
   getNextAppZoomPercent,
+  updateQaSmokeWriteActionSelection,
+  type AppProps,
   type LanguageCode
 } from "./App";
 
-type TestableAppProps = { initialLanguage?: LanguageCode };
+type TestableAppProps = AppProps;
 const TestableApp = App as unknown as (props: TestableAppProps) => ReturnType<typeof App>;
 
-function renderAppMarkup(initialLanguage?: LanguageCode) {
-  return renderToStaticMarkup(createElement(TestableApp, { initialLanguage }));
+function renderAppMarkup(initialLanguage?: LanguageCode, props: Omit<TestableAppProps, "initialLanguage"> = {}) {
+  return renderToStaticMarkup(createElement(TestableApp, { initialLanguage, ...props }));
 }
 
 describe("App", () => {
@@ -249,7 +251,7 @@ describe("App", () => {
     expect(output).toContain("简体中文");
     expect(output).toContain("繁中（台灣）");
     expect(output).toContain("Español");
-    expect(output.match(/<option/g)?.length ?? 0).toBe(4);
+    expect(output.match(/<option value="(?:en-US|zh-CN|zh-TW|es-ES)"/g)?.length ?? 0).toBe(4);
     expect(output).toContain("Language simulation uses local deterministic demo data only");
     expect(output).toContain("no external translation service");
     expect(output).toContain("no real ServiceNow, Teams, mailbox, Graph, or API connection is used");
@@ -449,7 +451,13 @@ describe("App", () => {
     expect(output).toContain("Controlled QA single-ticket smoke");
     expect(output).toContain("Manual-fill assisted QA smoke");
     expect(output).toContain("Current environment mode");
-    expect(output).toContain("Required approval phrase for submit_incident");
+    expect(output).toContain("Requested write action");
+    expect(output).toContain('value="save_incident"');
+    expect(output).toContain('value="submit_incident" selected=""');
+    expect(output).toContain('value="update_incident"');
+    expect(output).toContain('value="close_incident"');
+    expect(output).toContain("Required approval phrase for selected action");
+    expect(output).toContain("submit_incident");
     expect(output).toContain("I APPROVE MOCK SUBMIT ONLY");
     expect(output).toContain("Action-specific approval phrases");
     expect(output).toContain("I APPROVE MOCK SAVE ONLY");
@@ -471,6 +479,32 @@ describe("App", () => {
     expect(output).toContain("Channel / Contact type");
     expect(output).toContain("Work notes");
     expect(output).toContain("not available");
+  });
+
+  it("keeps the selected QA write action local and derives its matching approval phrase", () => {
+    const stalePhraseReset = updateQaSmokeWriteActionSelection("save_incident");
+
+    expect(stalePhraseReset).toEqual({
+      writeAction: "save_incident",
+      approvalPhrase: ""
+    });
+
+    const actionPhrases = [
+      ["save_incident", "I APPROVE MOCK SAVE ONLY"],
+      ["submit_incident", "I APPROVE MOCK SUBMIT ONLY"],
+      ["update_incident", "I APPROVE MOCK UPDATE ONLY"],
+      ["close_incident", "I APPROVE MOCK CLOSE ONLY"]
+    ] as const;
+
+    for (const [initialQaSmokeWriteAction, expectedPhrase] of actionPhrases) {
+      const output = renderAppMarkup(undefined, { initialQaSmokeWriteAction });
+
+      expect(output).toContain(`value="${initialQaSmokeWriteAction}" selected=""`);
+      expect(output).toContain(
+        `<span>Required approval phrase for selected action</span><code>${expectedPhrase}</code>`
+      );
+      expect(output).toContain("This does NOT submit, save, update, close, launch browser automation");
+    }
   });
 
   it("renders the legacy-inspired ServiceNow field review checklist and safety boundary", () => {
