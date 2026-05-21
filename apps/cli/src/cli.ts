@@ -1,7 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { createBrowserSessionService, ManualPasteAdapter } from "@servicenow-automation/adapters";
+import {
+  createBrowserSessionService,
+  ManualPasteAdapter,
+  type BrowserNoWriteLaunchResult,
+  type BrowserNoWriteLaunchSafety
+} from "@servicenow-automation/adapters";
 import { generateMockTicketDraft } from "@servicenow-automation/ai";
 import { demoKnowledgeArticles, searchKnowledgeArticles } from "@servicenow-automation/kb/browser";
 import {
@@ -51,6 +56,21 @@ const manualPasteAdapter = new ManualPasteAdapter({
   idFactory: () => "cli-demo-context",
   now: () => new Date("2026-05-18T12:00:00.000Z")
 });
+
+const qaIsolationConfirmationPhrase =
+  "QA isolation confirmed: this ticket will not notify production users, customers, or a real support team.";
+
+const manualFillAllowedOperatorActions = [
+  "Open the controlled browser window and sign in manually.",
+  "Copy reviewed field values from the local preview by hand.",
+  "Stop before any Save, Submit, Update, Close, upload, or notification action."
+];
+
+const manualFillProhibitedOperatorActions = [
+  "Do not use browser DOM autofill or ServiceNow API writes.",
+  "Do not click Save, Submit, Update, or Close from this command.",
+  "Do not bulk create, upload attachments, send email, capture screenshots, HAR, traces, cookies, or sessions."
+];
 
 export async function runCli(argv: string[], options: RunCliOptions = {}): Promise<CliResult> {
   const cwd = options.cwd ?? process.cwd();
@@ -258,6 +278,70 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
         plan,
         safety: safetyEnvelope()
       }, formatQaSmokePlan(plan));
+    }
+
+    if (namespace === "qa" && action === "manual-fill") {
+      const mode = parseEnvironmentMode(requiredFlag(parsed, "mode", "qa manual-fill"));
+      const template = requiredFlag(parsed, "template", "qa manual-fill");
+      const user = requiredFlag(parsed, "user", "qa manual-fill");
+      const summary = requiredFlag(parsed, "summary", "qa manual-fill");
+      const environment = getServiceNowEnvironmentConfig(mode);
+      const targetUrl = parsed.flags["target-url"] ?? environment.url;
+      const targetValidation = validateServiceNowTargetUrl(environment, targetUrl);
+      const ticketDraft = buildTicketDraft({ template, user, summary });
+      const plan = evaluateQaSingleTicketSmokePlan({
+        draft: ticketDraft,
+        environment,
+        targetUrl,
+        targetValidation,
+        mappingOptions: {
+          requester: user,
+          contactType: "Self-service / manual paste",
+          location: "Demo location / sanitized"
+        },
+        approvalPhrase: parsed.flags["approval-phrase"],
+        language: parsed.flags.language ?? "en-US",
+        templatePreset: parsed.flags["template-preset"] ?? "standard-service-desk",
+        now: new Date()
+      });
+      const qaIsolationConfirmed = parsed.flags["qa-isolation-confirmation"] === qaIsolationConfirmationPhrase;
+      const manualFillBlockedReason = qaManualFillBlockedReason(plan, qaIsolationConfirmed);
+      const manualFillStatus = manualFillBlockedReason ? "blocked" : "ready-for-manual-fill";
+      const browserLaunch = manualFillBlockedReason
+        ? blockedQaManualFillBrowserLaunch(manualFillBlockedReason)
+        : sanitizeQaManualFillBrowserLaunch(
+            await createBrowserSessionService({ projectRoot: cwd }).launchNoWriteBrowser(environment, {
+              targetUrlOverride: parsed.flags["target-url"],
+              execute: parsed.execute,
+              confirmNoWriteLaunch: parsed.confirmNoWriteLaunch,
+              browserExecutablePath: parsed.flags["browser-executable"]
+            })
+          );
+
+      return output(parsed, {
+        command: "qa manual-fill",
+        mode,
+        template,
+        manualFill: {
+          status: manualFillStatus,
+          qaIsolationConfirmed,
+          requiredQaIsolationConfirmation: qaIsolationConfirmationPhrase,
+          blockedReason: manualFillBlockedReason,
+          allowedOperatorActions: manualFillBlockedReason ? [] : manualFillAllowedOperatorActions,
+          prohibitedOperatorActions: manualFillProhibitedOperatorActions
+        },
+        plan: sanitizeQaManualFillPlan(plan),
+        browserLaunch,
+        safety: safetyEnvelope({
+          noExternalActionPerformed: browserLaunch.status !== "launched",
+          browserProcessLaunched: browserLaunch.status === "launched",
+          browserAutomationCalled: false,
+          noServiceNowWrite: true,
+          noExcelWrite: true,
+          noGraphWrite: true,
+          productionWriteAllowed: false
+        })
+      }, formatQaManualFillPlan(manualFillStatus, browserLaunch.blockedReason));
     }
 
     if (namespace === "run") {
@@ -501,6 +585,131 @@ function formatQaSmokePlan(plan: QaSingleTicketSmokePlan): string {
   return lines.join("\n");
 }
 
+function qaManualFillBlockedReason(plan: QaSingleTicketSmokePlan, qaIsolationConfirmed: boolean): string | undefined {
+  if (plan.status !== "ready-for-manual-fill") {
+    return `QA manual-fill plan is blocked: ${manualFillSafeBlockReason(plan)}.`;
+  }
+  if (!qaIsolationConfirmed) {
+    return "QA isolation confirmation is required before preparing a QA manual-fill browser session.";
+  }
+  return undefined;
+}
+
+function manualFillSafeBlockReason(plan: QaSingleTicketSmokePlan): string {
+  if (plan.missingRequiredFields.length > 0) {
+    return "missing-required-field-mappings";
+  }
+
+  switch (plan.gateDecision.reason) {
+    case "mock-write-denied":
+      return "mock-mode-has-no-service-now-target";
+    case "production-shadow-write-denied":
+      return "production-shadow-mode-denied";
+    case "target-url-not-https":
+    case "target-url-credentials-denied":
+    case "target-not-allowlisted":
+    case "target-validation-host-mismatch":
+    case "invalid-target-url":
+      return "target-validation-denied";
+    case "explicit-approval-required":
+    case "approval-operator-mismatch":
+    case "approval-mode-mismatch":
+    case "approval-action-mismatch":
+    case "approval-target-host-mismatch":
+    case "approval-phrase-mismatch":
+      return "qa-dev-readiness-approval-required";
+    case "environment-real-submit-disabled":
+      return "environment-mode-denied";
+    case "approved-for-qa-dev-write":
+      return "manual-fill-readiness-blocked";
+  }
+}
+
+function sanitizeQaManualFillPlan(plan: QaSingleTicketSmokePlan) {
+  const {
+    targetHost: _targetHost,
+    gateDecision: _gateDecision,
+    requiredApprovalPhrase: _requiredApprovalPhrase,
+    writeActionApprovalPhrases: _writeActionApprovalPhrases,
+    stopRules: _stopRules,
+    ...manualFillPlan
+  } = plan;
+
+  return {
+    ...manualFillPlan,
+    targetHost: undefined,
+    gateDecision: undefined,
+    requiredApprovalPhrase: undefined,
+    writeActionApprovalPhrases: undefined,
+    stopRules: [
+      "Stop before every Save/Submit/Update/Close; this command never authorizes write actions.",
+      "Stop if any real user, real ticket text, real ticket number, credential, cookie, session, screenshot, or recording detail appears.",
+      "Stop if QA isolation is not explicitly confirmed.",
+      "Stop if browser DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated close/update appears."
+    ],
+    manualFillGate: {
+      writeActionsEnabled: false,
+      serviceNowWriteApproved: false,
+      sourceGateReason: "manual-fill-gate-redacted"
+    }
+  };
+}
+
+function blockedQaManualFillBrowserLaunch(blockedReason: string) {
+  return {
+    status: "blocked" as const,
+    blockedReason,
+    commandPreview: undefined,
+    target: undefined,
+    safety: noWriteBrowserSafety(),
+    auditNotes: [blockedReason]
+  };
+}
+
+function sanitizeQaManualFillBrowserLaunch(launch: BrowserNoWriteLaunchResult) {
+  return {
+    status: launch.status,
+    blockedReason: launch.blockedReason,
+    commandPreview: undefined,
+    process: launch.process,
+    target: launch.commandPreview
+      ? {
+          allowlisted: true,
+          hostRedacted: true,
+          path: launch.commandPreview.targetPath
+        }
+      : undefined,
+    profile: {
+      underIgnoredLocalRuntimeDirectory: launch.plan.browserProfileDirectory.includes(".local/servicenow-browser-profiles"),
+      gitIgnorePattern: launch.plan.gitIgnorePattern
+    },
+    safety: launch.safety,
+    auditNotes: launch.auditNotes
+  };
+}
+
+function noWriteBrowserSafety(): BrowserNoWriteLaunchSafety {
+  return {
+    noWriteMode: true,
+    formAutomationAllowed: false,
+    fieldFillAllowed: false,
+    realServiceNowApiCalled: false,
+    realSubmitAllowed: false,
+    writeOperationsAllowed: false,
+    realActionGateRequiredForWrites: true
+  };
+}
+
+function formatQaManualFillPlan(status: string, blockedReason?: string): string {
+  return [
+    `Controlled QA manual-fill rehearsal: ${status}`,
+    blockedReason
+      ? `Blocked reason: ${blockedReason}`
+      : "Ready for manual browser launch and hand-filled field rehearsal only.",
+    "Safety: no DOM autofill, no ServiceNow API, no Save, Submit, Update, Close, upload, email, or bulk action."
+  ].join("\n");
+}
+
 function draftFieldValue(field: FieldDraft | undefined): string {
   return field?.value ?? "Not set";
 }
@@ -520,6 +729,7 @@ Commands:
   sda browser reset --mode <mock|qa|dev|production-shadow> [--json]
   sda workflow preview --template <template> --user <sanitized_user> --summary <sanitized_summary> --source <source> --dry-run [--json]
   sda qa smoke --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> [--target-url <url>] [--approval-phrase <phrase>] [--language <lang>] [--template-preset <preset>] [--json]
+  sda qa manual-fill --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> [--target-url <url>] [--approval-phrase <phrase>] [--browser-executable <path>] [--execute --confirm-no-write-launch] [--json]
   sda run --workflow <workflow_name> --input <json_file> --dry-run [--json]
 
 Safety:

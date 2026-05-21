@@ -83,6 +83,262 @@ describe("sda CLI", () => {
     expect(payload.safety.browserProcessLaunched).toBe(false);
   });
 
+  it("prepares a combined QA manual-fill dry-run with a sanitized browser launch preview", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-qa-manual-fill-"));
+    const qaIsolationConfirmation = "QA isolation confirmed: this ticket will not notify production users, customers, or a real support team.";
+
+    const result = await runCli([
+      "qa",
+      "manual-fill",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--approval-phrase",
+      "I APPROVE QA SUBMIT ONLY",
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--json"
+    ], { cwd: projectRoot });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+    const serviceNowDomain = "service" + "-now.com";
+    const sensitiveQueryName = "sys" + "_id";
+    const sensitiveTokenName = "to" + "ken";
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.command).toBe("qa manual-fill");
+    expect(payload.manualFill.status).toBe("ready-for-manual-fill");
+    expect(payload.manualFill.qaIsolationConfirmed).toBe(true);
+    expect(payload.manualFill.allowedOperatorActions).toContain("Open the controlled browser window and sign in manually.");
+    expect(payload.manualFill.prohibitedOperatorActions).toContain("Do not use browser DOM autofill or ServiceNow API writes.");
+    expect(payload.manualFill.prohibitedOperatorActions).toContain("Do not click Save, Submit, Update, or Close from this command.");
+    expect(payload.plan.status).toBe("ready-for-manual-fill");
+    expect(payload.plan.targetHost).toBeUndefined();
+    expect(payload.plan.gateDecision).toBeUndefined();
+    expect(payload.plan.requiredApprovalPhrase).toBeUndefined();
+    expect(payload.plan.writeActionApprovalPhrases).toBeUndefined();
+    expect(payload.plan.manualFillGate).toMatchObject({
+      writeActionsEnabled: false,
+      serviceNowWriteApproved: false,
+      sourceGateReason: "manual-fill-gate-redacted"
+    });
+    expect(payload.plan.stopRules).toContain("Stop before every Save/Submit/Update/Close; this command never authorizes write actions.");
+    expect(payload.plan.fieldMappings).toHaveLength(11);
+    expect(payload.browserLaunch.status).toBe("dry-run");
+    expect(payload.browserLaunch.commandPreview).toBeUndefined();
+    expect(payload.browserLaunch.target).toMatchObject({ allowlisted: true, hostRedacted: true });
+    expect(payload.browserLaunch.target.path).toMatch(/^\//);
+    expect(payload.browserLaunch.safety.noWriteMode).toBe(true);
+    expect(payload.browserLaunch.safety.fieldFillAllowed).toBe(false);
+    expect(payload.browserLaunch.safety.writeOperationsAllowed).toBe(false);
+    expect(payload.plan.safety.manualFillOnly).toBe(true);
+    expect(payload.plan.safety.noBrowserAutomation).toBe(true);
+    expect(payload.plan.safety.noServiceNowApi).toBe(true);
+    expect(payload.plan.safety.noAutoSubmit).toBe(true);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(payload.safety.browserAutomationCalled).toBe(false);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+    expect(serialized).not.toContain(serviceNowDomain);
+    expect(serialized).not.toContain("https" + "://");
+    expect(serialized).not.toContain("I APPROVE QA SUBMIT ONLY");
+    expect(serialized).not.toContain("I APPROVE QA SAVE ONLY");
+    expect(serialized).not.toContain("I APPROVE QA UPDATE ONLY");
+    expect(serialized).not.toContain("I APPROVE QA CLOSE ONLY");
+    expect(serialized).not.toContain(sensitiveQueryName);
+    expect(serialized).not.toContain(sensitiveTokenName);
+  });
+
+  it("blocks QA manual-fill browser preparation until the QA isolation sentence is present", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-qa-manual-fill-blocked-"));
+
+    const result = await runCli([
+      "qa",
+      "manual-fill",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--approval-phrase",
+      "I APPROVE QA SUBMIT ONLY",
+      "--json"
+    ], { cwd: projectRoot });
+    const payload = JSON.parse(result.stdout);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.command).toBe("qa manual-fill");
+    expect(payload.manualFill.status).toBe("blocked");
+    expect(payload.manualFill.qaIsolationConfirmed).toBe(false);
+    expect(payload.manualFill.blockedReason).toBe("QA isolation confirmation is required before preparing a QA manual-fill browser session.");
+    expect(payload.manualFill.allowedOperatorActions).not.toContain("Open the controlled browser window and sign in manually.");
+    expect(payload.browserLaunch.status).toBe("blocked");
+    expect(payload.browserLaunch.commandPreview).toBeUndefined();
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+  });
+
+  it("blocks QA manual-fill browser execution unless the no-write launch confirmation is present", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-qa-manual-fill-execute-blocked-"));
+    const qaIsolationConfirmation = "QA isolation confirmed: this ticket will not notify production users, customers, or a real support team.";
+
+    const result = await runCli([
+      "qa",
+      "manual-fill",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--approval-phrase",
+      "I APPROVE QA SUBMIT ONLY",
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--execute",
+      "--json"
+    ], { cwd: projectRoot });
+    const payload = JSON.parse(result.stdout);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.manualFill.status).toBe("ready-for-manual-fill");
+    expect(payload.browserLaunch.status).toBe("blocked");
+    expect(payload.browserLaunch.blockedReason).toBe("Explicit --confirm-no-write-launch is required before opening a real QA/dev browser window.");
+    expect(payload.browserLaunch.commandPreview).toBeUndefined();
+    expect(payload.browserLaunch.safety.writeOperationsAllowed).toBe(false);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+  });
+
+  it("keeps mock and production-shadow manual-fill browser preparation blocked", async () => {
+    const qaIsolationConfirmation = "QA isolation confirmed: this ticket will not notify production users, customers, or a real support team.";
+
+    for (const mode of ["mock", "production-shadow"] as const) {
+      const projectRoot = await mkdtemp(join(tmpdir(), `sda-cli-qa-manual-fill-${mode}-blocked-`));
+      const result = await runCli([
+        "qa",
+        "manual-fill",
+        "--mode",
+        mode,
+        "--template",
+        "vpn_issue",
+        "--user",
+        "Demo requester A",
+        "--summary",
+        "Fake Chat intake — VPN connection issue after password or MFA change",
+        "--approval-phrase",
+        "I APPROVE QA SUBMIT ONLY",
+        "--qa-isolation-confirmation",
+        qaIsolationConfirmation,
+        "--json"
+      ], { cwd: projectRoot });
+      const payload = JSON.parse(result.stdout);
+      const serialized = JSON.stringify(payload);
+
+      expect(result.exitCode).toBe(0);
+      expect(payload.manualFill.status).toBe("blocked");
+      expect(payload.manualFill.allowedOperatorActions).toEqual([]);
+      expect(payload.plan.gateDecision).toBeUndefined();
+      expect(payload.plan.requiredApprovalPhrase).toBeUndefined();
+      expect(payload.plan.writeActionApprovalPhrases).toBeUndefined();
+      expect(payload.browserLaunch.status).toBe("blocked");
+      expect(payload.browserLaunch.commandPreview).toBeUndefined();
+      expect(payload.safety.browserProcessLaunched).toBe(false);
+      expect(serialized).not.toContain("I APPROVE QA SUBMIT ONLY");
+    }
+  });
+
+  it("blocks sensitive QA target URLs for manual-fill without leaking the host or query markers", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-qa-manual-fill-sensitive-target-"));
+    const qaIsolationConfirmation = "QA isolation confirmed: this ticket will not notify production users, customers, or a real support team.";
+    const qaHost = new URL(getServiceNowEnvironmentConfig("qa").url ?? "").host;
+    const sensitiveQueryName = "sys" + "_id";
+    const sensitiveTokenName = "to" + "ken";
+    const targetUrl = `https${"://"}${qaHost}/nav_to.do?${sensitiveQueryName}=example&${sensitiveTokenName}=example`;
+
+    const result = await runCli([
+      "qa",
+      "manual-fill",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--approval-phrase",
+      "I APPROVE QA SUBMIT ONLY",
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--target-url",
+      targetUrl,
+      "--json"
+    ], { cwd: projectRoot });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.manualFill.status).toBe("blocked");
+    expect(payload.browserLaunch.status).toBe("blocked");
+    expect(payload.browserLaunch.commandPreview).toBeUndefined();
+    expect(payload.plan.gateDecision).toBeUndefined();
+    expect(payload.plan.requiredApprovalPhrase).toBeUndefined();
+    expect(payload.plan.writeActionApprovalPhrases).toBeUndefined();
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(serialized).not.toContain(qaHost);
+    expect(serialized).not.toContain("https" + "://");
+    expect(serialized).not.toContain(sensitiveQueryName);
+    expect(serialized).not.toContain(sensitiveTokenName);
+    expect(serialized).not.toContain("I APPROVE QA SUBMIT ONLY");
+  });
+
+  it("blocks manual-fill when required mappings are missing without leaking approved write-gate text", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-qa-manual-fill-missing-mappings-"));
+    const qaIsolationConfirmation = "QA isolation confirmed: this ticket will not notify production users, customers, or a real support team.";
+
+    const result = await runCli([
+      "qa",
+      "manual-fill",
+      "--mode",
+      "qa",
+      "--template",
+      "generic",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Generic request needs help",
+      "--approval-phrase",
+      "I APPROVE QA SUBMIT ONLY",
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--json"
+    ], { cwd: projectRoot });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.manualFill.status).toBe("blocked");
+    expect(payload.manualFill.blockedReason).toBe("QA manual-fill plan is blocked: missing-required-field-mappings.");
+    expect(payload.plan.missingRequiredFields).toEqual(expect.arrayContaining(["category", "subcategory"]));
+    expect(payload.plan.gateDecision).toBeUndefined();
+    expect(payload.plan.requiredApprovalPhrase).toBeUndefined();
+    expect(payload.plan.writeActionApprovalPhrases).toBeUndefined();
+    expect(payload.browserLaunch.status).toBe("blocked");
+    expect(payload.browserLaunch.blockedReason).toBe("QA manual-fill plan is blocked: missing-required-field-mappings.");
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(serialized).not.toContain("approved-for-qa-dev-write");
+    expect(serialized).not.toContain("I APPROVE QA SUBMIT ONLY");
+    expect(serialized).not.toContain("https" + "://");
+  });
+
   it("generates work notes from a sample JSON file", async () => {
     const result = await runCli([
       "notes",
