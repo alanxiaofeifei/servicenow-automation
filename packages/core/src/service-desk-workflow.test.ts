@@ -68,12 +68,43 @@ describe("service desk workflow preview", () => {
       languageOrServiceDeskTeam: "English / Demo Service Desk",
       issueType: "Incident",
       draft,
+      serviceDeskOwnerTeam: "Demo Service Desk",
       finalAssignmentGroup: "Demo Network Support",
       workNotesSummary: "Confirm VPN symptom and route if needed.",
-      handlingStatus: "New"
+      handlingStatus: "New",
+      confirmationState: {
+        status: "Needs confirmation",
+        summary: "Confirm fake requester and VPN impact before manual QA fill."
+      },
+      evidenceReviewState: {
+        evidenceType: "none",
+        reviewState: "not reviewed",
+        extractedFacts: ["No fake attachment required for first QA ticket."],
+        safetyLabel: "No file upload, OCR, or external AI"
+      },
+      fakeScenarioId: "vpn-issue",
+      requiredFieldCheck:
+        "Complete for manual fill: requester, channel, category, subcategory, location, impact, urgency, assignment group, short description, description, work notes.",
+      approvalPhraseGate:
+        "Separate exact approval phrase required before each real Save/Submit/Update/Close action.",
+      stopRuleCheck:
+        "Stop if production mode, real user data, notification risk, missing QA isolation, or any DOM/API/bulk path appears.",
+      qaIsolationCheck: "Pending explicit confirmation that QA will not notify production/support teams.",
+      qaDryRunOutcome: "Blocked until QA isolation is confirmed; field-trial prep only.",
+      qaTrialResult: "Not run - field-trial prep only."
     });
 
     expect(preview.row["ServiceNow Channel"]).toBe("Chat");
+    expect(preview.row["Service Desk Owner / Initial Group"]).toBe("Demo Service Desk");
+    expect(preview.row["Confirmation State"]).toBe("Needs confirmation");
+    expect(preview.row["Evidence Review State"]).toBe("not reviewed (none)");
+    expect(preview.row["Fake Scenario ID"]).toBe("vpn-issue");
+    expect(preview.row["Required Field Check"]).toContain("Complete for manual fill");
+    expect(preview.row["Approval Phrase Gate"]).toContain("Save/Submit/Update/Close");
+    expect(preview.row["Stop Rule Check"]).toContain("notification risk");
+    expect(preview.row["QA Isolation Check"]).toContain("Pending explicit confirmation");
+    expect(preview.row["QA Dry-run Outcome"]).toContain("Blocked until QA isolation is confirmed");
+    expect(preview.row["QA Trial Result"]).toBe("Not run - field-trial prep only.");
     expect(preview.row["Dry-run Result"]).toContain("Preview only");
     expect(preview.row["Dry-run Result"]).toContain("no Excel workbook is connected or written");
     expect(preview.safetyCopy).toBe(
@@ -109,6 +140,12 @@ describe("service desk workflow preview", () => {
       "Excel dry-run row"
     ]);
     expect(preview.mappedServiceNowChannel).toBe("Chat");
+    expect(preview.evidenceReviewState).toEqual({
+      evidenceType: "none",
+      reviewState: "not reviewed",
+      extractedFacts: ["No evidence artifact is required for this local preview."],
+      safetyLabel: "No file upload, OCR, or external AI"
+    });
     expect(preview.workNotesPlan.warning).toContain("Save is a real write action");
     expect(preview.workNotesPlan.warning).toContain("not executed");
     expect(preview.safety.noServiceNowWrite).toBe(true);

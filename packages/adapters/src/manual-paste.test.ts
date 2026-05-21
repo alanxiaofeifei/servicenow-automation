@@ -45,9 +45,22 @@ describe("ManualPasteAdapter", () => {
   it("provides stable demo scenarios for field trial rehearsal", () => {
     expect(demoManualPasteScenarios.map((scenario) => scenario.id)).toEqual([
       "vpn-issue",
-      "windows-issue",
+      "shared-mailbox-evidence",
+      "phone-confirmation",
+      "self-service-normalization",
+      "remote-support-teams",
       "account-login-issue"
     ]);
+    expect(demoManualPasteScenarios[0]).toMatchObject({
+      id: "vpn-issue",
+      label: "QA TEST — Fake Chat intake: VPN connection issue after password change"
+    });
+    expect(demoManualPasteScenarios.map((scenario) => scenario.label).join("\n")).toContain(
+      "Shared mailbox with fake attachment evidence"
+    );
+    expect(demoManualPasteScenarios.map((scenario) => scenario.label).join("\n")).toContain(
+      "Remote support / Teams troubleshooting checklist"
+    );
     expect(demoManualPasteScenarios.every((scenario) => scenario.rawText.length > 40)).toBe(true);
   });
 });

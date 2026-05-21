@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { demoManualPasteScenarios } from "@servicenow-automation/adapters/browser";
 
 import {
   App,
@@ -68,8 +69,11 @@ describe("App", () => {
     const output = renderAppMarkup();
 
     expect(output).toContain("Ticket Draft Workspace");
-    expect(output).toContain("Load VPN Demo");
-    expect(output).toContain("Load Windows Demo");
+    expect(output).toContain("Load VPN QA Scenario");
+    expect(output).toContain("Load Evidence Demo");
+    expect(output).toContain("Load Phone Demo");
+    expect(output).toContain("Load Self-service Demo");
+    expect(output).toContain("Load Remote Support Demo");
     expect(output).toContain("Load Account/Login Demo");
     expect(output).toContain("VPN connection issue after password or MFA change");
     expect(output).toContain("Short Description");
@@ -207,6 +211,14 @@ describe("App", () => {
     expect(draft.workNotes.value).toContain("Do not call external translation services");
   });
 
+  it("maps every manual paste scenario button to one deterministic queue item", () => {
+    const queueScenarioIds = buildDemoQueueItems("en-US").map((item) => item.scenarioId).sort();
+    const manualScenarioIds = demoManualPasteScenarios.map((scenario) => scenario.id).sort();
+
+    expect(queueScenarioIds).toEqual(manualScenarioIds);
+    expect(new Set(queueScenarioIds).size).toBe(demoManualPasteScenarios.length);
+  });
+
   it("renders local safe draft copy actions and sanitized Markdown export text", () => {
     const output = renderAppMarkup();
 
@@ -276,6 +288,13 @@ describe("App", () => {
     expect(output).toContain("Stage 2 — Final Assignment");
     expect(output).toContain("Save is a real write action");
     expect(output).toContain("Excel Dry-run Row Preview");
+    expect(output).toContain("Fake Scenario ID");
+    expect(output).toContain("vpn-issue");
+    expect(output).toContain("Approval Phrase Gate");
+    expect(output).toContain("Separate exact approval phrase required before each real Save/Submit/Update/Close action.");
+    expect(output).toContain("Stop Rule Check");
+    expect(output).toContain("QA Isolation Check");
+    expect(output).toContain("QA Dry-run Outcome");
     expect(output).toContain(
       "This row is generated locally from the reviewed draft. No workbook is connected or written."
     );
@@ -284,19 +303,23 @@ describe("App", () => {
     expect(output).toContain("No real ServiceNow, Excel workbook, Graph, browser, API, mailbox, Teams, or portal write is performed.");
   });
 
-  it("renders exactly four FIFO intake items", () => {
+  it("renders one FIFO intake item for each deterministic manual scenario", () => {
     const output = renderAppMarkup();
     const queueItemCount = output.match(/<button class=\"queue-item/g)?.length ?? 0;
     const teamsIndex = output.indexOf("Teams note: VPN connection issue after password reset");
     const selfServiceIndex = output.indexOf("Self-service request: Windows laptop slow after update");
     const chatIndex = output.indexOf("Chat transcript: account login issue after password change");
     const mailboxIndex = output.indexOf("Shared mailbox item: remote access unavailable");
+    const phoneIndex = output.indexOf("QA TEST ONLY - Fake phone intake requiring confirmation");
+    const remoteSupportIndex = output.indexOf("QA TEST ONLY - Fake remote support checklist");
 
-    expect(queueItemCount).toBe(4);
+    expect(queueItemCount).toBe(6);
     expect(teamsIndex).toBeGreaterThan(-1);
     expect(selfServiceIndex).toBeGreaterThan(teamsIndex);
     expect(chatIndex).toBeGreaterThan(selfServiceIndex);
     expect(mailboxIndex).toBeGreaterThan(chatIndex);
+    expect(phoneIndex).toBeGreaterThan(mailboxIndex);
+    expect(remoteSupportIndex).toBeGreaterThan(phoneIndex);
   });
 
   it("renders a filled mock ServiceNow Incident form with disabled demo submit", () => {
@@ -350,6 +373,15 @@ describe("App", () => {
     expect(output).toContain("Current environment mode");
     expect(output).toContain("Required approval phrase for submit_incident");
     expect(output).toContain("I APPROVE MOCK SUBMIT ONLY");
+    expect(output).toContain("Action-specific approval phrases");
+    expect(output).toContain("I APPROVE MOCK SAVE ONLY");
+    expect(output).toContain("I APPROVE MOCK UPDATE ONLY");
+    expect(output).toContain("I APPROVE MOCK CLOSE ONLY");
+    expect(output).toContain("Stop rules");
+    expect(output).toContain(
+      "Stop before every Save/Submit/Update/Close unless Alan gives the exact action-specific approval phrase."
+    );
+    expect(output).toContain("Stop if the QA ticket could notify production users or a real support team.");
     expect(output).toContain("Blocked: mock-write-denied");
     expect(output).toContain("Mock/prod shadow blocked.");
     expect(output).toContain("QA/dev missing phrase blocked.");

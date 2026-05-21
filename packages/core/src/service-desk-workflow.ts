@@ -15,6 +15,13 @@ export type ContactConfirmationState = {
   summary: string;
 };
 
+export type EvidenceReviewState = {
+  evidenceType: "none" | "screenshot" | "document" | "table";
+  reviewState: "not reviewed" | "reviewed" | "needs manual check";
+  extractedFacts: string[];
+  safetyLabel: "No file upload, OCR, or external AI";
+};
+
 export type RoutingPlan = {
   stage1: {
     label: "Stage 1 - Service Desk Handling";
@@ -41,6 +48,7 @@ export const excelDryRunRowColumns = [
   "ServiceNow Channel",
   "Requester Display",
   "Language / SD Team",
+  "Service Desk Owner / Initial Group",
   "Issue Type",
   "Category",
   "Subcategory",
@@ -49,6 +57,15 @@ export const excelDryRunRowColumns = [
   "Final Assignment Group",
   "Work Notes Summary",
   "Handling Status",
+  "Confirmation State",
+  "Evidence Review State",
+  "Fake Scenario ID",
+  "Required Field Check",
+  "Approval Phrase Gate",
+  "Stop Rule Check",
+  "QA Isolation Check",
+  "QA Dry-run Outcome",
+  "QA Trial Result",
   "Dry-run Result"
 ] as const;
 
@@ -75,6 +92,14 @@ export type ServiceDeskWorkflowPreviewInput = {
   finalAssignmentReason?: string;
   handlingStatus?: string;
   confirmationState?: ContactConfirmationState;
+  evidenceReviewState?: EvidenceReviewState;
+  fakeScenarioId?: string;
+  requiredFieldCheck?: string;
+  approvalPhraseGate?: string;
+  stopRuleCheck?: string;
+  qaIsolationCheck?: string;
+  qaDryRunOutcome?: string;
+  qaTrialResult?: string;
 };
 
 export type ExcelDryRunRowPreviewInput = {
@@ -84,9 +109,19 @@ export type ExcelDryRunRowPreviewInput = {
   languageOrServiceDeskTeam: string;
   issueType: string;
   draft: TicketDraft;
+  serviceDeskOwnerTeam: string;
   finalAssignmentGroup: string;
   workNotesSummary: string;
   handlingStatus: string;
+  confirmationState: ContactConfirmationState;
+  evidenceReviewState: EvidenceReviewState;
+  fakeScenarioId?: string;
+  requiredFieldCheck?: string;
+  approvalPhraseGate?: string;
+  stopRuleCheck?: string;
+  qaIsolationCheck?: string;
+  qaDryRunOutcome?: string;
+  qaTrialResult: string;
 };
 
 export type ServiceDeskWorkflowPreview = {
@@ -94,6 +129,7 @@ export type ServiceDeskWorkflowPreview = {
   rawIntakeSource: RawIntakeSource;
   mappedServiceNowChannel: ServiceNowChannel;
   confirmationState: ContactConfirmationState;
+  evidenceReviewState: EvidenceReviewState;
   incidentDraftMapping: {
     category: string;
     subcategory: string;
@@ -141,6 +177,7 @@ export function buildExcelDryRunRowPreview(input: ExcelDryRunRowPreviewInput): E
     "ServiceNow Channel": mapIntakeSourceToServiceNowChannel(input.rawIntakeSource),
     "Requester Display": input.requesterDisplay,
     "Language / SD Team": input.languageOrServiceDeskTeam,
+    "Service Desk Owner / Initial Group": input.serviceDeskOwnerTeam,
     "Issue Type": input.issueType,
     Category: draftFieldValue(input.draft.category),
     Subcategory: draftFieldValue(input.draft.subcategory),
@@ -149,6 +186,15 @@ export function buildExcelDryRunRowPreview(input: ExcelDryRunRowPreviewInput): E
     "Final Assignment Group": input.finalAssignmentGroup,
     "Work Notes Summary": input.workNotesSummary,
     "Handling Status": input.handlingStatus,
+    "Confirmation State": input.confirmationState.status,
+    "Evidence Review State": `${input.evidenceReviewState.reviewState} (${input.evidenceReviewState.evidenceType})`,
+    "Fake Scenario ID": input.fakeScenarioId ?? "not specified - fake/sanitized only",
+    "Required Field Check": input.requiredFieldCheck ?? defaultRequiredFieldCheck(),
+    "Approval Phrase Gate": input.approvalPhraseGate ?? defaultApprovalPhraseGate(),
+    "Stop Rule Check": input.stopRuleCheck ?? defaultStopRuleCheck(),
+    "QA Isolation Check": input.qaIsolationCheck ?? "Pending explicit QA isolation confirmation before field trial.",
+    "QA Dry-run Outcome": input.qaDryRunOutcome ?? "Not ready for QA write; dry-run preview only.",
+    "QA Trial Result": input.qaTrialResult,
     "Dry-run Result": "Preview only - no Excel workbook is connected or written."
   };
 
@@ -165,6 +211,8 @@ export function buildServiceDeskWorkflowPreview(
 ): ServiceDeskWorkflowPreview {
   const finalAssignmentGroup = input.finalAssignmentGroup ?? draftFieldValue(input.draft.assignmentGroup);
   const workNotesPlan = buildWorkNotesPlan(input.draft);
+  const confirmationState = input.confirmationState ?? defaultConfirmationState();
+  const evidenceReviewState = input.evidenceReviewState ?? defaultEvidenceReviewState();
   const excelDryRunRowPreview = buildExcelDryRunRowPreview({
     createdAt: input.createdAt,
     rawIntakeSource: input.rawIntakeSource,
@@ -172,9 +220,19 @@ export function buildServiceDeskWorkflowPreview(
     languageOrServiceDeskTeam: input.languageOrServiceDeskTeam,
     issueType: input.issueType,
     draft: input.draft,
+    serviceDeskOwnerTeam: input.serviceDeskOwnerTeam,
     finalAssignmentGroup,
     workNotesSummary: workNotesPlan.summary,
-    handlingStatus: input.handlingStatus ?? "New"
+    handlingStatus: input.handlingStatus ?? "New",
+    confirmationState,
+    evidenceReviewState,
+    fakeScenarioId: input.fakeScenarioId,
+    requiredFieldCheck: input.requiredFieldCheck,
+    approvalPhraseGate: input.approvalPhraseGate,
+    stopRuleCheck: input.stopRuleCheck,
+    qaIsolationCheck: input.qaIsolationCheck,
+    qaDryRunOutcome: input.qaDryRunOutcome,
+    qaTrialResult: input.qaTrialResult ?? "Not run - dry-run only."
   });
   const routingPlan: RoutingPlan = {
     stage1: {
@@ -201,10 +259,8 @@ export function buildServiceDeskWorkflowPreview(
     ],
     rawIntakeSource: input.rawIntakeSource,
     mappedServiceNowChannel: mapIntakeSourceToServiceNowChannel(input.rawIntakeSource),
-    confirmationState: input.confirmationState ?? {
-      status: "Needs confirmation",
-      summary: "Confirm requester identity, impact, urgency, and any missing troubleshooting facts."
-    },
+    confirmationState,
+    evidenceReviewState,
     incidentDraftMapping: {
       category: draftFieldValue(input.draft.category),
       subcategory: draftFieldValue(input.draft.subcategory),
@@ -229,6 +285,34 @@ export function buildServiceDeskWorkflowPreview(
     ...preview,
     markdownSummary: buildWorkflowMarkdownSummary(preview)
   };
+}
+
+function defaultConfirmationState(): ContactConfirmationState {
+  return {
+    status: "Needs confirmation",
+    summary: "Confirm requester identity, impact, urgency, and any missing troubleshooting facts."
+  };
+}
+
+function defaultEvidenceReviewState(): EvidenceReviewState {
+  return {
+    evidenceType: "none",
+    reviewState: "not reviewed",
+    extractedFacts: ["No evidence artifact is required for this local preview."],
+    safetyLabel: "No file upload, OCR, or external AI"
+  };
+}
+
+function defaultRequiredFieldCheck(): string {
+  return "Pending manual review of required fields: requester, channel, category, subcategory, location, impact, urgency, assignment group, short description, description, and work notes.";
+}
+
+function defaultApprovalPhraseGate(): string {
+  return "Separate exact Alan approval phrase is required before each real Save, Submit, Update, or Close action.";
+}
+
+function defaultStopRuleCheck(): string {
+  return "Stop on production mode, real customer data, notification/escalation risk, missing QA isolation, unexpected ServiceNow workflow, DOM autofill, API use, or bulk path.";
 }
 
 export function buildCsvRow(row: ExcelDryRunRow): string {

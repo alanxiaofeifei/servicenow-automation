@@ -4,6 +4,7 @@ import {
   type RealActionDecision,
   type RealActionEnvironment,
   type RealActionMode,
+  type RealActionType,
   type RealActionTargetValidation
 } from "./real-action-gate";
 import type { FieldDraft, TicketDraft } from "./models";
@@ -61,11 +62,19 @@ export type QaSingleTicketSmokeAuditPreview = {
 
 export type QaSingleTicketSmokePlanStatus = "blocked" | "ready-for-manual-fill";
 
+export type QaWriteActionApprovalPhrase = {
+  action: Extract<RealActionType, "save_incident" | "submit_incident" | "update_incident" | "close_incident">;
+  label: "Save" | "Submit" | "Update" | "Close";
+  phrase: string;
+};
+
 export type QaSingleTicketSmokePlan = {
   status: QaSingleTicketSmokePlanStatus;
   mode: RealActionMode;
   targetHost?: string;
   requiredApprovalPhrase: string;
+  writeActionApprovalPhrases: QaWriteActionApprovalPhrase[];
+  stopRules: string[];
   gateDecision: RealActionDecision;
   fieldMappings: IncidentFieldMapping[];
   missingRequiredFields: IncidentFieldMappingKey[];
@@ -145,6 +154,8 @@ export function evaluateQaSingleTicketSmokePlan(
     mode: request.environment.mode,
     targetHost,
     requiredApprovalPhrase,
+    writeActionApprovalPhrases: buildWriteActionApprovalPhrases(request.environment.mode),
+    stopRules: buildStopRules(),
     gateDecision: safeGateDecision,
     ...mappingPreview,
     safety: safetyFlags(),
@@ -156,6 +167,25 @@ export function evaluateQaSingleTicketSmokePlan(
       actionState: status
     }
   };
+}
+
+function buildWriteActionApprovalPhrases(mode: RealActionMode): QaWriteActionApprovalPhrase[] {
+  return [
+    { action: "save_incident", label: "Save", phrase: getRequiredRealActionApprovalPhrase(mode, "save_incident") },
+    { action: "submit_incident", label: "Submit", phrase: getRequiredRealActionApprovalPhrase(mode, "submit_incident") },
+    { action: "update_incident", label: "Update", phrase: getRequiredRealActionApprovalPhrase(mode, "update_incident") },
+    { action: "close_incident", label: "Close", phrase: getRequiredRealActionApprovalPhrase(mode, "close_incident") }
+  ];
+}
+
+function buildStopRules(): string[] {
+  return [
+    "Stop before every Save/Submit/Update/Close unless Alan gives the exact action-specific approval phrase.",
+    "Stop if any real user, real ticket text, real ticket number, credential, cookie, session, screenshot, or recording detail appears.",
+    "Stop if the QA ticket could notify production users or a real support team.",
+    "Stop if the environment is production or production-shadow, or if QA isolation is not explicitly confirmed.",
+    "Stop if browser DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated close/update appears."
+  ];
 }
 
 function contextMapping(

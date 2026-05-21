@@ -9,7 +9,13 @@ export type ManualPasteInput = {
 };
 
 export type ManualPasteScenario = ManualPasteInput & {
-  id: "vpn-issue" | "windows-issue" | "account-login-issue";
+  id:
+    | "vpn-issue"
+    | "shared-mailbox-evidence"
+    | "phone-confirmation"
+    | "self-service-normalization"
+    | "remote-support-teams"
+    | "account-login-issue";
   label: string;
 };
 
@@ -46,17 +52,38 @@ export class ManualPasteAdapter {
 export const demoManualPasteScenarios: ManualPasteScenario[] = [
   {
     id: "vpn-issue",
-    label: "VPN demo issue",
-    title: "VPN connection issue after password reset",
+    label: "QA TEST — Fake Chat intake: VPN connection issue after password change",
+    title: "QA TEST ONLY - Fake VPN connection issue after password change",
     rawText:
-      "User reports that VPN cannot connect after a recent password reset. The VPN client keeps looping at the MFA prompt. Internet works without VPN, but remote access is unavailable."
+      "QA TEST ONLY — Fake sanitized chat intake. A fake requester reports VPN connection issues after a password change. No customer impact, no real user data, and no production action. Use this only to validate manual field mapping, Work Notes preparation, and Excel dry-run reporting."
   },
   {
-    id: "windows-issue",
-    label: "Windows endpoint demo issue",
-    title: "Windows laptop slow after update",
+    id: "shared-mailbox-evidence",
+    label: "Shared mailbox with fake attachment evidence",
+    title: "QA TEST ONLY - Fake shared mailbox item with attachment evidence",
     rawText:
-      "User reports that a Windows laptop became very slow after the latest update. Reboot was attempted once, but startup and application launch remain slow."
+      "QA TEST ONLY — Fake shared mailbox intake. A fake message mentions a screenshot-style attachment showing an access error, but no file is uploaded, parsed, OCRed, or sent to external AI. Evidence review should stay local and needs manual check."
+  },
+  {
+    id: "phone-confirmation",
+    label: "Phone call intake with confirmation state",
+    title: "QA TEST ONLY - Fake phone intake requiring confirmation",
+    rawText:
+      "QA TEST ONLY — Fake phone intake. A fake caller reports intermittent application access after a password change. The agent must confirm requester, location, impact, urgency, and whether the issue is still reproducible before any manual QA fill."
+  },
+  {
+    id: "self-service-normalization",
+    label: "Self-service ticket requiring Service Desk normalization",
+    title: "QA TEST ONLY - Fake self-service ticket requiring normalization",
+    rawText:
+      "QA TEST ONLY — Fake self-service submission. A fake portal item says a Windows endpoint is slow after update and needs Service Desk normalization into category, subcategory, impact, urgency, assignment group, and Work Notes."
+  },
+  {
+    id: "remote-support-teams",
+    label: "Remote support / Teams troubleshooting checklist",
+    title: "QA TEST ONLY - Fake remote support checklist",
+    rawText:
+      "QA TEST ONLY — Fake remote support scenario. A fake Teams troubleshooting session records deterministic checks for network status, VPN client restart, MFA prompt behavior, and next routing decision. No remote desktop, screen capture, or real Teams data is connected."
   },
   {
     id: "account-login-issue",
