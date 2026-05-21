@@ -62,8 +62,13 @@ export type QaSingleTicketSmokeAuditPreview = {
 
 export type QaSingleTicketSmokePlanStatus = "blocked" | "ready-for-manual-fill";
 
+export type QaManualFillWriteAction = Extract<
+  RealActionType,
+  "save_incident" | "submit_incident" | "update_incident" | "close_incident"
+>;
+
 export type QaWriteActionApprovalPhrase = {
-  action: Extract<RealActionType, "save_incident" | "submit_incident" | "update_incident" | "close_incident">;
+  action: QaManualFillWriteAction;
   label: "Save" | "Submit" | "Update" | "Close";
   phrase: string;
 };
@@ -71,6 +76,7 @@ export type QaWriteActionApprovalPhrase = {
 export type QaSingleTicketSmokePlan = {
   status: QaSingleTicketSmokePlanStatus;
   mode: RealActionMode;
+  requestedWriteAction: QaManualFillWriteAction;
   targetHost?: string;
   requiredApprovalPhrase: string;
   writeActionApprovalPhrases: QaWriteActionApprovalPhrase[];
@@ -88,6 +94,7 @@ export type QaSingleTicketSmokePlanRequest = {
   targetUrl?: string;
   targetValidation?: RealActionTargetValidation;
   mappingOptions: IncidentFieldMappingPreviewOptions;
+  writeAction?: QaManualFillWriteAction;
   approvalPhrase?: string;
   language?: string;
   templatePreset?: string;
@@ -126,21 +133,22 @@ export function buildIncidentFieldMappingPreview(
 export function evaluateQaSingleTicketSmokePlan(
   request: QaSingleTicketSmokePlanRequest
 ): QaSingleTicketSmokePlan {
-  const requiredApprovalPhrase = getRequiredRealActionApprovalPhrase(request.environment.mode, "submit_incident");
+  const requestedWriteAction = request.writeAction ?? "submit_incident";
+  const requiredApprovalPhrase = getRequiredRealActionApprovalPhrase(request.environment.mode, requestedWriteAction);
   const mappingPreview = buildIncidentFieldMappingPreview(request.draft, request.mappingOptions);
   const targetHost = validatedTargetHost(request.targetValidation);
   const approval = request.approvalPhrase
     ? {
         operator: "Alan",
         mode: request.environment.mode,
-        action: "submit_incident" as const,
+        action: requestedWriteAction,
         targetHost: targetHost ?? "",
         phrase: request.approvalPhrase
       }
     : undefined;
   const gateDecision = authorizeRealAction({
     environment: request.environment,
-    action: "submit_incident",
+    action: requestedWriteAction,
     targetUrl: request.targetUrl ?? "",
     targetValidation: request.targetValidation,
     approval
@@ -152,6 +160,7 @@ export function evaluateQaSingleTicketSmokePlan(
   return {
     status,
     mode: request.environment.mode,
+    requestedWriteAction,
     targetHost,
     requiredApprovalPhrase,
     writeActionApprovalPhrases: buildWriteActionApprovalPhrases(request.environment.mode),

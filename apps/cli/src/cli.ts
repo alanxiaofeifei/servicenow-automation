@@ -21,6 +21,7 @@ import {
   type CapturedContext,
   type FieldDraft,
   type KnowledgeMatch,
+  type QaManualFillWriteAction,
   type QaSingleTicketSmokePlan,
   type RawIntakeSource,
   type TicketDraft
@@ -282,6 +283,7 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
 
     if (namespace === "qa" && action === "manual-fill") {
       const mode = parseEnvironmentMode(requiredFlag(parsed, "mode", "qa manual-fill"));
+      const writeAction = parseQaManualFillWriteAction(parsed.flags["write-action"] ?? "submit_incident");
       const template = requiredFlag(parsed, "template", "qa manual-fill");
       const user = requiredFlag(parsed, "user", "qa manual-fill");
       const summary = requiredFlag(parsed, "summary", "qa manual-fill");
@@ -299,6 +301,7 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
           contactType: "Self-service / manual paste",
           location: "Demo location / sanitized"
         },
+        writeAction,
         approvalPhrase: parsed.flags["approval-phrase"],
         language: parsed.flags.language ?? "en-US",
         templatePreset: parsed.flags["template-preset"] ?? "standard-service-desk",
@@ -459,6 +462,14 @@ function parseEnvironmentMode(value: string): ServiceNowEnvironmentMode {
     return value as ServiceNowEnvironmentMode;
   }
   throw new Error(`Unknown ServiceNow environment mode: ${value}`);
+}
+
+function parseQaManualFillWriteAction(value: string): QaManualFillWriteAction {
+  const allowedActions: QaManualFillWriteAction[] = ["save_incident", "submit_incident", "update_incident", "close_incident"];
+  if (allowedActions.includes(value as QaManualFillWriteAction)) {
+    return value as QaManualFillWriteAction;
+  }
+  throw new Error("Unsupported QA manual-fill write action. Allowed values: save_incident, submit_incident, update_incident, close_incident.");
 }
 
 function parseRawIntakeSource(value: string): RawIntakeSource {
@@ -648,6 +659,7 @@ function sanitizeQaManualFillPlan(plan: QaSingleTicketSmokePlan) {
       "Stop if browser DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated close/update appears."
     ],
     manualFillGate: {
+      requestedWriteAction: plan.requestedWriteAction,
       writeActionsEnabled: false,
       serviceNowWriteApproved: false,
       sourceGateReason: "manual-fill-gate-redacted"
@@ -729,7 +741,7 @@ Commands:
   sda browser reset --mode <mock|qa|dev|production-shadow> [--json]
   sda workflow preview --template <template> --user <sanitized_user> --summary <sanitized_summary> --source <source> --dry-run [--json]
   sda qa smoke --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> [--target-url <url>] [--approval-phrase <phrase>] [--language <lang>] [--template-preset <preset>] [--json]
-  sda qa manual-fill --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> [--target-url <url>] [--approval-phrase <phrase>] [--browser-executable <path>] [--execute --confirm-no-write-launch] [--json]
+  sda qa manual-fill --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> [--write-action <save_incident|submit_incident|update_incident|close_incident>] [--target-url <url>] [--approval-phrase <phrase>] [--browser-executable <path>] [--execute --confirm-no-write-launch] [--json]
   sda run --workflow <workflow_name> --input <json_file> --dry-run [--json]
 
 Safety:
