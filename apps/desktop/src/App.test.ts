@@ -147,6 +147,19 @@ describe("App", () => {
     expect(settingsMarkup).toContain("工作备注模板");
     expect(settingsMarkup).toContain("受理摘要");
     expect(settingsMarkup).toContain("内部排查备注");
+    expect(settingsMarkup).toContain("⚙ 可选字段检查清单 / 团队规则");
+    expect(settingsMarkup).toContain('aria-label="字段审核进度"');
+    expect(settingsMarkup).toContain("已本地审核");
+    expect(settingsMarkup).toContain("ServiceNow 会在提交时强制检查带星号的必填字段");
+    expect(settingsMarkup).toContain("请求者、类别、地点、渠道、影响、紧急度、分配组、短描述");
+    expect(settingsMarkup).toContain("来源渠道已审核");
+    expect(settingsMarkup).toContain("真实 ServiceNow 字段填充、Save、Submit、Update、Close");
+    expect(settingsMarkup).not.toContain("Optional field checklist / Team rules");
+    expect(settingsMarkup).not.toContain("reviewed locally");
+    expect(settingsMarkup).not.toContain("Subcategory selected if needed");
+    expect(settingsMarkup).not.toContain("Configuration item / affected service checked");
+    expect(settingsMarkup).not.toContain("Priority reviewed as derived value");
+    expect(settingsMarkup).not.toContain("Human confirmation before any mock fill/copy");
 
     expect(output).toContain("Mock 演示");
     expect(output).toContain("QA 测试环境");

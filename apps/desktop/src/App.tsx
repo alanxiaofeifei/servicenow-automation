@@ -74,8 +74,26 @@ type DemoQueueDefinition = {
   content: Record<LanguageCode, DemoQueueContent>;
 };
 
+type FieldReviewChecklistItemId =
+  | "source-channel-reviewed"
+  | "requester-identified"
+  | "location-checked"
+  | "channel-selected"
+  | "short-description-reviewed"
+  | "description-reviewed"
+  | "category-selected"
+  | "subcategory-selected-if-needed"
+  | "ci-affected-service-checked"
+  | "impact-checked"
+  | "urgency-checked"
+  | "priority-reviewed-derived"
+  | "assignment-group-reviewed"
+  | "work-notes-prepared"
+  | "comments-separated"
+  | "human-confirmation-before-mock-fill";
+
 type FieldReviewChecklistItem = {
-  id: string;
+  id: FieldReviewChecklistItemId;
   label: string;
 };
 
@@ -144,6 +162,18 @@ type UiTranslations = {
   copyTitle: string;
   checklistEyebrow: string;
   checklistTitle: string;
+  checklistSummaryLabel: string;
+  checklistProgressAria: string;
+  checklistReviewedLocally: string;
+  checklistIntroRequired: string;
+  checklistIntroQuality: string;
+  checklistReferenceAria: string;
+  checklistRequiredReferenceLabel: string;
+  checklistRequiredReferenceFields: string;
+  checklistSupportingFieldsLabel: string;
+  checklistSupportingFields: string;
+  checklistSafetyCopy: string;
+  checklistItemLabels: Record<FieldReviewChecklistItemId, string>;
   mockEyebrow: string;
   mockTitle: string;
   mockSubtitle: string;
@@ -160,6 +190,150 @@ export const languageOptions: { code: LanguageCode; label: string }[] = [
   { code: "zh-TW", label: "繁中（台灣）" },
   { code: "es-ES", label: "Español" }
 ];
+
+const englishFieldReviewChecklistTranslations = {
+  checklistSummaryLabel: "⚙ Optional field checklist / Team rules",
+  checklistProgressAria: "Field review progress",
+  checklistReviewedLocally: "reviewed locally",
+  checklistIntroRequired:
+    "ServiceNow already enforces starred required fields at submit time. This local checklist is optional and customizable for team process, field order, and draft quality before any mock fill/copy.",
+  checklistIntroQuality:
+    "Ticket quality depends on field order and dependencies, not text generation alone. Review requester, location, channel, category, affected service, impact, urgency, priority, assignment, comments, and work notes before any mock fill/copy.",
+  checklistReferenceAria: "Sanitized ServiceNow create form reference",
+  checklistRequiredReferenceLabel: "Required/starred reference",
+  checklistRequiredReferenceFields: "Requester, Category, Location, Channel, Impact, Urgency, Assignment group, Short description",
+  checklistSupportingFieldsLabel: "Supporting fields",
+  checklistSupportingFields:
+    "Description, Subcategory, Configuration item, Business service, Service offering, Priority, Assigned to, Additional comments, Work notes, Related Search / Knowledge & Catalog",
+  checklistSafetyCopy:
+    "Demo checklist only. Local state only. No real ServiceNow field fill, Save, Submit, Update, Close, API call, browser automation, DOM inspection, screenshots, HAR, traces, sessions, or storage export.",
+  checklistItemLabels: {
+    "source-channel-reviewed": "Source channel reviewed",
+    "requester-identified": "Requester identified",
+    "location-checked": "Location checked",
+    "channel-selected": "Channel selected",
+    "short-description-reviewed": "Short description generated/reviewed",
+    "description-reviewed": "Description generated/reviewed",
+    "category-selected": "Category selected",
+    "subcategory-selected-if-needed": "Subcategory selected if needed",
+    "ci-affected-service-checked": "Configuration item / affected service checked",
+    "impact-checked": "Impact checked",
+    "urgency-checked": "Urgency checked",
+    "priority-reviewed-derived": "Priority reviewed as derived value",
+    "assignment-group-reviewed": "Assignment group suggested/reviewed",
+    "work-notes-prepared": "Work notes prepared",
+    "comments-separated": "Customer-visible comments separated from internal Work Notes",
+    "human-confirmation-before-mock-fill": "Human confirmation before any mock fill/copy"
+  }
+};
+
+const zhCnFieldReviewChecklistTranslations = {
+  checklistSummaryLabel: "⚙ 可选字段检查清单 / 团队规则",
+  checklistProgressAria: "字段审核进度",
+  checklistReviewedLocally: "已本地审核",
+  checklistIntroRequired:
+    "ServiceNow 会在提交时强制检查带星号的必填字段。这个本地清单是可选项，可按团队流程、字段顺序和草稿质量要求自定义，并用于任何 mock 填充/复制前的检查。",
+  checklistIntroQuality:
+    "工单质量不仅取决于文本生成，还取决于字段顺序和依赖关系。在任何 mock 填充/复制前，请审核请求者、地点、渠道、类别、受影响服务、影响、紧急度、优先级、分配、评论和工作备注。",
+  checklistReferenceAria: "脱敏的 ServiceNow 新建表单参考",
+  checklistRequiredReferenceLabel: "必填/星号字段参考",
+  checklistRequiredReferenceFields: "请求者、类别、地点、渠道、影响、紧急度、分配组、短描述",
+  checklistSupportingFieldsLabel: "辅助字段",
+  checklistSupportingFields:
+    "描述、子类别、配置项、业务服务、服务项、优先级、指派给、附加评论、工作备注、相关搜索 / 知识库与目录",
+  checklistSafetyCopy:
+    "仅演示检查清单。仅本地状态。不会执行真实 ServiceNow 字段填充、Save、Submit、Update、Close、API 调用、浏览器自动化、DOM 检查、截图、HAR、trace、session 或 storage 导出。",
+  checklistItemLabels: {
+    "source-channel-reviewed": "来源渠道已审核",
+    "requester-identified": "请求者已识别",
+    "location-checked": "地点已检查",
+    "channel-selected": "渠道已选择",
+    "short-description-reviewed": "短描述已生成/审核",
+    "description-reviewed": "描述已生成/审核",
+    "category-selected": "类别已选择",
+    "subcategory-selected-if-needed": "需要时已选择子类别",
+    "ci-affected-service-checked": "配置项 / 受影响服务已检查",
+    "impact-checked": "影响已检查",
+    "urgency-checked": "紧急度已检查",
+    "priority-reviewed-derived": "优先级作为派生值已审核",
+    "assignment-group-reviewed": "分配组建议已审核",
+    "work-notes-prepared": "工作备注已准备",
+    "comments-separated": "面向客户的评论已与内部工作备注分开",
+    "human-confirmation-before-mock-fill": "任何 mock 填充/复制前已获得人工确认"
+  }
+};
+
+const zhTwFieldReviewChecklistTranslations = {
+  checklistSummaryLabel: "⚙ 可選欄位檢查清單 / 團隊規則",
+  checklistProgressAria: "欄位審核進度",
+  checklistReviewedLocally: "已本地審核",
+  checklistIntroRequired:
+    "ServiceNow 會在提交時強制檢查帶星號的必填欄位。此本地清單是可選項，可依團隊流程、欄位順序與草稿品質要求自訂，並用於任何 mock 填入/複製前的檢查。",
+  checklistIntroQuality:
+    "工單品質不只取決於文字產生，也取決於欄位順序與相依關係。在任何 mock 填入/複製前，請審核請求者、地點、管道、類別、受影響服務、影響、緊急度、優先順序、指派、留言與工作備註。",
+  checklistReferenceAria: "去識別化的 ServiceNow 新增表單參考",
+  checklistRequiredReferenceLabel: "必填/星號欄位參考",
+  checklistRequiredReferenceFields: "請求者、類別、地點、管道、影響、緊急度、指派群組、短描述",
+  checklistSupportingFieldsLabel: "輔助欄位",
+  checklistSupportingFields:
+    "描述、子類別、設定項目、業務服務、服務項目、優先順序、指派給、附加留言、工作備註、相關搜尋 / 知識庫與目錄",
+  checklistSafetyCopy:
+    "僅示範檢查清單。僅本地狀態。不會執行真實 ServiceNow 欄位填入、Save、Submit、Update、Close、API 呼叫、瀏覽器自動化、DOM 檢查、截圖、HAR、trace、session 或 storage 匯出。",
+  checklistItemLabels: {
+    "source-channel-reviewed": "來源管道已審核",
+    "requester-identified": "請求者已識別",
+    "location-checked": "地點已檢查",
+    "channel-selected": "管道已選擇",
+    "short-description-reviewed": "短描述已產生/審核",
+    "description-reviewed": "描述已產生/審核",
+    "category-selected": "類別已選擇",
+    "subcategory-selected-if-needed": "需要時已選擇子類別",
+    "ci-affected-service-checked": "設定項目 / 受影響服務已檢查",
+    "impact-checked": "影響已檢查",
+    "urgency-checked": "緊急度已檢查",
+    "priority-reviewed-derived": "優先順序作為衍生值已審核",
+    "assignment-group-reviewed": "指派群組建議已審核",
+    "work-notes-prepared": "工作備註已準備",
+    "comments-separated": "面向客戶的留言已與內部工作備註分開",
+    "human-confirmation-before-mock-fill": "任何 mock 填入/複製前已獲得人工確認"
+  }
+};
+
+const esFieldReviewChecklistTranslations = {
+  checklistSummaryLabel: "⚙ Lista opcional de campos / reglas del equipo",
+  checklistProgressAria: "Progreso de revisión de campos",
+  checklistReviewedLocally: "revisados localmente",
+  checklistIntroRequired:
+    "ServiceNow ya valida los campos obligatorios con asterisco al enviar. Esta lista local es opcional y personalizable para el proceso del equipo, el orden de campos y la calidad del borrador antes de cualquier relleno/copia mock.",
+  checklistIntroQuality:
+    "La calidad del ticket depende del orden y las dependencias de campos, no solo de la generación de texto. Revisa solicitante, ubicación, canal, categoría, servicio afectado, impacto, urgencia, prioridad, asignación, comentarios y notas de trabajo antes de cualquier relleno/copia mock.",
+  checklistReferenceAria: "Referencia sanitizada del formulario de creación de ServiceNow",
+  checklistRequiredReferenceLabel: "Referencia obligatoria/con asterisco",
+  checklistRequiredReferenceFields: "Solicitante, Categoría, Ubicación, Canal, Impacto, Urgencia, Grupo de asignación, Descripción breve",
+  checklistSupportingFieldsLabel: "Campos de apoyo",
+  checklistSupportingFields:
+    "Descripción, Subcategoría, Elemento de configuración, Servicio de negocio, Oferta de servicio, Prioridad, Asignado a, Comentarios adicionales, Notas de trabajo, Búsqueda relacionada / Conocimiento y catálogo",
+  checklistSafetyCopy:
+    "Lista demo solamente. Estado local solamente. Sin relleno real de campos ServiceNow, Save, Submit, Update, Close, llamada API, automatización de navegador, inspección DOM, capturas, HAR, trazas, sesiones ni exportación de almacenamiento.",
+  checklistItemLabels: {
+    "source-channel-reviewed": "Canal de origen revisado",
+    "requester-identified": "Solicitante identificado",
+    "location-checked": "Ubicación revisada",
+    "channel-selected": "Canal seleccionado",
+    "short-description-reviewed": "Descripción breve generada/revisada",
+    "description-reviewed": "Descripción generada/revisada",
+    "category-selected": "Categoría seleccionada",
+    "subcategory-selected-if-needed": "Subcategoría seleccionada si hace falta",
+    "ci-affected-service-checked": "Elemento de configuración / servicio afectado revisado",
+    "impact-checked": "Impacto revisado",
+    "urgency-checked": "Urgencia revisada",
+    "priority-reviewed-derived": "Prioridad revisada como valor derivado",
+    "assignment-group-reviewed": "Grupo de asignación sugerido/revisado",
+    "work-notes-prepared": "Notas de trabajo preparadas",
+    "comments-separated": "Comentarios visibles al cliente separados de Work Notes internas",
+    "human-confirmation-before-mock-fill": "Confirmación humana antes de cualquier relleno/copia mock"
+  }
+};
 
 const uiTranslations: Record<LanguageCode, UiTranslations> = {
   "zh-CN": {
@@ -208,6 +382,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     copyTitle: "安全草稿操作",
     checklistEyebrow: "传统字段审核",
     checklistTitle: "Incident 字段依赖检查清单",
+    ...zhCnFieldReviewChecklistTranslations,
     mockEyebrow: "Incident · QA/Dev 预演",
     mockTitle: "Mock ServiceNow Incident 预览",
     mockSubtitle: "该面板展示可编辑草稿如何映射到接近 ServiceNow 的 Incident 新建表单，仅用于演示。",
@@ -264,6 +439,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     copyTitle: "Safe draft actions",
     checklistEyebrow: "Legacy-inspired field review",
     checklistTitle: "Incident field dependency checklist",
+    ...englishFieldReviewChecklistTranslations,
     mockEyebrow: "Incident · QA/Dev rehearsal",
     mockTitle: "Mock ServiceNow Incident Preview",
     mockSubtitle:
@@ -320,6 +496,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     copyTitle: "安全草稿操作",
     checklistEyebrow: "傳統欄位審核",
     checklistTitle: "Incident 欄位相依檢查清單",
+    ...zhTwFieldReviewChecklistTranslations,
     mockEyebrow: "Incident · QA/Dev 預演",
     mockTitle: "Mock ServiceNow Incident 預覽",
     mockSubtitle: "此面板展示可編輯草稿如何對應到近似 ServiceNow 的 Incident 新增表單，僅供示範。",
@@ -376,6 +553,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     copyTitle: "Acciones seguras del borrador",
     checklistEyebrow: "Revisión de campos heredada",
     checklistTitle: "Lista de dependencias de campos de Incident",
+    ...esFieldReviewChecklistTranslations,
     mockEyebrow: "Incident · Ensayo QA/Dev",
     mockTitle: "Vista previa mock de ServiceNow Incident",
     mockSubtitle:
@@ -2935,14 +3113,14 @@ function FieldReviewChecklist({
       <summary>
         <div className="field-review-summary-title">
           <span className="eyebrow">{t.checklistEyebrow}</span>
-          <strong id="field-review-title">⚙ Optional field checklist / Team rules</strong>
+          <strong id="field-review-title">{t.checklistSummaryLabel}</strong>
           <span>{t.checklistTitle}</span>
         </div>
-        <div className="field-review-progress" aria-label="Field review progress">
+        <div className="field-review-progress" aria-label={t.checklistProgressAria}>
           <strong>
             {checkedItemIds.length}/{items.length}
           </strong>
-          <span>reviewed locally</span>
+          <span>{t.checklistReviewedLocally}</span>
         </div>
         <span aria-hidden="true" className="details-indicator">
           ▾
@@ -2950,27 +3128,17 @@ function FieldReviewChecklist({
       </summary>
 
       <div className="field-review-body" aria-labelledby="field-review-title">
-        <p className="field-review-intro">
-          ServiceNow already enforces starred required fields at submit time. This local checklist is optional and
-          customizable for team process, field order, and draft quality before any mock fill/copy.
-        </p>
-        <p className="field-review-intro">
-          Ticket quality depends on field order and dependencies, not text generation alone. Review requester,
-          location, channel, category, affected service, impact, urgency, priority, assignment, comments, and work
-          notes before any mock fill/copy.
-        </p>
+        <p className="field-review-intro">{t.checklistIntroRequired}</p>
+        <p className="field-review-intro">{t.checklistIntroQuality}</p>
 
-        <div className="field-reference-strip" aria-label="Sanitized ServiceNow create form reference">
+        <div className="field-reference-strip" aria-label={t.checklistReferenceAria}>
           <div>
-            <span>Required/starred reference</span>
-            <p>Requester, Category, Location, Channel, Impact, Urgency, Assignment group, Short description</p>
+            <span>{t.checklistRequiredReferenceLabel}</span>
+            <p>{t.checklistRequiredReferenceFields}</p>
           </div>
           <div>
-            <span>Supporting fields</span>
-            <p>
-              Description, Subcategory, Configuration item, Business service, Service offering, Priority, Assigned to,
-              Additional comments, Work notes, Related Search / Knowledge & Catalog
-            </p>
+            <span>{t.checklistSupportingFieldsLabel}</span>
+            <p>{t.checklistSupportingFields}</p>
           </div>
         </div>
 
@@ -2984,16 +3152,13 @@ function FieldReviewChecklist({
                   type="checkbox"
                   onChange={() => onToggleItem(item.id)}
                 />
-                <span>{item.label}</span>
+                <span>{t.checklistItemLabels[item.id] ?? item.label}</span>
               </label>
             </li>
           ))}
         </ol>
 
-        <p className="field-review-safety">
-          Demo checklist only. Local state only. No real ServiceNow field fill, Save, Submit, Update, Close, API call,
-          browser automation, DOM inspection, screenshots, HAR, traces, sessions, or storage export.
-        </p>
+        <p className="field-review-safety">{t.checklistSafetyCopy}</p>
       </div>
     </details>
   );
