@@ -153,6 +153,85 @@ describe("sda CLI", () => {
     expect(serialized).not.toContain(sensitiveTokenName);
   });
 
+  it("prepares a Save-only QA manual-fill gate without enabling ServiceNow writes", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-qa-manual-fill-save-only-"));
+    const qaIsolationConfirmation = "QA isolation confirmed: this ticket will not notify production users, customers, or a real support team.";
+
+    const result = await runCli([
+      "qa",
+      "manual-fill",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--write-action",
+      "save_incident",
+      "--approval-phrase",
+      "I APPROVE QA SAVE ONLY",
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--json"
+    ], { cwd: projectRoot });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.command).toBe("qa manual-fill");
+    expect(payload.manualFill.status).toBe("ready-for-manual-fill");
+    expect(payload.plan.status).toBe("ready-for-manual-fill");
+    expect(payload.plan.requestedWriteAction).toBe("save_incident");
+    expect(payload.plan.manualFillGate).toMatchObject({
+      requestedWriteAction: "save_incident",
+      writeActionsEnabled: false,
+      serviceNowWriteApproved: false,
+      sourceGateReason: "manual-fill-gate-redacted"
+    });
+    expect(payload.browserLaunch.status).toBe("dry-run");
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(payload.safety.browserAutomationCalled).toBe(false);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+    expect(payload.plan.requiredApprovalPhrase).toBeUndefined();
+    expect(payload.plan.writeActionApprovalPhrases).toBeUndefined();
+    expect(serialized).not.toContain("I APPROVE QA SAVE ONLY");
+    expect(serialized).not.toContain("approved-for-qa-dev-write");
+  });
+
+  it("does not echo invalid QA manual-fill write-action values", async () => {
+    const sensitiveApprovalPhrase = "I APPROVE QA SAVE ONLY";
+    const sensitiveTarget = "https" + "://" + "qa-example." + "service" + "-now.com/nav_to.do?sys" + "_id=123";
+
+    for (const invalidWriteAction of [sensitiveApprovalPhrase, sensitiveTarget]) {
+      const result = await runCli([
+        "qa",
+        "manual-fill",
+        "--mode",
+        "qa",
+        "--template",
+        "vpn_issue",
+        "--user",
+        "Demo requester A",
+        "--summary",
+        "Fake Chat intake — VPN connection issue after password or MFA change",
+        "--write-action",
+        invalidWriteAction,
+        "--json"
+      ]);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Unsupported QA manual-fill write action. Allowed values:");
+      expect(result.stderr).not.toContain(invalidWriteAction);
+      expect(result.stderr).not.toContain(sensitiveApprovalPhrase);
+      expect(result.stderr).not.toContain(sensitiveTarget);
+      expect(result.stderr).not.toContain("https" + "://");
+      expect(result.stderr).not.toContain("service" + "-now.com");
+      expect(result.stderr).not.toContain("sys" + "_id");
+    }
+  });
+
   it("blocks QA manual-fill browser preparation until the QA isolation sentence is present", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-qa-manual-fill-blocked-"));
 
