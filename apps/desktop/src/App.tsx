@@ -35,7 +35,12 @@ type DisplayTheme = "warm" | "cool" | "night";
 
 type TextFieldDisplayMode = "auto-fit" | "compact-resize";
 
-type SourceChannel = "Teams message" | "Self-service ticket" | "ServiceNow Chat transcript" | "Shared mailbox item";
+type SourceChannel =
+  | "Teams message"
+  | "Self-service ticket"
+  | "ServiceNow Chat transcript"
+  | "Shared mailbox item"
+  | "Phone call";
 
 type DemoQueueItem = {
   id: string;
@@ -508,7 +513,7 @@ const defaultDraftTemplatePreset = draftTemplatePresets[0];
 
 const unsupportedFallbackMode = "Unsupported-language fallback: source language + English bilingual draft";
 
-const demoQueueDefinitions: DemoQueueDefinition[] = [
+const baseDemoQueueDefinitions: DemoQueueDefinition[] = [
   {
     id: "demo-teams-vpn",
     scenarioId: "vpn-issue",
@@ -557,7 +562,7 @@ const demoQueueDefinitions: DemoQueueDefinition[] = [
   },
   {
     id: "demo-self-service-windows",
-    scenarioId: "windows-issue",
+    scenarioId: "self-service-normalization",
     receivedAt: "2026-05-18 08:40",
     sourceChannel: "Self-service ticket",
     content: {
@@ -649,7 +654,7 @@ const demoQueueDefinitions: DemoQueueDefinition[] = [
   },
   {
     id: "demo-shared-mailbox-vpn",
-    scenarioId: "vpn-issue",
+    scenarioId: "shared-mailbox-evidence",
     receivedAt: "2026-05-18 09:30",
     sourceChannel: "Shared mailbox item",
     content: {
@@ -694,6 +699,97 @@ const demoQueueDefinitions: DemoQueueDefinition[] = [
     }
   }
 ];
+
+const demoQueueDefinitions: DemoQueueDefinition[] = [
+  ...baseDemoQueueDefinitions,
+  ...demoManualPasteScenarios
+    .filter((scenario) => !baseDemoQueueDefinitions.some((definition) => definition.scenarioId === scenario.id))
+    .map(buildQueueDefinitionFromManualScenario)
+];
+
+function buildQueueDefinitionFromManualScenario(scenario: ManualPasteScenario): DemoQueueDefinition {
+  const sourceChannel = sourceChannelForScenario(scenario.id);
+  return {
+    id: `demo-${scenario.id}`,
+    scenarioId: scenario.id,
+    receivedAt: receivedAtForScenario(scenario.id),
+    sourceChannel,
+    content: {
+      "en-US": buildManualScenarioContent(scenario, {
+        requesterLabel: "Demo requester E",
+        sourceLanguage: "English fake manual-paste source",
+        draftLanguageMode: "Manual-paste QA scenario drives Description / Work Notes"
+      }),
+      "zh-CN": buildManualScenarioContent(scenario, {
+        requesterLabel: "演示请求者 E",
+        sourceLanguage: "英文假手动粘贴来源",
+        draftLanguageMode: "手动粘贴 QA 场景驱动 Description / Work Notes"
+      }),
+      "zh-TW": buildManualScenarioContent(scenario, {
+        requesterLabel: "示範請求者 E",
+        sourceLanguage: "英文假手動貼上來源",
+        draftLanguageMode: "手動貼上 QA 場景驅動 Description / Work Notes"
+      }),
+      "es-ES": buildManualScenarioContent(scenario, {
+        requesterLabel: "Solicitante demo E",
+        sourceLanguage: "Origen demo en ingles por pegado manual",
+        draftLanguageMode: "El escenario QA de pegado manual guia Description / Work Notes"
+      })
+    }
+  };
+}
+
+function buildManualScenarioContent(
+  scenario: ManualPasteScenario,
+  options: Pick<DemoQueueContent, "requesterLabel" | "sourceLanguage" | "draftLanguageMode">
+): DemoQueueContent {
+  return {
+    ...options,
+    subject: scenario.title ?? scenario.label,
+    bodyPreview: scenario.rawText,
+    sourceBody: [
+      `${scenario.title ?? scenario.label}`,
+      "",
+      scenario.rawText,
+      "",
+      "This is generated from local fake manual-paste scenario metadata only. No live ServiceNow, Teams, mailbox, phone system, remote support tool, browser session, file, or external AI connection is used."
+    ].join("\n")
+  };
+}
+
+function sourceChannelForScenario(id: ManualPasteScenario["id"]): SourceChannel {
+  switch (id) {
+    case "phone-confirmation":
+      return "Phone call";
+    case "remote-support-teams":
+      return "Teams message";
+    case "shared-mailbox-evidence":
+      return "Shared mailbox item";
+    case "self-service-normalization":
+      return "Self-service ticket";
+    case "account-login-issue":
+      return "ServiceNow Chat transcript";
+    case "vpn-issue":
+      return "Teams message";
+  }
+}
+
+function receivedAtForScenario(id: ManualPasteScenario["id"]): string {
+  switch (id) {
+    case "phone-confirmation":
+      return "2026-05-18 09:45";
+    case "remote-support-teams":
+      return "2026-05-18 10:00";
+    case "shared-mailbox-evidence":
+      return "2026-05-18 09:30";
+    case "self-service-normalization":
+      return "2026-05-18 08:40";
+    case "account-login-issue":
+      return "2026-05-18 09:05";
+    case "vpn-issue":
+      return "2026-05-18 08:15";
+  }
+}
 
 export function buildDemoQueueItems(
   language: LanguageCode,
@@ -781,7 +877,17 @@ export function App() {
     confirmationState: {
       status: "Needs confirmation",
       summary: "Confirm requester, impact, urgency, and missing troubleshooting details before any real handling."
-    }
+    },
+    fakeScenarioId: selectedQueueItem.scenarioId,
+    requiredFieldCheck:
+      "Complete for manual fill: requester, channel, category, subcategory, location, impact, urgency, assignment group, short description, description, work notes.",
+    approvalPhraseGate:
+      "Separate exact approval phrase required before each real Save/Submit/Update/Close action.",
+    stopRuleCheck:
+      "Stop if production mode, real user data, notification risk, missing QA isolation, unexpected ServiceNow workflow, DOM autofill, API use, or bulk path appears.",
+    qaIsolationCheck: "Pending explicit confirmation that QA will not notify production/support teams.",
+    qaDryRunOutcome: "Blocked until QA isolation is confirmed; field-trial prep only.",
+    qaTrialResult: "Not run - field-trial prep only."
   });
   const qaSmokeTargetUrl = selectedEnvironment.url;
   const qaSmokeTargetValidation = validateServiceNowTargetUrl(selectedEnvironment, qaSmokeTargetUrl);
@@ -1793,6 +1899,8 @@ function sourceTypeForQueueItem(item: DemoQueueItem): SourceType {
       return "servicenow_chat";
     case "Shared mailbox item":
       return "outlook_web";
+    case "Phone call":
+      return "manual_paste";
   }
 }
 
@@ -2536,6 +2644,30 @@ function ControlledQaSingleTicketSmokePanel({
         />
       </label>
 
+      <section className="qa-smoke-approval-matrix" aria-labelledby="qa-approval-phrases-title">
+        <h3 id="qa-approval-phrases-title">Action-specific approval phrases</h3>
+        <p>Each real write action needs its own exact Alan phrase. One approval never covers another action.</p>
+        <dl>
+          {plan.writeActionApprovalPhrases.map((item) => (
+            <div key={item.action}>
+              <dt>{item.label}</dt>
+              <dd>
+                <code>{item.phrase}</code>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <section className="qa-smoke-stop-rules" aria-labelledby="qa-stop-rules-title">
+        <h3 id="qa-stop-rules-title">Stop rules</h3>
+        <ul>
+          {plan.stopRules.map((rule) => (
+            <li key={rule}>{rule}</li>
+          ))}
+        </ul>
+      </section>
+
       <ul className="qa-smoke-rules">
         <li>Mock/prod shadow blocked.</li>
         <li>QA/dev missing phrase blocked.</li>
@@ -2627,9 +2759,15 @@ function statusClassName(status: DemoQueueStatus): string {
 function buttonLabelForScenario(id: ManualPasteScenario["id"]): string {
   switch (id) {
     case "vpn-issue":
-      return "Load VPN Demo";
-    case "windows-issue":
-      return "Load Windows Demo";
+      return "Load VPN QA Scenario";
+    case "shared-mailbox-evidence":
+      return "Load Evidence Demo";
+    case "phone-confirmation":
+      return "Load Phone Demo";
+    case "self-service-normalization":
+      return "Load Self-service Demo";
+    case "remote-support-teams":
+      return "Load Remote Support Demo";
     case "account-login-issue":
       return "Load Account/Login Demo";
   }

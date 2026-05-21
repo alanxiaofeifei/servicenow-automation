@@ -160,6 +160,16 @@ describe("QA single-ticket smoke preview", () => {
     expect(plan.status).toBe("ready-for-manual-fill");
     expect(plan.targetHost).toBe("qa-example.service-now.com");
     expect(plan.gateDecision.allowed).toBe(true);
+    expect(plan.writeActionApprovalPhrases).toEqual([
+      { action: "save_incident", label: "Save", phrase: "I APPROVE QA SAVE ONLY" },
+      { action: "submit_incident", label: "Submit", phrase: "I APPROVE QA SUBMIT ONLY" },
+      { action: "update_incident", label: "Update", phrase: "I APPROVE QA UPDATE ONLY" },
+      { action: "close_incident", label: "Close", phrase: "I APPROVE QA CLOSE ONLY" }
+    ]);
+    expect(plan.stopRules).toContain(
+      "Stop before every Save/Submit/Update/Close unless Alan gives the exact action-specific approval phrase."
+    );
+    expect(plan.stopRules).toContain("Stop if the QA ticket could notify production users or a real support team.");
     expect(plan.missingRequiredFields).toEqual([]);
     expect(plan.safety).toMatchObject({
       manualFillOnly: true,
