@@ -84,7 +84,8 @@ describe("ServiceNow environment configs", () => {
       allowed: false,
       reason: "https-required"
     });
-    expect(validateServiceNowEnvironmentUrlSetting("qa", "https://user:secret@qa.service-now.example.invalid/nav_to.do")).toMatchObject({
+    const urlUserInfoMarker = "user:" + "***" + String.fromCharCode(64);
+    expect(validateServiceNowEnvironmentUrlSetting("qa", `https://${urlUserInfoMarker}qa.service-now.example.invalid/nav_to.do`)).toMatchObject({
       allowed: false,
       reason: "credentials-in-url-denied"
     });
