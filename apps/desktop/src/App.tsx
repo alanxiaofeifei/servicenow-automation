@@ -1477,7 +1477,7 @@ export function updateQaSmokeWriteActionSelection(nextAction: QaManualFillWriteA
 
 export function App({
   initialLanguage = "en-US",
-  initialQaSmokeWriteAction = "submit_incident",
+  initialQaSmokeWriteAction = "save_incident",
   initialQaSmokeApprovalPhrase = ""
 }: AppProps = {}) {
   const [language, setLanguage] = useState<LanguageCode>(initialLanguage);
@@ -3330,6 +3330,15 @@ function ControlledQaSingleTicketSmokePanel({
           <code>{plan.requiredApprovalPhrase}</code>
         </div>
       </div>
+
+      <section className="qa-smoke-safe-scope" aria-labelledby="qa-safe-scope-title">
+        <h3 id="qa-safe-scope-title">First smoke safe scope</h3>
+        <ul>
+          <li>Dry-run first: review the local field mapping and Excel row preview only.</li>
+          <li>Manual copy only: Alan copies or types values; the app never fills ServiceNow.</li>
+          <li>Save-only readiness: Submit, Update, and Close remain deferred to a later checkpoint.</li>
+        </ul>
+      </section>
 
       <label className="qa-smoke-approval">
         <span>Local approval phrase</span>

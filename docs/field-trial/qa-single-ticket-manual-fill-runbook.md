@@ -8,6 +8,8 @@ The goal is to validate whether the cockpit's fake/sanitized Service Desk workfl
 
 This runbook does **not** approve browser DOM autofill, ServiceNow API calls, bulk creation, production testing, or any uncontrolled write action.
 
+For the local no-write pre-flight path, use `docs/field-trial/qa-single-ticket-safe-smoke-checklist.md` first. That checklist stops at dry-run/manual-copy/Save-only readiness and does not authorize a QA login or any ServiceNow write.
+
 ## Scope
 
 Allowed:

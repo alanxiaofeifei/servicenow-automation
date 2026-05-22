@@ -147,7 +147,8 @@ Say:
 Show:
 
 - QA runbook path: `docs/field-trial/qa-single-ticket-manual-fill-runbook.md`.
-- Emphasize fake scenario and stop rules.
+- Safe smoke checklist path: `docs/field-trial/qa-single-ticket-safe-smoke-checklist.md`.
+- Emphasize fake scenario, dry-run/manual-copy first, Save-only readiness, and stop rules.
 
 Close with:
 
