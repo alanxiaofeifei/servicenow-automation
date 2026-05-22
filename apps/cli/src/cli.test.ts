@@ -601,6 +601,51 @@ describe("sda CLI", () => {
     expect(payload.safety.noServiceNowWrite).toBe(true);
   });
 
+  it.each(["ambiguous-description", "non-writable-work-notes"])(
+    "fails closed when the QA autofill fixture has %s",
+    async (selectorFixture) => {
+      const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
+      const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
+
+      const result = await runCli([
+        "qa",
+        "autofill-fixture",
+        "--mode",
+        "qa",
+        "--template",
+        "vpn_issue",
+        "--user",
+        "Demo requester A",
+        "--summary",
+        "Fake Chat intake — VPN connection issue after password or MFA change",
+        "--approval-phrase",
+        "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED",
+        "--qa-isolation-confirmation",
+        qaIsolationConfirmation,
+        "--dedicated-profile-confirmation",
+        dedicatedProfileConfirmation,
+        "--selector-fixture",
+        selectorFixture,
+        "--json"
+      ], { cwd });
+      const payload = JSON.parse(result.stdout);
+      const serialized = JSON.stringify(payload);
+
+      expect(result.exitCode).toBe(0);
+      expect(payload.command).toBe("qa autofill-fixture");
+      expect(payload.autofill.status).toBe("blocked");
+      expect(payload.plan.status).toBe("blocked");
+      expect(payload.plan.blockedReason).toBe("selector-mismatch");
+      expect(payload.execution.status).toBe("blocked");
+      expect(payload.execution.filledFields).toEqual([]);
+      expect(payload.safety.browserProcessLaunched).toBe(false);
+      expect(payload.safety.browserAutomationCalled).toBe(false);
+      expect(payload.safety.noServiceNowWrite).toBe(true);
+      expect(serialized).not.toContain("I APPROVE QA SINGLE-TICKET AUTOFILL ONLY");
+      expect(serialized).not.toContain("https" + "://");
+    }
+  );
+
   it("blocks QA autofill with wrong approval or unsafe target without leaking denied URL details", async () => {
     const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
     const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
