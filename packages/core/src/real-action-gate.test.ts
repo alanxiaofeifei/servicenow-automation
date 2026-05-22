@@ -62,8 +62,8 @@ describe("RealActionGate", () => {
     const decision = authorizeRealAction({
       environment: qaEnvironment,
       action: "submit_incident",
-      targetUrl: "https://qa-example.service-now.com/nav_to.do",
-      targetValidation: allowlisted("qa-example.service-now.com")
+      targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
+      targetValidation: allowlisted("qa.service-now.example.invalid")
     });
 
     expect(decision).toMatchObject({
@@ -79,13 +79,13 @@ describe("RealActionGate", () => {
     const decision = authorizeRealAction({
       environment: qaEnvironment,
       action: "submit_incident",
-      targetUrl: "https://qa-example.service-now.com/nav_to.do",
-      targetValidation: allowlisted("qa-example.service-now.com"),
+      targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
+      targetValidation: allowlisted("qa.service-now.example.invalid"),
       approval: {
         operator: "Alan",
         mode: "qa",
         action: "submit_incident",
-        targetHost: "qa-example.service-now.com",
+        targetHost: "qa.service-now.example.invalid",
         phrase: "I APPROVE QA SUBMIT ONLY"
       }
     });
@@ -103,7 +103,7 @@ describe("RealActionGate", () => {
       operator: "Alan",
       mode: "qa" as const,
       action: "submit_incident" as const,
-      targetHost: "qa-example.service-now.com",
+      targetHost: "qa.service-now.example.invalid",
       phrase: "I APPROVE QA SUBMIT ONLY"
     };
 
@@ -111,7 +111,7 @@ describe("RealActionGate", () => {
       authorizeRealAction({
         environment: qaEnvironment,
         action: "submit_incident",
-        targetUrl: "https://qa-example.service-now.com/nav_to.do",
+        targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
         approval
       }).reason
     ).toBe("target-not-allowlisted");
@@ -120,12 +120,12 @@ describe("RealActionGate", () => {
       authorizeRealAction({
         environment: qaEnvironment,
         action: "submit_incident",
-        targetUrl: "https://qa-example.service-now.com/nav_to.do",
+        targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
         targetValidation: {
           allowed: false,
           reason: "host-not-allowlisted",
-          host: "qa-example.service-now.com",
-          allowedHost: "other-example.service-now.com"
+          host: "qa.service-now.example.invalid",
+          allowedHost: "dev.service-now.example.invalid"
         },
         approval
       }).reason
@@ -135,8 +135,8 @@ describe("RealActionGate", () => {
       authorizeRealAction({
         environment: qaEnvironment,
         action: "submit_incident",
-        targetUrl: "https://qa-example.service-now.com/nav_to.do",
-        targetValidation: allowlisted("other-example.service-now.com"),
+        targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
+        targetValidation: allowlisted("dev.service-now.example.invalid"),
         approval
       }).reason
     ).toBe("target-validation-host-mismatch");
@@ -145,8 +145,8 @@ describe("RealActionGate", () => {
       authorizeRealAction({
         environment: qaEnvironment,
         action: "submit_incident",
-        targetUrl: "http://qa-example.service-now.com/nav_to.do",
-        targetValidation: allowlisted("qa-example.service-now.com"),
+        targetUrl: "http://qa.service-now.example.invalid/nav_to.do",
+        targetValidation: allowlisted("qa.service-now.example.invalid"),
         approval
       }).reason
     ).toBe("target-url-not-https");
@@ -156,13 +156,13 @@ describe("RealActionGate", () => {
     const wrongPhrase = authorizeRealAction({
       environment: qaEnvironment,
       action: "submit_incident",
-      targetUrl: "https://qa-example.service-now.com/nav_to.do",
-      targetValidation: allowlisted("qa-example.service-now.com"),
+      targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
+      targetValidation: allowlisted("qa.service-now.example.invalid"),
       approval: {
         operator: "Alan",
         mode: "qa",
         action: "submit_incident",
-        targetHost: "qa-example.service-now.com",
+        targetHost: "qa.service-now.example.invalid",
         phrase: "I APPROVE QA WRITE ONLY"
       }
     });
@@ -170,13 +170,13 @@ describe("RealActionGate", () => {
     const wrongAction = authorizeRealAction({
       environment: qaEnvironment,
       action: "submit_incident",
-      targetUrl: "https://qa-example.service-now.com/nav_to.do",
-      targetValidation: allowlisted("qa-example.service-now.com"),
+      targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
+      targetValidation: allowlisted("qa.service-now.example.invalid"),
       approval: {
         operator: "Alan",
         mode: "qa",
         action: "update_incident",
-        targetHost: "qa-example.service-now.com",
+        targetHost: "qa.service-now.example.invalid",
         phrase: "I APPROVE QA UPDATE ONLY"
       }
     });
@@ -191,13 +191,13 @@ describe("RealActionGate", () => {
     const decision = authorizeRealAction({
       environment: qaEnvironment,
       action: "submit_incident",
-      targetUrl: "https://qa-example.service-now.com/nav_to.do",
-      targetValidation: allowlisted("qa-example.service-now.com"),
+      targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
+      targetValidation: allowlisted("qa.service-now.example.invalid"),
       approval: {
         operator: "Alan",
         mode: "qa",
         action: "submit_incident",
-        targetHost: "evil-example.service-now.com",
+        targetHost: "dev.service-now.example.invalid",
         phrase: "I APPROVE QA SUBMIT ONLY"
       }
     });
@@ -210,13 +210,13 @@ describe("RealActionGate", () => {
     const decision = authorizeRealAction({
       environment: qaEnvironment,
       action: "save_incident",
-      targetUrl: "https://qa-example.service-now.com/nav_to.do",
-      targetValidation: allowlisted("qa-example.service-now.com"),
+      targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
+      targetValidation: allowlisted("qa.service-now.example.invalid"),
       approval: {
         operator: "Alan",
         mode: "qa",
         action: "save_incident",
-        targetHost: "qa-example.service-now.com",
+        targetHost: "qa.service-now.example.invalid",
         phrase: "I APPROVE QA SAVE ONLY"
       }
     });
@@ -234,13 +234,13 @@ describe("RealActionGate", () => {
     const decision = authorizeRealAction({
       environment: productionShadowEnvironment,
       action: "save_incident",
-      targetUrl: "https://prod-example.service-now.com/nav_to.do",
-      targetValidation: allowlisted("prod-example.service-now.com"),
+      targetUrl: "https://prod-shadow.service-now.example.invalid/nav_to.do",
+      targetValidation: allowlisted("prod-shadow.service-now.example.invalid"),
       approval: {
         operator: "Alan",
         mode: "production-shadow",
         action: "save_incident",
-        targetHost: "prod-example.service-now.com",
+        targetHost: "prod-shadow.service-now.example.invalid",
         phrase: "I APPROVE PRODUCTION-SHADOW SAVE ONLY"
       }
     });
@@ -256,13 +256,13 @@ describe("RealActionGate", () => {
     const decision = authorizeRealAction({
       environment: productionShadowEnvironment,
       action: "submit_incident",
-      targetUrl: "https://prod-example.service-now.com/nav_to.do",
-      targetValidation: allowlisted("prod-example.service-now.com"),
+      targetUrl: "https://prod-shadow.service-now.example.invalid/nav_to.do",
+      targetValidation: allowlisted("prod-shadow.service-now.example.invalid"),
       approval: {
         operator: "Alan",
         mode: "production-shadow",
         action: "submit_incident",
-        targetHost: "prod-example.service-now.com",
+        targetHost: "prod-shadow.service-now.example.invalid",
         phrase: "I APPROVE PRODUCTION-SHADOW SUBMIT ONLY"
       }
     });
@@ -288,13 +288,13 @@ describe("RealActionGate", () => {
       authorizeRealAction({
         environment: devEnvironment,
         action: "update_incident",
-        targetUrl: "https://dev-example.service-now.com/nav_to.do",
-        targetValidation: allowlisted("dev-example.service-now.com"),
+        targetUrl: "https://dev.service-now.example.invalid/nav_to.do",
+        targetValidation: allowlisted("dev.service-now.example.invalid"),
         approval: {
           operator: "Alan",
           mode: "dev",
           action: "update_incident",
-          targetHost: "dev-example.service-now.com",
+          targetHost: "dev.service-now.example.invalid",
           phrase: "I APPROVE DEV UPDATE ONLY"
         }
       }).allowed

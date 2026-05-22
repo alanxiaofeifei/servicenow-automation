@@ -21,7 +21,7 @@ describe("BrowserSessionService", () => {
 
     expect(plan.status).toBe("ready");
     expect(plan.mode).toBe("qa");
-    expect(plan.targetUrl).toContain("https://yageoqa.service-now.com");
+    expect(plan.targetUrl).toContain("https://qa.service-now.example.invalid");
     expect(plan.browserProfileDirectory).toBe(resolve(projectRoot, ".local/servicenow-browser-profiles/qa"));
     expect(plan.actions).toEqual(["open-controlled-browser", "wait-for-manual-login", "capture-page-context-only"]);
     expect(plan.safety.manualLoginRequired).toBe(true);
@@ -89,10 +89,10 @@ describe("BrowserSessionService", () => {
     const qaHost = new URL(getServiceNowEnvironmentConfig("qa").url ?? "").host;
 
     const devPlan = service.createLaunchPlan(getServiceNowEnvironmentConfig("dev"), {
-      targetUrlOverride: "https://user:pass@dev-example.service-now.com/nav_to.do"
+      targetUrlOverride: "https://user:example-user@example.invalid/nav_to.do"
     });
     const productionShadowPlan = service.createLaunchPlan(getServiceNowEnvironmentConfig("production-shadow"), {
-      targetUrlOverride: "https://user:pass@prod-example.service-now.com/nav_to.do"
+      targetUrlOverride: "https://user:example-user@example.invalid/nav_to.do"
     });
     const httpPlan = service.createLaunchPlan(getServiceNowEnvironmentConfig("qa"), {
       targetUrlOverride: `http://user:pass@${qaHost}/nav_to.do`
@@ -112,7 +112,7 @@ describe("BrowserSessionService", () => {
 
     const blockedPlan = service.createLaunchPlan(getServiceNowEnvironmentConfig("dev"));
     const overridePlan = service.createLaunchPlan(getServiceNowEnvironmentConfig("dev"), {
-      targetUrlOverride: "https://dev-example.service-now.com/nav_to.do"
+      targetUrlOverride: "https://dev.service-now.example.invalid/nav_to.do"
     });
 
     expect(blockedPlan.status).toBe("blocked");
@@ -130,7 +130,7 @@ describe("BrowserSessionService", () => {
     const service = createBrowserSessionService({ projectRoot });
 
     const plan = service.createLaunchPlan(getServiceNowEnvironmentConfig("production-shadow"), {
-      targetUrlOverride: "https://prod-example.service-now.com/nav_to.do"
+      targetUrlOverride: "https://prod-shadow.service-now.example.invalid/nav_to.do"
     });
 
     expect(plan.status).toBe("blocked");
@@ -413,7 +413,7 @@ describe("BrowserSessionService", () => {
 
     const mock = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("mock"));
     const productionShadow = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("production-shadow"), {
-      targetUrlOverride: "https://prod-example.service-now.com/"
+      targetUrlOverride: "https://prod-shadow.service-now.example.invalid/"
     });
     const userinfo = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("qa"), {
       targetUrlOverride: `https://user:***@${qaHost}/nav_to.do`
@@ -544,7 +544,7 @@ describe("BrowserSessionService", () => {
     const sensitiveQueryName = "sys" + "_id";
     const sensitiveTokenName = "to" + "ken";
     const blockedTargets = [
-      `https://qa-example.service-now.com/nav_to.do?${sensitiveQueryName}=abc123`,
+      `https://qa.service-now.example.invalid/nav_to.do?${sensitiveQueryName}=abc123`,
       "http://example.test/",
       "file:///tmp/safe.html",
       `about:blank?${sensitiveTokenName}=abc123`
@@ -567,7 +567,7 @@ describe("BrowserSessionService", () => {
       });
       expect(result.commandPreview).toBeUndefined();
       expect(result.safety.browserProcessLaunched).toBe(false);
-      expect(serialized).not.toContain("qa-example.service-now.com");
+      expect(serialized).not.toContain("qa.service-now.example.invalid");
       expect(serialized).not.toContain("service-now.com");
       expect(serialized).not.toContain(sensitiveQueryName);
       expect(serialized).not.toContain(`${sensitiveTokenName}=abc123`);

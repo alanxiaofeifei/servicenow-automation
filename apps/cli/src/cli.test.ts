@@ -71,7 +71,7 @@ describe("sda CLI", () => {
     expect(result.exitCode).toBe(0);
     expect(payload.command).toBe("qa smoke");
     expect(payload.plan.status).toBe("ready-for-manual-fill");
-    expect(payload.plan.targetHost).toBe("yageoqa.service-now.com");
+    expect(payload.plan.targetHost).toBe("qa.service-now.example.invalid");
     expect(payload.plan.requiredApprovalPhrase).toBe("I APPROVE QA SUBMIT ONLY");
     expect(payload.plan.fieldMappings.find((field: { key: string }) => field.key === "shortDescription").value).toContain("VPN");
     expect(payload.plan.safety.manualFillOnly).toBe(true);
@@ -510,7 +510,7 @@ describe("sda CLI", () => {
     expect(result.exitCode).toBe(0);
     expect(payload.command).toBe("browser plan");
     expect(payload.plan.status).toBe("ready");
-    expect(payload.plan.targetUrl).toContain("https://yageoqa.service-now.com");
+    expect(payload.plan.targetUrl).toContain("https://qa.service-now.example.invalid");
     expect(payload.plan.browserProfileDirectory).toContain(".local/servicenow-browser-profiles/qa");
     expect(payload.plan.safety.browserAutomationImplemented).toBe(false);
     expect(payload.plan.safety.realSubmitAllowed).toBe(false);
@@ -742,7 +742,7 @@ describe("sda CLI", () => {
     const sensitiveQueryName = "sys" + "_id";
     const sensitiveTokenName = "to" + "ken";
     const targetUrls = [
-      `https://qa-example.service-now.com/nav_to.do?${sensitiveQueryName}=abc123`,
+      `https://qa.service-now.example.invalid/nav_to.do?${sensitiveQueryName}=abc123`,
       `http://example.test/?${sensitiveTokenName}=abc123`
     ];
 
@@ -769,7 +769,7 @@ describe("sda CLI", () => {
       });
       expect(payload.smoke.commandPreview).toBeUndefined();
       expect(payload.safety.browserProcessLaunched).toBe(false);
-      expect(serialized).not.toContain("qa-example.service-now.com");
+      expect(serialized).not.toContain("qa.service-now.example.invalid");
       expect(serialized).not.toContain("service-now.com");
       expect(serialized).not.toContain(sensitiveQueryName);
       expect(serialized).not.toContain(`${sensitiveTokenName}=abc123`);

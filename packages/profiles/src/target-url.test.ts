@@ -118,12 +118,12 @@ describe("validateServiceNowTargetUrl", () => {
   });
 
   it("blocks QA target overrides outside the configured host", () => {
-    const result = validateServiceNowTargetUrl(qaConfig, "https://evil-example.service-now.com/nav_to.do");
+    const result = validateServiceNowTargetUrl(qaConfig, "https://dev.service-now.example.invalid/nav_to.do");
 
     expect(result).toMatchObject({
       allowed: false,
       reason: "host-not-allowlisted",
-      host: "evil-example.service-now.com",
+      host: "dev.service-now.example.invalid",
       allowedHost: qaHost
     });
   });
@@ -134,7 +134,7 @@ describe("validateServiceNowTargetUrl", () => {
       reason: "mock-has-no-service-now-target"
     });
     expect(
-      validateServiceNowTargetUrl(getServiceNowEnvironmentConfig("dev"), "https://dev-example.service-now.com/nav_to.do")
+      validateServiceNowTargetUrl(getServiceNowEnvironmentConfig("dev"), "https://dev.service-now.example.invalid/nav_to.do")
     ).toMatchObject({
       allowed: false,
       reason: "no-allowlisted-host"
@@ -142,7 +142,7 @@ describe("validateServiceNowTargetUrl", () => {
     expect(
       validateServiceNowTargetUrl(
         getServiceNowEnvironmentConfig("production-shadow"),
-        "https://prod-example.service-now.com/nav_to.do"
+        "https://prod-shadow.service-now.example.invalid/nav_to.do"
       )
     ).toMatchObject({
       allowed: false,
