@@ -1,0 +1,271 @@
+import type { FieldDraft, TicketDraft } from "./models";
+import type { RealActionEnvironment, RealActionMode, RealActionTargetValidation } from "./real-action-gate";
+
+export type QaAutofillFieldKey = "shortDescription" | "description" | "workNotes";
+export type QaAutofillSelectorStatus = "found" | "missing" | "ambiguous";
+
+export type QaAutofillSelectorVerification = Record<QaAutofillFieldKey, QaAutofillSelectorStatus>;
+
+export type QaAutofillRequestedOperation = "fill-text" | "click-save" | "click-submit" | "click-update" | "click-close";
+
+export type QaAutofillPlanStatus = "ready-for-autofill" | "blocked";
+
+export type QaAutofillBlockedReason =
+  | "qa-dev-only"
+  | "target-validation-denied"
+  | "qa-isolation-confirmation-required"
+  | "dedicated-profile-confirmation-required"
+  | "approval-phrase-required"
+  | "approval-phrase-mismatch"
+  | "missing-text-field-value"
+  | "selector-verification-required"
+  | "selector-mismatch"
+  | "unexpected-required-field"
+  | "bulk-mode-denied"
+  | "write-operation-denied";
+
+export type QaAutofillField = {
+  key: QaAutofillFieldKey;
+  label: "Short description" | "Description" | "Work notes";
+  type: "text" | "textarea";
+  value: string;
+  selectors: string[];
+  source: "ticket-draft";
+};
+
+export type QaAutofillOperation = {
+  kind: "fill-text";
+  fieldKey: QaAutofillFieldKey;
+  label: QaAutofillField["label"];
+  selectors: string[];
+  value: string;
+  stopBeforeWrite: true;
+};
+
+export type QaAutofillSafety = {
+  singleTicketOnly: true;
+  textFieldsOnly: true;
+  autofillOnly: true;
+  manualLoginOnly: true;
+  dedicatedChromiumProfileRequired: true;
+  noSaveSubmitUpdateClose: true;
+  noServiceNowApi: true;
+  noBulkCreateOrFill: true;
+  noArtifactCapture: true;
+  noExternalAiOnQaContent: true;
+  productionWriteAllowed: false;
+};
+
+export type QaAutofillPlan = {
+  status: QaAutofillPlanStatus;
+  mode: RealActionMode;
+  blockedReason?: QaAutofillBlockedReason;
+  target: {
+    allowlisted: boolean;
+    hostRedacted: true;
+  };
+  allowedFields: QaAutofillField[];
+  operations: QaAutofillOperation[];
+  safety: QaAutofillSafety;
+  stopRules: string[];
+  stopMessage: string;
+};
+
+export type QaAutofillPlanRequest = {
+  draft: TicketDraft;
+  environment: RealActionEnvironment;
+  targetUrl?: string;
+  targetValidation?: RealActionTargetValidation;
+  approvalPhrase?: string;
+  qaIsolationConfirmed: boolean;
+  dedicatedProfileConfirmed: boolean;
+  selectorVerification?: Partial<QaAutofillSelectorVerification>;
+  unexpectedRequiredFields?: string[];
+  requestedOperations?: QaAutofillRequestedOperation[];
+  ticketCount?: number;
+};
+
+const stopMessage =
+  "Autofill completed. The tool will not Save, Submit, Update, or Close. Review the QA page manually.";
+
+const fieldDefinitions: Array<Omit<QaAutofillField, "value" | "source"> & { draftField: QaAutofillFieldKey }> = [
+  {
+    key: "shortDescription",
+    draftField: "shortDescription",
+    label: "Short description",
+    type: "text",
+    selectors: [
+      'input[name="incident.short_description"]',
+      'input[id="incident.short_description"]',
+      'input[id$=".short_description"]'
+    ]
+  },
+  {
+    key: "description",
+    draftField: "description",
+    label: "Description",
+    type: "textarea",
+    selectors: [
+      'textarea[name="incident.description"]',
+      'textarea[id="incident.description"]',
+      'textarea[id$=".description"]'
+    ]
+  },
+  {
+    key: "workNotes",
+    draftField: "workNotes",
+    label: "Work notes",
+    type: "textarea",
+    selectors: [
+      'textarea[name="incident.work_notes"]',
+      'textarea[id="incident.work_notes"]',
+      'textarea[id$=".work_notes"]'
+    ]
+  }
+];
+
+export function getRequiredQaAutofillApprovalPhrase(mode: Extract<RealActionMode, "qa" | "dev">): string {
+  return `I APPROVE ${mode.toUpperCase()} SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED`;
+}
+
+export function buildQaTextFieldAutofillPlan(request: QaAutofillPlanRequest): QaAutofillPlan {
+  if (request.environment.mode !== "qa" && request.environment.mode !== "dev") {
+    return blockedPlan(request, "qa-dev-only");
+  }
+
+  if (!request.targetValidation?.allowed) {
+    return blockedPlan(request, "target-validation-denied");
+  }
+
+  if ((request.ticketCount ?? 1) !== 1) {
+    return blockedPlan(request, "bulk-mode-denied");
+  }
+
+  if (!request.qaIsolationConfirmed) {
+    return blockedPlan(request, "qa-isolation-confirmation-required");
+  }
+
+  if (!request.dedicatedProfileConfirmed) {
+    return blockedPlan(request, "dedicated-profile-confirmation-required");
+  }
+
+  if (!request.approvalPhrase) {
+    return blockedPlan(request, "approval-phrase-required");
+  }
+
+  if (request.approvalPhrase !== getRequiredQaAutofillApprovalPhrase(request.environment.mode)) {
+    return blockedPlan(request, "approval-phrase-mismatch");
+  }
+
+  if ((request.unexpectedRequiredFields ?? []).length > 0) {
+    return blockedPlan(request, "unexpected-required-field");
+  }
+
+  if ((request.requestedOperations ?? ["fill-text"]).some((operation) => operation !== "fill-text")) {
+    return blockedPlan(request, "write-operation-denied");
+  }
+
+  if (!request.selectorVerification) {
+    return blockedPlan(request, "selector-verification-required");
+  }
+
+  const selectorMismatch = fieldDefinitions.some((field) => request.selectorVerification?.[field.key] !== "found");
+  if (selectorMismatch) {
+    return blockedPlan(request, "selector-mismatch");
+  }
+
+  const allowedFields = buildAllowedFields(request.draft);
+  if (allowedFields.length !== fieldDefinitions.length) {
+    return blockedPlan(request, "missing-text-field-value");
+  }
+
+  const operations = allowedFields.map<QaAutofillOperation>((field) => ({
+    kind: "fill-text",
+    fieldKey: field.key,
+    label: field.label,
+    selectors: field.selectors,
+    value: field.value,
+    stopBeforeWrite: true
+  }));
+
+  return {
+    status: "ready-for-autofill",
+    mode: request.environment.mode,
+    target: sanitizedTarget(request),
+    allowedFields,
+    operations,
+    safety: safetyFlags(),
+    stopRules: autofillStopRules(),
+    stopMessage
+  };
+}
+
+function buildAllowedFields(draft: TicketDraft): QaAutofillField[] {
+  return fieldDefinitions.flatMap((definition) => {
+    const value = normalizeDraftField(draft[definition.draftField]);
+    if (!value) return [];
+
+    return [
+      {
+        key: definition.key,
+        label: definition.label,
+        type: definition.type,
+        value,
+        selectors: definition.selectors,
+        source: "ticket-draft" as const
+      }
+    ];
+  });
+}
+
+function normalizeDraftField(field: FieldDraft | undefined): string | undefined {
+  const value = field?.value.trim();
+  return value ? value : undefined;
+}
+
+function blockedPlan(request: QaAutofillPlanRequest, blockedReason: QaAutofillBlockedReason): QaAutofillPlan {
+  return {
+    status: "blocked",
+    mode: request.environment.mode,
+    blockedReason,
+    target: sanitizedTarget(request),
+    allowedFields: [],
+    operations: [],
+    safety: safetyFlags(),
+    stopRules: autofillStopRules(),
+    stopMessage
+  };
+}
+
+function sanitizedTarget(request: QaAutofillPlanRequest): QaAutofillPlan["target"] {
+  return {
+    allowlisted: request.targetValidation?.allowed === true,
+    hostRedacted: true
+  };
+}
+
+function safetyFlags(): QaAutofillSafety {
+  return {
+    singleTicketOnly: true,
+    textFieldsOnly: true,
+    autofillOnly: true,
+    manualLoginOnly: true,
+    dedicatedChromiumProfileRequired: true,
+    noSaveSubmitUpdateClose: true,
+    noServiceNowApi: true,
+    noBulkCreateOrFill: true,
+    noArtifactCapture: true,
+    noExternalAiOnQaContent: true,
+    productionWriteAllowed: false
+  };
+}
+
+function autofillStopRules(): string[] {
+  return [
+    "Stop before Save, Submit, Update, Close, attachment upload, outbound email, notification, API write, or bulk action.",
+    "Stop if QA/dev isolation or the dedicated/tool-owned Chromium profile is not confirmed immediately before autofill.",
+    "Stop if any selector is missing, ambiguous, or points outside the approved text-field allowlist.",
+    "Stop if unexpected required fields appear; do not guess reference, select, routing, impact, urgency, priority, state, or status values.",
+    "Record only sanitized outcome; do not capture browser artifacts, page source, raw QA addresses, record identifiers, requester identity, or real field values."
+  ];
+}

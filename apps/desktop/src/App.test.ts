@@ -712,6 +712,31 @@ describe("App", () => {
     expect(output).not.toContain('class="field-review-checklist" open');
   });
 
+  it("renders a QA browser-assisted text-field autofill gate that remains separate from Save/Submit", () => {
+    const output = renderAppMarkup(undefined, {
+      initialEnvironmentMode: "qa",
+      initialQaAutofillQaIsolationConfirmed: true,
+      initialQaAutofillDedicatedProfileConfirmed: true,
+      initialQaAutofillApprovalPhrase:
+        "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED"
+    });
+
+    expect(output).toContain("QA browser-assisted text-field autofill planning gate");
+    expect(output).toContain("Blocked: selector-verification-required");
+    expect(output).toContain("Planning/review only in this slice.");
+    expect(output).toContain("Text fields only: Short description, Description, Work notes");
+    expect(output).toContain("Autofill approval does not approve Save, Submit, Update, or Close.");
+    expect(output).toContain("I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED");
+    expect(output).toContain("Selector verification is mandatory; missing or mismatched selectors keep this panel blocked.");
+    expect(output).toContain("Planning gate only: browser text-field execution remains blocked until a later selector-verified execution slice is reviewed.");
+    expect(output).toContain("No ServiceNow API, bulk fill, browser artifacts, auth-material export, or external AI on QA content.");
+    expect(output).toContain("Short description");
+    expect(output).toContain("Description");
+    expect(output).toContain("Work notes");
+    expect(output).not.toContain("Click Save");
+    expect(output).not.toContain("Click Submit");
+  });
+
   it("renders ServiceNow environment modes and QA/dev safety boundaries", () => {
     const output = renderAppMarkup();
 

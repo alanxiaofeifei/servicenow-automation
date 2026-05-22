@@ -16,11 +16,13 @@ import {
   type ServiceNowEnvironmentMode
 } from "@servicenow-automation/profiles";
 import {
+  buildQaTextFieldAutofillPlan,
   buildServiceDeskWorkflowPreview,
   evaluateQaSingleTicketSmokePlan,
   type CapturedContext,
   type FieldDraft,
   type KnowledgeMatch,
+  type QaAutofillPlan,
   type QaManualFillWriteAction,
   type QaSingleTicketSmokePlan,
   type RawIntakeSource,
@@ -58,8 +60,11 @@ const manualPasteAdapter = new ManualPasteAdapter({
   now: () => new Date("2026-05-18T12:00:00.000Z")
 });
 
-const qaIsolationConfirmationPhrase =
+const manualFillQaIsolationConfirmationPhrase =
   "QA isolation confirmed: this ticket will not notify production users, customers, or a real support team.";
+
+const autofillQaIsolationConfirmationPhrase =
+  "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
 
 const manualFillAllowedOperatorActions = [
   "Open the controlled browser window and sign in manually.",
@@ -71,6 +76,22 @@ const manualFillProhibitedOperatorActions = [
   "Do not use browser DOM autofill or ServiceNow API writes.",
   "Do not click Save, Submit, Update, or Close from this command.",
   "Do not bulk create, upload attachments, send email, capture screenshots, HAR, traces, cookies, or sessions."
+];
+
+const dedicatedProfileConfirmationPhrase =
+  "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
+
+const autofillAllowedOperatorActions = [
+  "Manually log in and navigate to the authorized QA/dev Incident form in the dedicated Chromium profile.",
+  "Review the three approved text fields before any fill action.",
+  "Keep this command as a planning/review gate only; it does not launch a browser or fill the page.",
+  "Wait for a later selector-verified execution slice before any browser text-field fill."
+];
+
+const autofillProhibitedOperatorActions = [
+  "Do not Save, Submit, Update, Close, upload attachments, send email, or trigger notifications.",
+  "Do not fill requester, assignment group, CI, category, subcategory, impact, urgency, priority, state, status, or customer-visible comments.",
+  "Do not call the ServiceNow API, bulk fill, capture browser artifacts, export auth material, or send QA content to external AI."
 ];
 
 export async function runCli(argv: string[], options: RunCliOptions = {}): Promise<CliResult> {
@@ -281,6 +302,54 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
       }, formatQaSmokePlan(plan));
     }
 
+    if (namespace === "qa" && action === "autofill") {
+      const mode = parseEnvironmentMode(requiredFlag(parsed, "mode", "qa autofill"));
+      const template = requiredFlag(parsed, "template", "qa autofill");
+      const user = requiredFlag(parsed, "user", "qa autofill");
+      const summary = requiredFlag(parsed, "summary", "qa autofill");
+      const environment = getServiceNowEnvironmentConfig(mode);
+      const targetUrl = parsed.flags["target-url"] ?? environment.url;
+      const targetValidation = validateServiceNowTargetUrl(environment, targetUrl);
+      const ticketDraft = buildTicketDraft({ template, user, summary });
+      const qaIsolationConfirmed = parsed.flags["qa-isolation-confirmation"] === autofillQaIsolationConfirmationPhrase;
+      const dedicatedProfileConfirmed = parsed.flags["dedicated-profile-confirmation"] === dedicatedProfileConfirmationPhrase;
+      const plan = buildQaTextFieldAutofillPlan({
+        draft: ticketDraft,
+        environment,
+        targetUrl,
+        targetValidation,
+        approvalPhrase: parsed.flags["approval-phrase"],
+        qaIsolationConfirmed,
+        dedicatedProfileConfirmed
+      });
+
+      return output(parsed, {
+        command: "qa autofill",
+        mode,
+        template,
+        autofill: {
+          status: plan.status,
+          qaIsolationConfirmed,
+          dedicatedProfileConfirmed,
+          requiredQaIsolationConfirmation: autofillQaIsolationConfirmationPhrase,
+          requiredDedicatedProfileConfirmation: dedicatedProfileConfirmationPhrase,
+          allowedOperatorActions: plan.status === "ready-for-autofill" ? autofillAllowedOperatorActions : [],
+          prohibitedOperatorActions: autofillProhibitedOperatorActions,
+          blockedReason: plan.blockedReason,
+          approvalPhraseAccepted: plan.status === "ready-for-autofill"
+        },
+        plan: sanitizeQaAutofillPlan(plan),
+        safety: safetyEnvelope({
+          browserProcessLaunched: false,
+          browserAutomationCalled: false,
+          noServiceNowWrite: true,
+          noExcelWrite: true,
+          noGraphWrite: true,
+          productionWriteAllowed: false
+        })
+      }, formatQaAutofillPlan(plan));
+    }
+
     if (namespace === "qa" && action === "manual-fill") {
       const mode = parseEnvironmentMode(requiredFlag(parsed, "mode", "qa manual-fill"));
       const writeAction = parseQaManualFillWriteAction(parsed.flags["write-action"] ?? "submit_incident");
@@ -307,7 +376,7 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
         templatePreset: parsed.flags["template-preset"] ?? "standard-service-desk",
         now: new Date()
       });
-      const qaIsolationConfirmed = parsed.flags["qa-isolation-confirmation"] === qaIsolationConfirmationPhrase;
+      const qaIsolationConfirmed = parsed.flags["qa-isolation-confirmation"] === manualFillQaIsolationConfirmationPhrase;
       const manualFillBlockedReason = qaManualFillBlockedReason(plan, qaIsolationConfirmed);
       const manualFillStatus = manualFillBlockedReason ? "blocked" : "ready-for-manual-fill";
       const browserLaunch = manualFillBlockedReason
@@ -328,7 +397,7 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
         manualFill: {
           status: manualFillStatus,
           qaIsolationConfirmed,
-          requiredQaIsolationConfirmation: qaIsolationConfirmationPhrase,
+          requiredQaIsolationConfirmation: manualFillQaIsolationConfirmationPhrase,
           blockedReason: manualFillBlockedReason,
           allowedOperatorActions: manualFillBlockedReason ? [] : manualFillAllowedOperatorActions,
           prohibitedOperatorActions: manualFillProhibitedOperatorActions
@@ -596,6 +665,34 @@ function formatQaSmokePlan(plan: QaSingleTicketSmokePlan): string {
   return lines.join("\n");
 }
 
+function sanitizeQaAutofillPlan(plan: QaAutofillPlan): QaAutofillPlan {
+  return {
+    ...plan,
+    target: {
+      allowlisted: plan.target.allowlisted,
+      hostRedacted: true
+    },
+    operations: plan.operations.map((operation) => ({
+      ...operation,
+      selectors: operation.selectors.map(() => "approved-text-field-selector")
+    })),
+    allowedFields: plan.allowedFields.map((field) => ({
+      ...field,
+      selectors: field.selectors.map(() => "approved-text-field-selector")
+    }))
+  };
+}
+
+function formatQaAutofillPlan(plan: QaAutofillPlan): string {
+  return [
+    `QA browser-assisted text-field autofill planning gate: ${plan.status}`,
+    plan.blockedReason
+      ? `Blocked reason: ${plan.blockedReason}`
+      : "Selector-verified plan ready; this CLI still does not launch a browser or fill a page.",
+    "Safety: planning/review only here; no Save, Submit, Update, Close, ServiceNow API, browser artifacts, or bulk action."
+  ].join("\n");
+}
+
 function qaManualFillBlockedReason(plan: QaSingleTicketSmokePlan, qaIsolationConfirmed: boolean): string | undefined {
   if (plan.status !== "ready-for-manual-fill") {
     return `QA manual-fill plan is blocked: ${manualFillSafeBlockReason(plan)}.`;
@@ -741,6 +838,7 @@ Commands:
   sda browser reset --mode <mock|qa|dev|production-shadow> [--json]
   sda workflow preview --template <template> --user <sanitized_user> --summary <sanitized_summary> --source <source> --dry-run [--json]
   sda qa smoke --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> [--target-url <url>] [--approval-phrase <phrase>] [--language <lang>] [--template-preset <preset>] [--json]
+  sda qa autofill --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> --dedicated-profile-confirmation <sentence> --approval-phrase <phrase> [--target-url <url>] [--json]
   sda qa manual-fill --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> [--write-action <save_incident|submit_incident|update_incident|close_incident>] [--target-url <url>] [--approval-phrase <phrase>] [--browser-executable <path>] [--execute --confirm-no-write-launch] [--json]
   sda run --workflow <workflow_name> --input <json_file> --dry-run [--json]
 
