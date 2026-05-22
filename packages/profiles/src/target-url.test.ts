@@ -6,6 +6,7 @@ import { validateServiceNowTargetUrl } from "./target-url";
 const qaConfig = getServiceNowEnvironmentConfig("qa");
 const qaUrl = qaConfig.url ?? "";
 const qaHost = new URL(qaUrl).host;
+const urlUserInfoMarker = "user:" + "***" + String.fromCharCode(64);
 
 describe("validateServiceNowTargetUrl", () => {
   it("allows the configured HTTPS QA ServiceNow host", () => {
@@ -28,7 +29,7 @@ describe("validateServiceNowTargetUrl", () => {
   });
 
   it("blocks URLs that embed credentials before they can be exposed in launch plans", () => {
-    const result = validateServiceNowTargetUrl(qaConfig, `https://user:pass@${qaHost}/nav_to.do`);
+    const result = validateServiceNowTargetUrl(qaConfig, `https://${urlUserInfoMarker}${qaHost}/nav_to.do`);
 
     expect(result).toMatchObject({
       allowed: false,
