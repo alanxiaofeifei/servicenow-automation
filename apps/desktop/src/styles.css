@@ -840,11 +840,65 @@ details[open] > summary .details-indicator {
   background: #edf8f2;
 }
 
+.severity-monitor-group-settings {
+  grid-column: 1 / -1;
+  border: 1px solid #e2d4bc;
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: #fffaf0;
+}
+
+.severity-monitor-group-settings h4,
+.severity-monitor-group-settings p {
+  margin: 0;
+}
+
+.severity-monitor-group-settings h4 {
+  color: #3f3528;
+  font-size: 0.9rem;
+}
+
+.severity-monitor-group-settings p {
+  margin-top: 4px;
+  color: #63574a;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.severity-monitor-group-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.severity-monitor-group-list label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #d2bea0;
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: #443729;
+  background: #fff9ed;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.severity-monitor-group-list input {
+  accent-color: #2f756c;
+}
+
 .severity-summary {
+  grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
   gap: 7px;
   margin: 0;
+}
+
+.severity-actions {
+  grid-column: 1 / -1;
 }
 
 .severity-summary div {

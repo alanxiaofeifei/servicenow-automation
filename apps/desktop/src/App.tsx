@@ -35,6 +35,11 @@ const profile = loadDemoYageoProfile();
 type DemoQueueStatus = "New" | "Reviewed" | "Drafted" | "Done" | "Skipped";
 
 export type HighSeverityState = "normal" | "p2" | "p1";
+export type HighSeverityMonitorGroup =
+  | "demo-service-desk"
+  | "demo-identity-access"
+  | "demo-network-operations"
+  | "demo-employee-portal";
 
 type DisplayTheme = "warm" | "cool";
 
@@ -147,6 +152,13 @@ type UiTranslations = {
     stateLabel: string;
     countLabel: string;
     affectedServicesLabel: string;
+    monitorGroupLabel: string;
+    alertStatusLabel: string;
+    alertEnabledStatus: string;
+    alertSuppressedStatus: string;
+    alertInactiveStatus: string;
+    monitoredGroupsTitle: string;
+    monitoredGroupsHelper: string;
     acknowledgedLabel: string;
     mutedLabel: string;
     acknowledgeAction: string;
@@ -367,6 +379,13 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
       stateLabel: "状态",
       countLabel: "假告警数",
       affectedServicesLabel: "假受影响服务",
+      monitorGroupLabel: "监控组",
+      alertStatusLabel: "报警状态",
+      alertEnabledStatus: "已启用报警",
+      alertSuppressedStatus: "已按监控组设置抑制",
+      alertInactiveStatus: "当前无报警",
+      monitoredGroupsTitle: "报警监控组",
+      monitoredGroupsHelper: "只有所选监控组内的 P1/P2 事件才会报警；其他组本地抑制，不连接真实 ServiceNow。",
       acknowledgedLabel: "已确认",
       mutedLabel: "演示静音",
       acknowledgeAction: "Acknowledge",
@@ -424,6 +443,13 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
       stateLabel: "State",
       countLabel: "Fake count",
       affectedServicesLabel: "Fake affected services",
+      monitorGroupLabel: "Monitor group",
+      alertStatusLabel: "Alert status",
+      alertEnabledStatus: "Alert enabled",
+      alertSuppressedStatus: "Suppressed by monitored-group settings",
+      alertInactiveStatus: "No active alarm",
+      monitoredGroupsTitle: "Monitored groups for alerts",
+      monitoredGroupsHelper: "Only P1/P2 events in selected monitored groups will alert; other groups are suppressed locally with no real ServiceNow polling.",
       acknowledgedLabel: "Acknowledged",
       mutedLabel: "Muted",
       acknowledgeAction: "Acknowledge",
@@ -481,6 +507,13 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
       stateLabel: "狀態",
       countLabel: "假告警數",
       affectedServicesLabel: "假受影響服務",
+      monitorGroupLabel: "監控群組",
+      alertStatusLabel: "警報狀態",
+      alertEnabledStatus: "已啟用警報",
+      alertSuppressedStatus: "已依監控群組設定抑制",
+      alertInactiveStatus: "目前無警報",
+      monitoredGroupsTitle: "警報監控群組",
+      monitoredGroupsHelper: "只有所選監控群組內的 P1/P2 事件才會警報；其他群組會在本地抑制，不連線真實 ServiceNow。",
       acknowledgedLabel: "已確認",
       mutedLabel: "示範靜音",
       acknowledgeAction: "Acknowledge",
@@ -538,6 +571,13 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
       stateLabel: "Estado",
       countLabel: "Conteo falso",
       affectedServicesLabel: "Servicios falsos afectados",
+      monitorGroupLabel: "Grupo monitoreado",
+      alertStatusLabel: "Estado de alerta",
+      alertEnabledStatus: "Alerta activada",
+      alertSuppressedStatus: "Suprimida por la configuración de grupos monitoreados",
+      alertInactiveStatus: "Sin alarma activa",
+      monitoredGroupsTitle: "Grupos monitoreados para alertas",
+      monitoredGroupsHelper: "Solo los eventos P1/P2 en grupos monitoreados seleccionados generan alerta; otros grupos se suprimen localmente sin sondeo real de ServiceNow.",
       acknowledgedLabel: "Reconocido",
       mutedLabel: "Demo silenciada",
       acknowledgeAction: "Acknowledge",
@@ -584,32 +624,54 @@ const runtimeSafetyStatuses = [
   { label: "Data", value: "fake sanitized demo data only" }
 ];
 
+export const highSeverityMonitorGroups: { id: HighSeverityMonitorGroup; label: string }[] = [
+  { id: "demo-service-desk", label: "Demo Service Desk" },
+  { id: "demo-identity-access", label: "Demo Identity Access" },
+  { id: "demo-network-operations", label: "Demo Network Operations" },
+  { id: "demo-employee-portal", label: "Demo Employee Portal" }
+];
+
+export const defaultHighSeverityMonitoredGroups: HighSeverityMonitorGroup[] = highSeverityMonitorGroups.map(
+  (group) => group.id
+);
+
+const highSeverityMonitorGroupLabels: Record<HighSeverityMonitorGroup, string> = Object.fromEntries(
+  highSeverityMonitorGroups.map((group) => [group.id, group.label])
+) as Record<HighSeverityMonitorGroup, string>;
+
 const highSeveritySimulatorStates: Record<
   HighSeverityState,
-  { label: string; fakeCount: number; affectedServices: string[] }
+  { label: string; fakeCount: number; affectedServices: string[]; monitorGroupId: HighSeverityMonitorGroup }
 > = {
   normal: {
     label: "Normal",
     fakeCount: 0,
-    affectedServices: ["Demo service desk queue"]
+    affectedServices: ["Demo service desk queue"],
+    monitorGroupId: "demo-service-desk"
   },
   p2: {
     label: "P2 Active",
     fakeCount: 2,
-    affectedServices: ["Demo identity sign-in", "Demo remote access"]
+    affectedServices: ["Demo identity sign-in", "Demo remote access"],
+    monitorGroupId: "demo-identity-access"
   },
   p1: {
     label: "P1 Active",
     fakeCount: 4,
-    affectedServices: ["Demo network access", "Demo employee portal"]
+    affectedServices: ["Demo network access", "Demo employee portal"],
+    monitorGroupId: "demo-network-operations"
   }
 };
 
 export type HighSeverityVoiceReminder = {
   severity: HighSeverityState;
+  monitoredGroupId: HighSeverityMonitorGroup;
+  monitoredGroupLabel: string;
+  alarmEnabled: boolean;
   voiceText: string;
   policyText: string;
   previewSafetyText: string;
+  suppressionText: string;
   requiresManualAcknowledge: boolean;
   autoStopAfterAnnouncements: number | null;
 };
@@ -687,15 +749,70 @@ const highSeverityVoiceReminderTranslations = {
   }
 } satisfies Record<LanguageCode, Record<HighSeverityState, Pick<HighSeverityVoiceReminder, "voiceText" | "policyText" | "previewSafetyText">>>;
 
+const highSeveritySuppressedReminderTranslations = {
+  "zh-CN": {
+    voiceText: (groupLabel: string) => `P1/P2 报警已抑制：${groupLabel} 不在监控组中。`,
+    policyText: "未命中监控组时不会报警；请在监控组设置中勾选该组后再启用提醒。",
+    suppressionText: (groupLabel: string) => `${groupLabel} 不在监控组中；不会发出报警。`
+  },
+  "en-US": {
+    voiceText: (groupLabel: string) => `P1/P2 alert suppressed: ${groupLabel} is not monitored.`,
+    policyText: "No alarm is emitted when the event group is outside the monitored groups.",
+    suppressionText: (groupLabel: string) => `${groupLabel} not in monitored groups; no alarm will sound.`
+  },
+  "zh-TW": {
+    voiceText: (groupLabel: string) => `P1/P2 警報已抑制：${groupLabel} 不在監控群組中。`,
+    policyText: "未命中監控群組時不會警報；請在監控群組設定中勾選該群組後再啟用提醒。",
+    suppressionText: (groupLabel: string) => `${groupLabel} 不在監控群組中；不會發出警報。`
+  },
+  "es-ES": {
+    voiceText: (groupLabel: string) => `Alerta P1/P2 suprimida: ${groupLabel} no está monitoreado.`,
+    policyText: "No se emite alarma cuando el grupo del evento está fuera de los grupos monitoreados.",
+    suppressionText: (groupLabel: string) => `${groupLabel} no está en los grupos monitoreados; no sonará ninguna alarma.`
+  }
+} satisfies Record<
+  LanguageCode,
+  {
+    voiceText: (groupLabel: string) => string;
+    policyText: string;
+    suppressionText: (groupLabel: string) => string;
+  }
+>;
+
 export function getHighSeverityVoiceReminder(
   severity: HighSeverityState,
-  language: LanguageCode
+  language: LanguageCode,
+  monitoredGroupIds: HighSeverityMonitorGroup[] = defaultHighSeverityMonitoredGroups
 ): HighSeverityVoiceReminder {
   const localizedReminder = highSeverityVoiceReminderTranslations[language][severity];
+  const selectedFakeState = highSeveritySimulatorStates[severity];
+  const monitoredGroupLabel = highSeverityMonitorGroupLabels[selectedFakeState.monitorGroupId];
+  const alarmEnabled = severity !== "normal" && monitoredGroupIds.includes(selectedFakeState.monitorGroupId);
+
+  if (!alarmEnabled && severity !== "normal") {
+    const suppressedReminder = highSeveritySuppressedReminderTranslations[language];
+
+    return {
+      severity,
+      monitoredGroupId: selectedFakeState.monitorGroupId,
+      monitoredGroupLabel,
+      alarmEnabled: false,
+      voiceText: suppressedReminder.voiceText(monitoredGroupLabel),
+      policyText: suppressedReminder.policyText,
+      previewSafetyText: localizedReminder.previewSafetyText,
+      suppressionText: suppressedReminder.suppressionText(monitoredGroupLabel),
+      requiresManualAcknowledge: false,
+      autoStopAfterAnnouncements: null
+    };
+  }
 
   return {
     severity,
+    monitoredGroupId: selectedFakeState.monitorGroupId,
+    monitoredGroupLabel,
+    alarmEnabled,
     ...localizedReminder,
+    suppressionText: "",
     requiresManualAcknowledge: severity === "p1",
     autoStopAfterAnnouncements: severity === "p2" ? 3 : null
   };
@@ -1602,6 +1719,7 @@ export function buildDemoQueueItems(
 export type AppProps = {
   initialLanguage?: LanguageCode;
   initialHighSeverityState?: HighSeverityState;
+  initialHighSeverityMonitoredGroups?: HighSeverityMonitorGroup[];
   initialQaSmokeWriteAction?: QaManualFillWriteAction;
   initialQaSmokeApprovalPhrase?: string;
   initialEnvironmentUrlSettings?: ServiceNowEnvironmentUrlOverrides;
@@ -1622,6 +1740,7 @@ export function getNextEnvironmentUrlOverrideFromDraft(mode: Exclude<ServiceNowE
 export function App({
   initialLanguage = "en-US",
   initialHighSeverityState = "normal",
+  initialHighSeverityMonitoredGroups = defaultHighSeverityMonitoredGroups,
   initialQaSmokeWriteAction = "save_incident",
   initialQaSmokeApprovalPhrase = "",
   initialEnvironmentUrlSettings = {}
@@ -1669,6 +1788,9 @@ export function App({
     return () => window.removeEventListener("keydown", closeSettingsOnEscape);
   }, [settingsOpen]);
   const [highSeverityState, setHighSeverityState] = useState<HighSeverityState>(initialHighSeverityState);
+  const [highSeverityMonitoredGroups, setHighSeverityMonitoredGroups] = useState<HighSeverityMonitorGroup[]>(
+    initialHighSeverityMonitoredGroups
+  );
   const [highSeverityAcknowledged, setHighSeverityAcknowledged] = useState(false);
   const [highSeverityMuted, setHighSeverityMuted] = useState(false);
   const [selectedTemplatePresetId, setSelectedTemplatePresetId] = useState<DraftTemplatePresetId>(
@@ -1839,6 +1961,13 @@ export function App({
     );
   }
 
+  function toggleHighSeverityMonitoredGroup(groupId: HighSeverityMonitorGroup) {
+    setHighSeverityMonitoredGroups((current) =>
+      current.includes(groupId) ? current.filter((id) => id !== groupId) : [...current, groupId]
+    );
+    setHighSeverityAcknowledged(false);
+  }
+
   function prepareCopyDraft(label: string, text: string) {
     const preparedDraft = { confirmation: "Prepared copy text", text };
     setPreparedCopyDraft(preparedDraft);
@@ -1925,11 +2054,13 @@ export function App({
 
             <HighSeverityMonitorSimulator
               language={language}
+              monitoredGroupIds={highSeverityMonitoredGroups}
               acknowledged={highSeverityAcknowledged}
               muted={highSeverityMuted}
               selectedState={highSeverityState}
               onAcknowledge={() => setHighSeverityAcknowledged(true)}
               onMute={() => setHighSeverityMuted((current) => !current)}
+              onMonitoredGroupToggle={toggleHighSeverityMonitoredGroup}
               onSelectedStateChange={(state) => {
                 setHighSeverityState(state);
                 setHighSeverityAcknowledged(false);
@@ -2469,8 +2600,10 @@ function RuntimeSafetyPanel({ t }: { t: UiTranslations }) {
 function HighSeverityMonitorSimulator({
   acknowledged,
   language,
+  monitoredGroupIds,
   muted,
   onAcknowledge,
+  onMonitoredGroupToggle,
   onMute,
   onSelectedStateChange,
   selectedState,
@@ -2478,15 +2611,23 @@ function HighSeverityMonitorSimulator({
 }: {
   acknowledged: boolean;
   language: LanguageCode;
+  monitoredGroupIds: HighSeverityMonitorGroup[];
   muted: boolean;
   onAcknowledge: () => void;
+  onMonitoredGroupToggle: (groupId: HighSeverityMonitorGroup) => void;
   onMute: () => void;
   onSelectedStateChange: (state: HighSeverityState) => void;
   selectedState: HighSeverityState;
   t: UiTranslations;
 }) {
   const selectedFakeState = highSeveritySimulatorStates[selectedState];
-  const voiceReminder = getHighSeverityVoiceReminder(selectedState, language);
+  const voiceReminder = getHighSeverityVoiceReminder(selectedState, language, monitoredGroupIds);
+  const alertStatus =
+    selectedState === "normal"
+      ? t.highSeverityMonitor.alertInactiveStatus
+      : voiceReminder.alarmEnabled
+        ? t.highSeverityMonitor.alertEnabledStatus
+        : t.highSeverityMonitor.alertSuppressedStatus;
 
   return (
     <details className="high-severity-simulator">
@@ -2511,6 +2652,23 @@ function HighSeverityMonitorSimulator({
           ))}
         </div>
 
+        <section className="severity-monitor-group-settings" aria-label={t.highSeverityMonitor.monitoredGroupsTitle}>
+          <h4>{t.highSeverityMonitor.monitoredGroupsTitle}</h4>
+          <p>{t.highSeverityMonitor.monitoredGroupsHelper}</p>
+          <div className="severity-monitor-group-list">
+            {highSeverityMonitorGroups.map((group) => (
+              <label key={group.id}>
+                <input
+                  type="checkbox"
+                  checked={monitoredGroupIds.includes(group.id)}
+                  onChange={() => onMonitoredGroupToggle(group.id)}
+                />
+                <span>{group.label}</span>
+              </label>
+            ))}
+          </div>
+        </section>
+
         <dl className="severity-summary">
           <div>
             <dt>{t.highSeverityMonitor.stateLabel}</dt>
@@ -2523,6 +2681,14 @@ function HighSeverityMonitorSimulator({
           <div>
             <dt>{t.highSeverityMonitor.affectedServicesLabel}</dt>
             <dd>{selectedFakeState.affectedServices.join(", ")}</dd>
+          </div>
+          <div>
+            <dt>{t.highSeverityMonitor.monitorGroupLabel}</dt>
+            <dd>{voiceReminder.monitoredGroupLabel}</dd>
+          </div>
+          <div>
+            <dt>{t.highSeverityMonitor.alertStatusLabel}</dt>
+            <dd>{alertStatus}</dd>
           </div>
           <div>
             <dt>{t.highSeverityMonitor.acknowledgedLabel}</dt>
@@ -2546,6 +2712,7 @@ function HighSeverityMonitorSimulator({
         <section className={`severity-voice-preview ${selectedState}`} aria-label="Local high severity voice reminder preview">
           <strong>{voiceReminder.voiceText}</strong>
           <p>{voiceReminder.policyText}</p>
+          {voiceReminder.suppressionText ? <small>{voiceReminder.suppressionText}</small> : null}
           <small>{voiceReminder.previewSafetyText}</small>
         </section>
       </div>
