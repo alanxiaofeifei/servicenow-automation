@@ -12,6 +12,7 @@ import {
   draftTemplatePresets,
   getCtrlWheelZoomDelta,
   getNextAppZoomPercent,
+  getNextEnvironmentUrlOverrideFromDraft,
   updateQaSmokeWriteActionSelection,
   type AppProps,
   type LanguageCode
@@ -29,6 +30,7 @@ describe("App", () => {
     const rendered = renderAppMarkup();
 
     expect(rendered).toContain("ServiceNow Automation");
+    expect(rendered).toContain('class="hero-title"');
     expect(rendered).toContain(
       "AI drafts only. Human review and manual submit required."
     );
@@ -376,11 +378,80 @@ describe("App", () => {
     expect(output).toContain("QA Isolation Check");
     expect(output).toContain("QA Dry-run Outcome");
     expect(output).toContain(
-      "This row is generated locally from the reviewed draft. No workbook is connected or written."
+      "This row is generated locally from the reviewed draft. XLSX export creates a local dry-run file only; no Graph, cloud workbook, or ServiceNow write is performed."
     );
     expect(output).toContain("Copy CSV Row");
     expect(output).toContain("Copy Markdown Summary");
     expect(output).toContain("No real ServiceNow, Excel workbook, Graph, browser, API, mailbox, Teams, or portal write is performed.");
+  });
+
+  it("renders local XLSX dry-run artifact metadata without Graph or ServiceNow writes", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Local XLSX Dry-run Artifact");
+    expect(output).toContain("Download Local XLSX Dry-run");
+    expect(output).toContain("Copy XLSX Metadata");
+    expect(output).toContain("servicenow-dry-run-2026-05-18T08-15.xlsx");
+    expect(output).toContain("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    expect(output).toContain("Excel Dry-run Row");
+    expect(output).toContain("Artifact byte size");
+    expect(output).toContain(
+      "Local deterministic XLSX dry-run artifact only. It does not connect to Microsoft Graph, a cloud workbook, ServiceNow, browser automation, or any real write path."
+    );
+  });
+
+  it("renders local-only ServiceNow environment URL settings with unchanged write gates", () => {
+    const output = renderAppMarkup(undefined, {
+      initialEnvironmentUrlSettings: {
+        qa: "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
+      }
+    });
+    const settingsStart = output.indexOf('id="app-settings-sidebar"');
+    const settingsEnd = output.indexOf("</aside>", settingsStart);
+    const settingsMarkup = output.slice(settingsStart, settingsEnd);
+
+    expect(settingsMarkup).toContain("ServiceNow Environment URL settings");
+    expect(settingsMarkup).toContain("Local state only");
+    expect(settingsMarkup).toContain("Custom URL");
+    expect(settingsMarkup).toContain("QA Test Environment");
+    expect(settingsMarkup).toContain("Development Test Environment");
+    expect(settingsMarkup).toContain("Production Shadow Mode");
+    expect(settingsMarkup).toContain("Accepted ServiceNow host");
+    expect(settingsMarkup).toContain("qa.service-now.example.invalid");
+    expect(settingsMarkup).toContain("Custom target active for this session");
+    expect(settingsMarkup).toContain("Built-in/default target active; raw target URL stays hidden until a safe custom URL is accepted.");
+    expect(settingsMarkup).toContain(
+      "Write gate unchanged: each Save/Submit/Update/Close still requires the exact action approval phrase."
+    );
+    expect(output).not.toContain('href="https://');
+    expect(output).not.toContain("graph.microsoft.com");
+  });
+
+  it("does not label invalid ServiceNow environment URL drafts as active targets", () => {
+    const output = renderAppMarkup(undefined, {
+      initialEnvironmentUrlSettings: {
+        qa: "https://not-servicenow.example.invalid/nav_to.do"
+      }
+    });
+    const settingsStart = output.indexOf('id="app-settings-sidebar"');
+    const settingsEnd = output.indexOf("</aside>", settingsStart);
+    const settingsMarkup = output.slice(settingsStart, settingsEnd);
+
+    expect(settingsMarkup).toContain("Blocked URL setting: host must be a ServiceNow host or approved non-routable placeholder");
+    expect(settingsMarkup).toContain("Built-in/default target active; raw target URL stays hidden until a safe custom URL is accepted.");
+    expect(settingsMarkup).not.toContain("Custom target active for this session");
+  });
+
+  it("clears active ServiceNow URL overrides when a draft URL becomes invalid", () => {
+    expect(
+      getNextEnvironmentUrlOverrideFromDraft(
+        "qa",
+        "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
+      )
+    ).toBe("https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do");
+    expect(getNextEnvironmentUrlOverrideFromDraft("qa", "https://qa.service-now.example.invalid/incident.do/fake-record-123")).toBe("");
+    expect(getNextEnvironmentUrlOverrideFromDraft("qa", "https://example.invalid/nav_to.do")).toBe("");
+    expect(getNextEnvironmentUrlOverrideFromDraft("qa", "")).toBe("");
   });
 
   it("renders one FIFO intake item for each deterministic manual scenario", () => {
@@ -452,15 +523,19 @@ describe("App", () => {
     expect(output).toContain("Manual-fill assisted QA smoke");
     expect(output).toContain("Current environment mode");
     expect(output).toContain("Requested write action");
-    expect(output).toContain('value="save_incident"');
-    expect(output).toContain('value="submit_incident" selected=""');
+    expect(output).toContain('value="save_incident" selected=""');
+    expect(output).toContain('value="submit_incident"');
     expect(output).toContain('value="update_incident"');
     expect(output).toContain('value="close_incident"');
     expect(output).toContain("Required approval phrase for selected action");
-    expect(output).toContain("submit_incident");
-    expect(output).toContain("I APPROVE MOCK SUBMIT ONLY");
-    expect(output).toContain("Action-specific approval phrases");
+    expect(output).toContain("save_incident");
     expect(output).toContain("I APPROVE MOCK SAVE ONLY");
+    expect(output).toContain("First smoke safe scope");
+    expect(output).toContain("Dry-run first: review the local field mapping and Excel row preview only.");
+    expect(output).toContain("Manual copy only: Alan copies or types values; the app never fills ServiceNow.");
+    expect(output).toContain("Save-only readiness: Submit, Update, and Close remain deferred to a later checkpoint.");
+    expect(output).toContain("Action-specific approval phrases");
+    expect(output).toContain("I APPROVE MOCK SUBMIT ONLY");
     expect(output).toContain("I APPROVE MOCK UPDATE ONLY");
     expect(output).toContain("I APPROVE MOCK CLOSE ONLY");
     expect(output).toContain("Stop rules");

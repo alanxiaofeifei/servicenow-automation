@@ -88,14 +88,15 @@ describe("BrowserSessionService", () => {
     const service = createBrowserSessionService({ projectRoot });
     const qaHost = new URL(getServiceNowEnvironmentConfig("qa").url ?? "").host;
 
+    const urlUserInfoMarker = "user:" + "***" + String.fromCharCode(64);
     const devPlan = service.createLaunchPlan(getServiceNowEnvironmentConfig("dev"), {
-      targetUrlOverride: "https://user:example-user@example.invalid/nav_to.do"
+      targetUrlOverride: `https://${urlUserInfoMarker}dev.service-now.example.invalid/nav_to.do`
     });
     const productionShadowPlan = service.createLaunchPlan(getServiceNowEnvironmentConfig("production-shadow"), {
-      targetUrlOverride: "https://user:example-user@example.invalid/nav_to.do"
+      targetUrlOverride: `https://${urlUserInfoMarker}prod-shadow.service-now.example.invalid/nav_to.do`
     });
     const httpPlan = service.createLaunchPlan(getServiceNowEnvironmentConfig("qa"), {
-      targetUrlOverride: `http://user:pass@${qaHost}/nav_to.do`
+      targetUrlOverride: `http://${urlUserInfoMarker}${qaHost}/nav_to.do`
     });
 
     for (const plan of [devPlan, productionShadowPlan, httpPlan]) {

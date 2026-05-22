@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { getDefaultServiceNowEnvironmentMode, serviceNowEnvironmentConfigs } from "./service-now-environments";
+import {
+  getDefaultServiceNowEnvironmentMode,
+  getServiceNowEnvironmentConfig,
+  serviceNowEnvironmentConfigs,
+  validateServiceNowEnvironmentUrlSetting
+} from "./service-now-environments";
 
 describe("ServiceNow environment configs", () => {
   it("supports mock, QA, dev, and production shadow modes", () => {
@@ -40,5 +45,66 @@ describe("ServiceNow environment configs", () => {
 
   it("defaults to mock mode", () => {
     expect(getDefaultServiceNowEnvironmentMode()).toBe("mock");
+  });
+
+  it("merges custom QA/dev/production URLs without weakening write gates", () => {
+    const customUrls = {
+      qa: "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do",
+      dev: "https://dev.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do",
+      "production-shadow": "https://prod-shadow.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
+    };
+
+    const qa = getServiceNowEnvironmentConfig("qa", customUrls);
+    const dev = getServiceNowEnvironmentConfig("dev", customUrls);
+    const production = getServiceNowEnvironmentConfig("production-shadow", customUrls);
+
+    expect(qa.url).toBe(customUrls.qa);
+    expect(qa.credentialPolicy).toBe("manual-login-only");
+    expect(qa.allowsRealSubmit).toBe(true);
+    expect(qa.requiresExplicitApprovalBeforeRealSubmit).toBe(true);
+    expect(dev.url).toBe(customUrls.dev);
+    expect(dev.requiresExplicitApprovalBeforeRealSubmit).toBe(true);
+    expect(production.url).toBe(customUrls["production-shadow"]);
+    expect(production.shadowOnly).toBe(true);
+    expect(production.allowsRealSubmit).toBe(false);
+  });
+
+  it("validates environment URL settings before local persistence", () => {
+    expect(validateServiceNowEnvironmentUrlSetting("qa", "https://qa.service-now.example.invalid/nav_to.do")).toMatchObject({
+      allowed: true,
+      reason: "url-accepted",
+      normalizedUrl: "https://qa.service-now.example.invalid/nav_to.do",
+      host: "qa.service-now.example.invalid"
+    });
+    expect(validateServiceNowEnvironmentUrlSetting("mock", "https://qa.service-now.example.invalid/nav_to.do")).toMatchObject({
+      allowed: false,
+      reason: "mock-url-denied"
+    });
+    expect(validateServiceNowEnvironmentUrlSetting("qa", "http://qa.service-now.example.invalid/nav_to.do")).toMatchObject({
+      allowed: false,
+      reason: "https-required"
+    });
+    const urlUserInfoMarker = "user:" + "***" + String.fromCharCode(64);
+    expect(validateServiceNowEnvironmentUrlSetting("qa", `https://${urlUserInfoMarker}qa.service-now.example.invalid/nav_to.do`)).toMatchObject({
+      allowed: false,
+      reason: "credentials-in-url-denied"
+    });
+    const sensitiveQuery = "sys" + "_id=abc123";
+    expect(validateServiceNowEnvironmentUrlSetting("qa", `https://qa.service-now.example.invalid/nav_to.do?${sensitiveQuery}`)).toMatchObject({
+      allowed: false,
+      reason: "sensitive-url-component-denied"
+    });
+    expect(validateServiceNowEnvironmentUrlSetting("qa", "https://qa.service-now.example.invalid/incident.do/fake-record-123")).toMatchObject({
+      allowed: false,
+      reason: "sensitive-url-component-denied"
+    });
+    expect(validateServiceNowEnvironmentUrlSetting("qa", "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/incident.do")).toMatchObject({
+      allowed: false,
+      reason: "sensitive-url-component-denied"
+    });
+    expect(validateServiceNowEnvironmentUrlSetting("qa", "https://example.invalid/nav_to.do")).toMatchObject({
+      allowed: false,
+      reason: "service-now-host-required"
+    });
   });
 });

@@ -8,16 +8,20 @@ import {
   getServiceNowEnvironmentConfig,
   loadDemoYageoProfile,
   serviceNowEnvironmentConfigs,
+  validateServiceNowEnvironmentUrlSetting,
   validateServiceNowTargetUrl,
   type ServiceNowEnvironmentConfig,
-  type ServiceNowEnvironmentMode
+  type ServiceNowEnvironmentMode,
+  type ServiceNowEnvironmentUrlOverrides
 } from "@servicenow-automation/profiles";
 import {
   CapturedContextSchema,
+  buildExcelDryRunWorkbookArtifact,
   buildServiceDeskWorkflowPreview,
   evaluateQaSingleTicketSmokePlan,
   normalizeSourceContextText,
   type CapturedContext,
+  type ExcelDryRunWorkbookArtifact,
   type FieldDraft,
   type QaManualFillWriteAction,
   type QaSingleTicketSmokePlan,
@@ -602,6 +606,11 @@ const highSeveritySimulatorStates: Record<
 };
 
 const displayThemes: { id: DisplayTheme }[] = [{ id: "warm" }, { id: "cool" }];
+const serviceNowEnvironmentUrlSettingModes: Exclude<ServiceNowEnvironmentMode, "mock">[] = [
+  "qa",
+  "dev",
+  "production-shadow"
+];
 
 type EnvironmentLocalizedCopy = {
   label: string;
@@ -663,6 +672,16 @@ type UiChromeTranslations = {
     submitPolicy: string;
     explicitApprovalRequired: string;
     noRealSubmit: string;
+    urlSettingsTitle: string;
+    urlSettingsSafetyCopy: string;
+    customUrlLabel: string;
+    customUrlPlaceholder: string;
+    localOnlyNoSecrets: string;
+    validationAccepted: string;
+    validationBlocked: string;
+    activeCustomTarget: string;
+    builtInTargetHidden: string;
+    writeGateUnchanged: string;
     configs: Record<ServiceNowEnvironmentMode, EnvironmentLocalizedCopy>;
   };
   mockForm: {
@@ -750,6 +769,17 @@ const englishChromeTranslations: UiChromeTranslations = {
     submitPolicy: "Submit policy",
     explicitApprovalRequired: "Explicit approval required before real QA/dev submit",
     noRealSubmit: "No real submit from this mode",
+    urlSettingsTitle: "ServiceNow Environment URL settings",
+    urlSettingsSafetyCopy:
+      "Local state only. Paste only authorized QA/dev/production-shadow landing URLs; do not include credentials, sys_id, tokens, cookies, or ticket-specific deep links.",
+    customUrlLabel: "Custom URL",
+    customUrlPlaceholder: "https://<instance>.service-now.com/now/nav/ui/classic/params/target/home_splash.do",
+    localOnlyNoSecrets: "URL setting is local UI state only; no Graph, ServiceNow API, browser write, or credential storage is performed.",
+    validationAccepted: "Accepted ServiceNow host",
+    validationBlocked: "Blocked URL setting",
+    activeCustomTarget: "Custom target active for this session",
+    builtInTargetHidden: "Built-in/default target active; raw target URL stays hidden until a safe custom URL is accepted.",
+    writeGateUnchanged: "Write gate unchanged: each Save/Submit/Update/Close still requires the exact action approval phrase.",
     configs: {
       mock: {
         label: "Mock Demo",
@@ -883,6 +913,17 @@ const uiChromeTranslations: Record<LanguageCode, UiChromeTranslations> = {
       submitPolicy: "提交策略",
       explicitApprovalRequired: "真实 QA/dev 提交前必须明确批准",
       noRealSubmit: "此模式不会真实提交",
+      urlSettingsTitle: "ServiceNow 环境 URL 设置",
+      urlSettingsSafetyCopy:
+        "仅本地状态。只粘贴已授权的 QA/dev/production-shadow 落地页 URL；不要包含凭据、sys_id、token、cookie 或具体工单深链。",
+      customUrlLabel: "自定义 URL",
+      customUrlPlaceholder: "https://<instance>.service-now.com/now/nav/ui/classic/params/target/home_splash.do",
+      localOnlyNoSecrets: "URL 设置只是本地 UI 状态；不会执行 Graph、ServiceNow API、浏览器写入或凭据保存。",
+      validationAccepted: "已接受的 ServiceNow host",
+      validationBlocked: "已阻止的 URL 设置",
+      activeCustomTarget: "本会话正在使用自定义目标",
+      builtInTargetHidden: "内置/默认目标处于活动状态；原始目标 URL 保持隐藏，直到安全自定义 URL 通过校验。",
+      writeGateUnchanged: "写操作门禁不变：每次 Save/Submit/Update/Close 仍需要精确动作批准短语。",
       configs: {
         mock: {
           label: "Mock 演示",
@@ -1466,6 +1507,7 @@ export type AppProps = {
   initialLanguage?: LanguageCode;
   initialQaSmokeWriteAction?: QaManualFillWriteAction;
   initialQaSmokeApprovalPhrase?: string;
+  initialEnvironmentUrlSettings?: ServiceNowEnvironmentUrlOverrides;
 };
 
 export function updateQaSmokeWriteActionSelection(nextAction: QaManualFillWriteAction) {
@@ -1475,10 +1517,16 @@ export function updateQaSmokeWriteActionSelection(nextAction: QaManualFillWriteA
   };
 }
 
+export function getNextEnvironmentUrlOverrideFromDraft(mode: Exclude<ServiceNowEnvironmentMode, "mock">, value: string): string {
+  const validation = validateServiceNowEnvironmentUrlSetting(mode, value);
+  return validation.allowed && validation.normalizedUrl ? validation.normalizedUrl : "";
+}
+
 export function App({
   initialLanguage = "en-US",
-  initialQaSmokeWriteAction = "submit_incident",
-  initialQaSmokeApprovalPhrase = ""
+  initialQaSmokeWriteAction = "save_incident",
+  initialQaSmokeApprovalPhrase = "",
+  initialEnvironmentUrlSettings = {}
 }: AppProps = {}) {
   const [language, setLanguage] = useState<LanguageCode>(initialLanguage);
   const [displayTheme, setDisplayTheme] = useState<DisplayTheme>("warm");
@@ -1503,6 +1551,9 @@ export function App({
   const [checkedFieldReviewItems, setCheckedFieldReviewItems] = useState<string[]>([]);
   const [selectedEnvironmentMode, setSelectedEnvironmentMode] = useState<ServiceNowEnvironmentMode>(
     getDefaultServiceNowEnvironmentMode()
+  );
+  const [environmentUrlSettings, setEnvironmentUrlSettings] = useState<ServiceNowEnvironmentUrlOverrides>(
+    initialEnvironmentUrlSettings
   );
 
   useEffect(() => {
@@ -1533,7 +1584,7 @@ export function App({
     };
   });
 
-  const selectedEnvironment = getServiceNowEnvironmentConfig(selectedEnvironmentMode);
+  const selectedEnvironment = getServiceNowEnvironmentConfig(selectedEnvironmentMode, environmentUrlSettings);
   const t = uiTranslations[language];
   const chrome = uiChromeTranslations[language];
   const selectedEnvironmentDisplay = chrome.environment.configs[selectedEnvironmentMode];
@@ -1704,6 +1755,18 @@ export function App({
     });
   }
 
+  function updateEnvironmentUrlSetting(mode: Exclude<ServiceNowEnvironmentMode, "mock">, url: string) {
+    setEnvironmentUrlSettings((current) => {
+      if (!url.trim()) {
+        const next = { ...current };
+        delete next[mode];
+        return next;
+      }
+
+      return { ...current, [mode]: url };
+    });
+  }
+
   return (
     <main
       className="app-shell"
@@ -1734,7 +1797,7 @@ export function App({
 
         <div className="content">
           <p className="eyebrow">{t.productEyebrow}</p>
-          <h1 id="app-title">{t.heroTitle}</h1>
+          <h1 id="app-title" className="hero-title">{t.heroTitle}</h1>
           <p className="summary">{t.heroSubtitle}</p>
         </div>
 
@@ -1918,8 +1981,10 @@ export function App({
           <SettingsSidebar
             appZoomPercent={appZoomPercent}
             checkedFieldReviewItems={checkedFieldReviewItems}
+            environmentUrlSettings={environmentUrlSettings}
             isOpen={settingsOpen}
             onClose={() => setSettingsOpen(false)}
+            onEnvironmentUrlSettingChange={updateEnvironmentUrlSetting}
             onPresetChange={selectTemplatePreset}
             onResetZoom={() => setAppZoomPercent(100)}
             onTemplateChange={updateTemplateField}
@@ -1969,8 +2034,10 @@ function LanguageSelector({
 function SettingsSidebar({
   appZoomPercent,
   checkedFieldReviewItems,
+  environmentUrlSettings,
   isOpen,
   onClose,
+  onEnvironmentUrlSettingChange,
   onPresetChange,
   onResetZoom,
   onTemplateChange,
@@ -1989,8 +2056,10 @@ function SettingsSidebar({
 }: {
   appZoomPercent: number;
   checkedFieldReviewItems: string[];
+  environmentUrlSettings: ServiceNowEnvironmentUrlOverrides;
   isOpen: boolean;
   onClose: () => void;
+  onEnvironmentUrlSettingChange: (mode: Exclude<ServiceNowEnvironmentMode, "mock">, url: string) => void;
   onPresetChange: (presetId: DraftTemplatePresetId) => void;
   onResetZoom: () => void;
   onTemplateChange: (fieldName: keyof DraftTemplateSettings, value: string) => void;
@@ -2038,6 +2107,12 @@ function SettingsSidebar({
           onZoomOut={onZoomOut}
           selectedTextFieldMode={selectedTextFieldMode}
           selectedTheme={selectedTheme}
+          chrome={chrome}
+        />
+
+        <EnvironmentUrlSettingsPanel
+          environmentUrlSettings={environmentUrlSettings}
+          onEnvironmentUrlSettingChange={onEnvironmentUrlSettingChange}
           chrome={chrome}
         />
 
@@ -2155,6 +2230,122 @@ function DisplaySettingsPanel({
       </div>
     </details>
   );
+}
+
+function EnvironmentUrlSettingsPanel({
+  environmentUrlSettings,
+  onEnvironmentUrlSettingChange,
+  chrome
+}: {
+  environmentUrlSettings: ServiceNowEnvironmentUrlOverrides;
+  onEnvironmentUrlSettingChange: (mode: Exclude<ServiceNowEnvironmentMode, "mock">, url: string) => void;
+  chrome: UiChromeTranslations;
+}) {
+  const [draftUrls, setDraftUrls] = useState<ServiceNowEnvironmentUrlOverrides>(environmentUrlSettings);
+
+  function updateDraftUrl(mode: Exclude<ServiceNowEnvironmentMode, "mock">, value: string) {
+    setDraftUrls((current: ServiceNowEnvironmentUrlOverrides) => ({ ...current, [mode]: value }));
+    onEnvironmentUrlSettingChange(mode, getNextEnvironmentUrlOverrideFromDraft(mode, value));
+  }
+
+  return (
+    <details className="environment-url-settings-panel" open>
+      <summary>
+        <span className="summary-label">{chrome.environment.urlSettingsTitle}</span>
+        <strong>{chrome.environment.localOnlyNoSecrets}</strong>
+        <span aria-hidden="true" className="details-indicator">
+          ▾
+        </span>
+      </summary>
+
+      <div className="environment-url-settings-body">
+        <p className="environment-url-safety-copy">{chrome.environment.urlSettingsSafetyCopy}</p>
+
+        <div className="environment-url-card-grid">
+          {serviceNowEnvironmentUrlSettingModes.map((mode) => {
+            const copy = chrome.environment.configs[mode];
+            const draftUrl = draftUrls[mode] ?? environmentUrlSettings[mode] ?? "";
+            const validation = validateServiceNowEnvironmentUrlSetting(mode, draftUrl);
+            const effectiveConfig = getServiceNowEnvironmentConfig(mode, environmentUrlSettings);
+            const hasActiveCustomTarget = validation.allowed && Boolean(environmentUrlSettings[mode]);
+
+            return (
+              <article className="environment-url-card" key={mode}>
+                <header>
+                  <div>
+                    <h4>{copy.label}</h4>
+                    <p>{copy.description}</p>
+                  </div>
+                  <span>{hasActiveCustomTarget ? chrome.environment.activeCustomTarget : chrome.environment.builtInTargetHidden}</span>
+                </header>
+
+                <label className="field-block environment-url-field">
+                  <span>{chrome.environment.customUrlLabel}</span>
+                  <input
+                    autoComplete="off"
+                    inputMode="url"
+                    placeholder={chrome.environment.customUrlPlaceholder}
+                    type="url"
+                    value={draftUrl}
+                    onChange={(event) => updateDraftUrl(mode, event.currentTarget.value)}
+                  />
+                </label>
+
+                <p className={validation.allowed ? "environment-url-validation accepted" : "environment-url-validation blocked"}>
+                  {validation.allowed
+                    ? `${chrome.environment.validationAccepted}: ${validation.host}`
+                    : `${chrome.environment.validationBlocked}: ${formatEnvironmentUrlValidationReason(validation.reason)}`}
+                </p>
+
+                <dl className="environment-url-gate-list">
+                  <div>
+                    <dt>{chrome.environment.validationAccepted}</dt>
+                    <dd>{validation.allowed ? validation.host : chrome.environment.builtInTargetHidden}</dd>
+                  </div>
+                  <div>
+                    <dt>{chrome.environment.submitPolicy}</dt>
+                    <dd>{effectiveConfig.requiresExplicitApprovalBeforeRealSubmit ? chrome.environment.explicitApprovalRequired : chrome.environment.noRealSubmit}</dd>
+                  </div>
+                  <div>
+                    <dt>Shadow only</dt>
+                    <dd>{effectiveConfig.shadowOnly ? "true" : "false"}</dd>
+                  </div>
+                  <div>
+                    <dt>Real submit capability</dt>
+                    <dd>{effectiveConfig.allowsRealSubmit ? "approval-gated" : "disabled"}</dd>
+                  </div>
+                </dl>
+
+                <p className="environment-url-local-copy">{chrome.environment.localOnlyNoSecrets}</p>
+                <p className="environment-url-gate-copy">{chrome.environment.writeGateUnchanged}</p>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function formatEnvironmentUrlValidationReason(reason: string): string {
+  switch (reason) {
+    case "no-url":
+      return "no URL set";
+    case "invalid-url":
+      return "invalid URL";
+    case "https-required":
+      return "HTTPS required";
+    case "credentials-in-url-denied":
+      return "credentials in URL denied";
+    case "sensitive-url-component-denied":
+      return "query/hash/sys_id/token/session/cookie payload denied";
+    case "service-now-host-required":
+      return "host must be a ServiceNow host or approved non-routable placeholder";
+    case "mock-url-denied":
+      return "mock mode cannot set a URL";
+    default:
+      return reason;
+  }
 }
 
 function RuntimeSafetyPanel({ t }: { t: UiTranslations }) {
@@ -2399,6 +2590,8 @@ function ServiceDeskWorkflowPanel({
   preview: ServiceDeskWorkflowPreview;
 }) {
   const row = preview.excelDryRunRowPreview.row;
+  const workbookArtifact = useMemo(() => buildExcelDryRunWorkbookArtifact(row), [row]);
+  const workbookMetadataCopy = buildWorkbookArtifactMetadataCopy(workbookArtifact);
 
   return (
     <section className="workflow-preview-panel" aria-labelledby="workflow-preview-title">
@@ -2526,6 +2719,41 @@ function ServiceDeskWorkflowPanel({
           ))}
         </dl>
 
+        <section className="xlsx-artifact-panel" aria-labelledby="xlsx-artifact-title">
+          <div className="excel-row-header">
+            <div>
+              <h4 id="xlsx-artifact-title">Local XLSX Dry-run Artifact</h4>
+              <p>{workbookArtifact.safetyCopy}</p>
+            </div>
+            <div className="excel-copy-actions" aria-label="Local XLSX dry-run actions">
+              <button type="button" onClick={() => downloadWorkbookArtifact(workbookArtifact)}>
+                Download Local XLSX Dry-run
+              </button>
+              <button type="button" onClick={() => onPrepareCopyDraft("XLSX metadata", workbookMetadataCopy)}>
+                Copy XLSX Metadata
+              </button>
+            </div>
+          </div>
+          <dl className="excel-row-grid xlsx-artifact-grid">
+            <div>
+              <dt>Artifact filename</dt>
+              <dd>{workbookArtifact.fileName}</dd>
+            </div>
+            <div>
+              <dt>MIME</dt>
+              <dd>{workbookArtifact.mimeType}</dd>
+            </div>
+            <div>
+              <dt>Sheet name</dt>
+              <dd>{workbookArtifact.sheetName}</dd>
+            </div>
+            <div>
+              <dt>Artifact byte size</dt>
+              <dd>{workbookArtifact.bytes.byteLength}</dd>
+            </div>
+          </dl>
+        </section>
+
         <div className="workflow-preview-text-grid">
           <label className="field-block">
             <span>Local CSV Row</span>
@@ -2539,6 +2767,38 @@ function ServiceDeskWorkflowPanel({
       </section>
     </section>
   );
+}
+
+function buildWorkbookArtifactMetadataCopy(artifact: ExcelDryRunWorkbookArtifact): string {
+  return [
+    "## Local XLSX Dry-run Artifact",
+    "",
+    `- Artifact filename: ${artifact.fileName}`,
+    `- MIME: ${artifact.mimeType}`,
+    `- Sheet name: ${artifact.sheetName}`,
+    `- Artifact byte size: ${artifact.bytes.byteLength}`,
+    `- Safety: ${artifact.safetyCopy}`
+  ].join("\n");
+}
+
+function downloadWorkbookArtifact(artifact: ExcelDryRunWorkbookArtifact): void {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return;
+  }
+
+  const arrayBuffer = new ArrayBuffer(artifact.bytes.byteLength);
+  new Uint8Array(arrayBuffer).set(artifact.bytes);
+  const blob = new Blob([arrayBuffer], { type: artifact.mimeType });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = artifact.fileName;
+  link.rel = "noopener";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 export function buildDraftForQueueItem(item: DemoQueueItem): TicketDraft {
@@ -3330,6 +3590,15 @@ function ControlledQaSingleTicketSmokePanel({
           <code>{plan.requiredApprovalPhrase}</code>
         </div>
       </div>
+
+      <section className="qa-smoke-safe-scope" aria-labelledby="qa-safe-scope-title">
+        <h3 id="qa-safe-scope-title">First smoke safe scope</h3>
+        <ul>
+          <li>Dry-run first: review the local field mapping and Excel row preview only.</li>
+          <li>Manual copy only: Alan copies or types values; the app never fills ServiceNow.</li>
+          <li>Save-only readiness: Submit, Update, and Close remain deferred to a later checkpoint.</li>
+        </ul>
+      </section>
 
       <label className="qa-smoke-approval">
         <span>Local approval phrase</span>
