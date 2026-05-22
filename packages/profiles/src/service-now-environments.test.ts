@@ -17,7 +17,7 @@ describe("ServiceNow environment configs", () => {
     const dev = serviceNowEnvironmentConfigs.find((config) => config.mode === "dev");
     const production = serviceNowEnvironmentConfigs.find((config) => config.mode === "production-shadow");
 
-    expect(qa?.url).toContain("https://yageoqa.service-now.com");
+    expect(qa?.url).toContain("https://qa.service-now.example.invalid");
     expect(qa?.credentialPolicy).toBe("manual-login-only");
     expect(qa?.requiresExplicitApprovalBeforeRealSubmit).toBe(true);
     expect(qa?.localRuntimeDirectory).toContain(".local/servicenow-browser-profiles/qa");

@@ -33,7 +33,7 @@ export const serviceNowEnvironmentConfigs: readonly ServiceNowEnvironmentConfig[
     mode: "qa",
     label: "QA Test Environment",
     description: "Authorized ServiceNow QA target for controlled test-ticket rehearsal after mock workflow is stable.",
-    url: "https://yageoqa.service-now.com/now/nav/ui/classic/params/target/home_splash.do",
+    url: "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do",
     credentialPolicy: "manual-login-only",
     localRuntimeDirectory: ".local/servicenow-browser-profiles/qa",
     allowsRealSubmit: true,

@@ -39,8 +39,8 @@ const productionShadowEnvironment: RealActionEnvironment = {
 const qaTargetValidation: RealActionTargetValidation = {
   allowed: true,
   reason: "target-allowlisted",
-  host: "qa-example.service-now.com",
-  allowedHost: "qa-example.service-now.com"
+  host: "qa.service-now.example.invalid",
+  allowedHost: "qa.service-now.example.invalid"
 };
 
 const completeMappingOptions: IncidentFieldMappingPreviewOptions = {
@@ -77,7 +77,7 @@ describe("QA single-ticket smoke preview", () => {
     const plan = evaluateQaSingleTicketSmokePlan({
       draft: completeDraft(),
       environment: productionShadowEnvironment,
-      targetUrl: "https://qa-example.service-now.com/nav_to.do",
+      targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
       targetValidation: qaTargetValidation,
       mappingOptions: completeMappingOptions,
       approvalPhrase: "I APPROVE PRODUCTION-SHADOW SUBMIT ONLY",
@@ -93,7 +93,7 @@ describe("QA single-ticket smoke preview", () => {
     const plan = evaluateQaSingleTicketSmokePlan({
       draft: completeDraft(),
       environment: mockEnvironment,
-      targetUrl: "https://qa-example.service-now.com/nav_to.do",
+      targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
       targetValidation: qaTargetValidation,
       mappingOptions: completeMappingOptions,
       approvalPhrase: "I APPROVE MOCK SUBMIT ONLY"
@@ -107,19 +107,19 @@ describe("QA single-ticket smoke preview", () => {
     const qaPlan = evaluateQaSingleTicketSmokePlan({
       draft: completeDraft(),
       environment: qaEnvironment,
-      targetUrl: "https://qa-example.service-now.com/nav_to.do",
+      targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
       targetValidation: qaTargetValidation,
       mappingOptions: completeMappingOptions
     });
     const devPlan = evaluateQaSingleTicketSmokePlan({
       draft: completeDraft(),
       environment: devEnvironment,
-      targetUrl: "https://dev-example.service-now.com/nav_to.do",
+      targetUrl: "https://dev.service-now.example.invalid/nav_to.do",
       targetValidation: {
         allowed: true,
         reason: "target-allowlisted",
-        host: "dev-example.service-now.com",
-        allowedHost: "dev-example.service-now.com"
+        host: "dev.service-now.example.invalid",
+        allowedHost: "dev.service-now.example.invalid"
       },
       mappingOptions: completeMappingOptions
     });
@@ -134,7 +134,7 @@ describe("QA single-ticket smoke preview", () => {
     const plan = evaluateQaSingleTicketSmokePlan({
       draft: completeDraft(),
       environment: qaEnvironment,
-      targetUrl: "https://qa-example.service-now.com/nav_to.do",
+      targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
       targetValidation: qaTargetValidation,
       mappingOptions: completeMappingOptions,
       approvalPhrase: "I APPROVE QA WRITE ONLY"
@@ -148,7 +148,7 @@ describe("QA single-ticket smoke preview", () => {
     const plan = evaluateQaSingleTicketSmokePlan({
       draft: completeDraft(),
       environment: qaEnvironment,
-      targetUrl: "https://qa-example.service-now.com/nav_to.do",
+      targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
       targetValidation: qaTargetValidation,
       mappingOptions: completeMappingOptions,
       approvalPhrase: "I APPROVE QA SUBMIT ONLY",
@@ -158,7 +158,7 @@ describe("QA single-ticket smoke preview", () => {
     });
 
     expect(plan.status).toBe("ready-for-manual-fill");
-    expect(plan.targetHost).toBe("qa-example.service-now.com");
+    expect(plan.targetHost).toBe("qa.service-now.example.invalid");
     expect(plan.gateDecision.allowed).toBe(true);
     expect(plan.writeActionApprovalPhrases).toEqual([
       { action: "save_incident", label: "Save", phrase: "I APPROVE QA SAVE ONLY" },
@@ -192,7 +192,7 @@ describe("QA single-ticket smoke preview", () => {
     const plan = evaluateQaSingleTicketSmokePlan({
       draft: completeDraft({ subcategory: undefined }),
       environment: qaEnvironment,
-      targetUrl: "https://qa-example.service-now.com/nav_to.do",
+      targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
       targetValidation: qaTargetValidation,
       mappingOptions: completeMappingOptions,
       approvalPhrase: "I APPROVE QA SUBMIT ONLY"
