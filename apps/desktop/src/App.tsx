@@ -34,7 +34,7 @@ const profile = loadDemoYageoProfile();
 
 type DemoQueueStatus = "New" | "Reviewed" | "Drafted" | "Done" | "Skipped";
 
-type HighSeverityState = "normal" | "p2" | "p1";
+export type HighSeverityState = "normal" | "p2" | "p1";
 
 type DisplayTheme = "warm" | "cool";
 
@@ -604,6 +604,102 @@ const highSeveritySimulatorStates: Record<
     affectedServices: ["Demo network access", "Demo employee portal"]
   }
 };
+
+export type HighSeverityVoiceReminder = {
+  severity: HighSeverityState;
+  voiceText: string;
+  policyText: string;
+  previewSafetyText: string;
+  requiresManualAcknowledge: boolean;
+  autoStopAfterAnnouncements: number | null;
+};
+
+const highSeverityVoiceReminderTranslations = {
+  "zh-CN": {
+    normal: {
+      voiceText: "当前没有 P1 或 P2 高优先级事件提醒。",
+      policyText: "无活跃语音播报。",
+      previewSafetyText: "Local browser speech preview only — 本地浏览器语音预览，不连接真实 ServiceNow。"
+    },
+    p2: {
+      voiceText: "P2 重要事件提醒：检测到 VIP 或重要且紧急事件。请尽快查看并确认处理负责人。",
+      policyText: "三次提醒后自动停止；用户也可以提前手动确认或静音。",
+      previewSafetyText: "Local browser speech preview only — 本地浏览器语音预览，不连接真实 ServiceNow。"
+    },
+    p1: {
+      voiceText: "P1 严重事件警报：可能是高影响范围事件，例如产线停产、公司断网或安全事故。请立即处理。",
+      policyText: "更频繁重复播报，直到用户手动确认或静音。",
+      previewSafetyText: "Local browser speech preview only — 本地浏览器语音预览，不连接真实 ServiceNow。"
+    }
+  },
+  "en-US": {
+    normal: {
+      voiceText: "No active P1 or P2 high-severity incident reminder.",
+      policyText: "No active voice announcement.",
+      previewSafetyText: "Local browser speech preview only — no real ServiceNow polling or API call."
+    },
+    p2: {
+      voiceText: "P2 urgent incident reminder: a VIP or important urgent event needs review and owner confirmation.",
+      policyText: "Auto-stops after 3 announcements, or sooner if the user acknowledges or mutes it.",
+      previewSafetyText: "Local browser speech preview only — no real ServiceNow polling or API call."
+    },
+    p1: {
+      voiceText:
+        "P1 critical incident alert: possible major-impact event, such as production stoppage, company network outage, or safety incident. Take immediate action.",
+      policyText: "Repeats until manual acknowledgement or mute.",
+      previewSafetyText: "Local browser speech preview only — no real ServiceNow polling or API call."
+    }
+  },
+  "zh-TW": {
+    normal: {
+      voiceText: "目前沒有 P1 或 P2 高優先級事件提醒。",
+      policyText: "沒有啟用語音播報。",
+      previewSafetyText: "Local browser speech preview only — 本地瀏覽器語音預覽，不連線真實 ServiceNow。"
+    },
+    p2: {
+      voiceText: "P2 重要事件提醒：偵測到 VIP 或重要且緊急事件。請盡快查看並確認處理負責人。",
+      policyText: "提醒三次後自動停止；使用者也可以提前手動確認或靜音。",
+      previewSafetyText: "Local browser speech preview only — 本地瀏覽器語音預覽，不連線真實 ServiceNow。"
+    },
+    p1: {
+      voiceText: "P1 緊急事件警報：可能是高影響範圍事件，例如產線停產、公司網路中斷或安全事故。請立即處理。",
+      policyText: "更頻繁重複播報，直到使用者手動確認或靜音。",
+      previewSafetyText: "Local browser speech preview only — 本地瀏覽器語音預覽，不連線真實 ServiceNow。"
+    }
+  },
+  "es-ES": {
+    normal: {
+      voiceText: "No hay recordatorio activo de incidente de alta severidad P1 o P2.",
+      policyText: "No hay anuncio de voz activo.",
+      previewSafetyText: "Local browser speech preview only — vista previa local de voz sin sondeo ni API real de ServiceNow."
+    },
+    p2: {
+      voiceText: "Recordatorio de incidente urgente P2: un evento VIP o importante y urgente requiere revisión y confirmación del responsable.",
+      policyText: "Se detiene automáticamente después de 3 anuncios, o antes si el usuario lo reconoce o silencia.",
+      previewSafetyText: "Local browser speech preview only — vista previa local de voz sin sondeo ni API real de ServiceNow."
+    },
+    p1: {
+      voiceText:
+        "Alerta de incidente crítico P1: posible evento de alto impacto, como parada de producción, caída de red corporativa o incidente de seguridad. Actúa de inmediato.",
+      policyText: "Se repite hasta confirmación manual o silencio por el usuario.",
+      previewSafetyText: "Local browser speech preview only — vista previa local de voz sin sondeo ni API real de ServiceNow."
+    }
+  }
+} satisfies Record<LanguageCode, Record<HighSeverityState, Pick<HighSeverityVoiceReminder, "voiceText" | "policyText" | "previewSafetyText">>>;
+
+export function getHighSeverityVoiceReminder(
+  severity: HighSeverityState,
+  language: LanguageCode
+): HighSeverityVoiceReminder {
+  const localizedReminder = highSeverityVoiceReminderTranslations[language][severity];
+
+  return {
+    severity,
+    ...localizedReminder,
+    requiresManualAcknowledge: severity === "p1",
+    autoStopAfterAnnouncements: severity === "p2" ? 3 : null
+  };
+}
 
 const displayThemes: { id: DisplayTheme }[] = [{ id: "warm" }, { id: "cool" }];
 const serviceNowEnvironmentUrlSettingModes: Exclude<ServiceNowEnvironmentMode, "mock">[] = [
@@ -1505,6 +1601,7 @@ export function buildDemoQueueItems(
 
 export type AppProps = {
   initialLanguage?: LanguageCode;
+  initialHighSeverityState?: HighSeverityState;
   initialQaSmokeWriteAction?: QaManualFillWriteAction;
   initialQaSmokeApprovalPhrase?: string;
   initialEnvironmentUrlSettings?: ServiceNowEnvironmentUrlOverrides;
@@ -1524,6 +1621,7 @@ export function getNextEnvironmentUrlOverrideFromDraft(mode: Exclude<ServiceNowE
 
 export function App({
   initialLanguage = "en-US",
+  initialHighSeverityState = "normal",
   initialQaSmokeWriteAction = "save_incident",
   initialQaSmokeApprovalPhrase = "",
   initialEnvironmentUrlSettings = {}
@@ -1570,7 +1668,7 @@ export function App({
     window.addEventListener("keydown", closeSettingsOnEscape);
     return () => window.removeEventListener("keydown", closeSettingsOnEscape);
   }, [settingsOpen]);
-  const [highSeverityState, setHighSeverityState] = useState<HighSeverityState>("normal");
+  const [highSeverityState, setHighSeverityState] = useState<HighSeverityState>(initialHighSeverityState);
   const [highSeverityAcknowledged, setHighSeverityAcknowledged] = useState(false);
   const [highSeverityMuted, setHighSeverityMuted] = useState(false);
   const [selectedTemplatePresetId, setSelectedTemplatePresetId] = useState<DraftTemplatePresetId>(
@@ -1826,6 +1924,7 @@ export function App({
             <RuntimeSafetyPanel t={t} />
 
             <HighSeverityMonitorSimulator
+              language={language}
               acknowledged={highSeverityAcknowledged}
               muted={highSeverityMuted}
               selectedState={highSeverityState}
@@ -2369,6 +2468,7 @@ function RuntimeSafetyPanel({ t }: { t: UiTranslations }) {
 
 function HighSeverityMonitorSimulator({
   acknowledged,
+  language,
   muted,
   onAcknowledge,
   onMute,
@@ -2377,6 +2477,7 @@ function HighSeverityMonitorSimulator({
   t
 }: {
   acknowledged: boolean;
+  language: LanguageCode;
   muted: boolean;
   onAcknowledge: () => void;
   onMute: () => void;
@@ -2385,6 +2486,7 @@ function HighSeverityMonitorSimulator({
   t: UiTranslations;
 }) {
   const selectedFakeState = highSeveritySimulatorStates[selectedState];
+  const voiceReminder = getHighSeverityVoiceReminder(selectedState, language);
 
   return (
     <details className="high-severity-simulator">
@@ -2440,6 +2542,12 @@ function HighSeverityMonitorSimulator({
             {t.highSeverityMonitor.muteAction}
           </button>
         </div>
+
+        <section className={`severity-voice-preview ${selectedState}`} aria-label="Local high severity voice reminder preview">
+          <strong>{voiceReminder.voiceText}</strong>
+          <p>{voiceReminder.policyText}</p>
+          <small>{voiceReminder.previewSafetyText}</small>
+        </section>
       </div>
     </details>
   );

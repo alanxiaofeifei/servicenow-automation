@@ -11,6 +11,7 @@ import {
   clampAppZoomPercent,
   draftTemplatePresets,
   getCtrlWheelZoomDelta,
+  getHighSeverityVoiceReminder,
   getNextAppZoomPercent,
   getNextEnvironmentUrlOverrideFromDraft,
   updateQaSmokeWriteActionSelection,
@@ -71,6 +72,56 @@ describe("App", () => {
     expect(output).toContain("Demo service desk queue");
     expect(output).toContain('<details class="high-severity-simulator">');
     expect(output).not.toContain('class="high-severity-simulator" open');
+  });
+
+  it("builds multilingual P1/P2 voice reminder policy copy", () => {
+    const p1TraditionalChinese = getHighSeverityVoiceReminder("p1", "zh-TW");
+    const p2English = getHighSeverityVoiceReminder("p2", "en-US");
+    const p2Spanish = getHighSeverityVoiceReminder("p2", "es-ES");
+
+    expect(p1TraditionalChinese.severity).toBe("p1");
+    expect(p1TraditionalChinese.requiresManualAcknowledge).toBe(true);
+    expect(p1TraditionalChinese.autoStopAfterAnnouncements).toBeNull();
+    expect(p1TraditionalChinese.voiceText).toContain("P1 緊急事件");
+    expect(p1TraditionalChinese.policyText).toContain("手動確認");
+
+    expect(p2English.severity).toBe("p2");
+    expect(p2English.requiresManualAcknowledge).toBe(false);
+    expect(p2English.autoStopAfterAnnouncements).toBe(3);
+    expect(p2English.voiceText).toContain("P2 urgent incident reminder");
+
+    expect(p2Spanish.voiceText).toContain("incidente urgente P2");
+    expect(p2Spanish.policyText).toContain("3");
+  });
+
+  it("keeps every localized high severity reminder populated", () => {
+    const languages: LanguageCode[] = ["zh-CN", "zh-TW", "en-US", "es-ES"];
+    const severities = ["normal", "p2", "p1"] as const;
+
+    for (const language of languages) {
+      for (const severity of severities) {
+        const reminder = getHighSeverityVoiceReminder(severity, language);
+        expect(reminder.voiceText.length).toBeGreaterThan(12);
+        expect(reminder.policyText.length).toBeGreaterThan(6);
+        expect(reminder.previewSafetyText).toContain("Local browser speech preview only");
+      }
+    }
+  });
+
+  it("renders selected-language P2 voice reminder copy in the simulator", () => {
+    const output = renderAppMarkup("zh-CN", { initialHighSeverityState: "p2" });
+
+    expect(output).toContain("P2 重要事件提醒");
+    expect(output).toContain("三次提醒后自动停止");
+    expect(output).toContain("Local browser speech preview only");
+  });
+
+  it("keeps P1 persistent until manual acknowledgement in the simulator", () => {
+    const output = renderAppMarkup("en-US", { initialHighSeverityState: "p1" });
+
+    expect(output).toContain("P1 critical incident");
+    expect(output).toContain("Repeats until manual acknowledgement or mute");
+    expect(output).not.toContain("Auto-stops after 3 announcements");
   });
 
   it("renders the Ticket Draft workspace controls and default VPN draft", () => {
