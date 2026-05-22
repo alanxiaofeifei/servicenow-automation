@@ -16,6 +16,7 @@ import {
   getNextEnvironmentUrlOverrideFromDraft,
   updateQaSmokeWriteActionSelection,
   type AppProps,
+  type HighSeverityMonitorGroup,
   type LanguageCode
 } from "./App";
 
@@ -92,6 +93,42 @@ describe("App", () => {
 
     expect(p2Spanish.voiceText).toContain("incidente urgente P2");
     expect(p2Spanish.policyText).toContain("3");
+  });
+
+  it("suppresses P1/P2 voice reminders outside the monitored groups", () => {
+    const monitoredGroups: HighSeverityMonitorGroup[] = ["demo-network-operations"];
+    const monitoredP1 = getHighSeverityVoiceReminder("p1", "en-US", monitoredGroups);
+    const suppressedP2 = getHighSeverityVoiceReminder("p2", "en-US", monitoredGroups);
+
+    expect(monitoredP1.alarmEnabled).toBe(true);
+    expect(monitoredP1.monitoredGroupLabel).toBe("Demo Network Operations");
+    expect(monitoredP1.voiceText).toContain("P1 critical incident");
+
+    expect(suppressedP2.alarmEnabled).toBe(false);
+    expect(suppressedP2.monitoredGroupLabel).toBe("Demo Identity Access");
+    expect(suppressedP2.autoStopAfterAnnouncements).toBeNull();
+    expect(suppressedP2.voiceText).not.toContain("P2 urgent incident reminder");
+    expect(suppressedP2.suppressionText).toContain("not in monitored groups");
+
+    const suppressedP1TraditionalChinese = getHighSeverityVoiceReminder("p1", "zh-TW", ["demo-identity-access"]);
+    expect(suppressedP1TraditionalChinese.alarmEnabled).toBe(false);
+    expect(suppressedP1TraditionalChinese.requiresManualAcknowledge).toBe(false);
+    expect(suppressedP1TraditionalChinese.voiceText).toContain("警報已抑制");
+    expect(suppressedP1TraditionalChinese.suppressionText).toContain("不在監控群組中");
+  });
+
+  it("renders monitored-group settings and suppresses unmonitored P2 alert copy", () => {
+    const output = renderAppMarkup("en-US", {
+      initialHighSeverityState: "p2",
+      initialHighSeverityMonitoredGroups: ["demo-network-operations"]
+    });
+
+    expect(output).toContain("Monitored groups for alerts");
+    expect(output).toContain("Only P1/P2 events in selected monitored groups will alert");
+    expect(output).toContain("Demo Identity Access");
+    expect(output).toContain("Suppressed by monitored-group settings");
+    expect(output).toContain("not in monitored groups");
+    expect(output).not.toContain("P2 urgent incident reminder");
   });
 
   it("keeps every localized high severity reminder populated", () => {
