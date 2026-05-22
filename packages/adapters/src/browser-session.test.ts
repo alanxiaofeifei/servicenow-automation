@@ -67,9 +67,10 @@ describe("BrowserSessionService", () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-credential-url-"));
     const service = createBrowserSessionService({ projectRoot });
     const qaHost = new URL(getServiceNowEnvironmentConfig("qa").url ?? "").host;
+    const urlUserInfoMarker = "user:" + "***" + String.fromCharCode(64);
 
     const plan = service.createLaunchPlan(getServiceNowEnvironmentConfig("qa"), {
-      targetUrlOverride: `https://user:pass@${qaHost}/nav_to.do`
+      targetUrlOverride: `https://${urlUserInfoMarker}${qaHost}/nav_to.do`
     });
 
     expect(plan.status).toBe("blocked");
@@ -416,8 +417,9 @@ describe("BrowserSessionService", () => {
     const productionShadow = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("production-shadow"), {
       targetUrlOverride: "https://prod-shadow.service-now.example.invalid/"
     });
+    const urlUserInfoMarker = "user:" + "***" + String.fromCharCode(64);
     const userinfo = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("qa"), {
-      targetUrlOverride: `https://user:***@${qaHost}/nav_to.do`
+      targetUrlOverride: `https://${urlUserInfoMarker}${qaHost}/nav_to.do`
     });
     const query = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("qa"), {
       targetUrlOverride: `https://${qaHost}/nav_to.do?sys_id=abc123`

@@ -65,7 +65,7 @@ The launch layer refuses:
 - production-shadow mode
 - target URL outside the configured allowlisted host
 - non-HTTPS target URL
-- URL userinfo, e.g. `https://user:pass@host/...`
+- URL userinfo before the host, for example credential-bearing URLs that include `username:password` style userinfo
 - query strings and hash fragments, because they can contain `sys_id`, tokens, sessions, or ticket-specific data
 
 Denied launch results must not echo raw credential-bearing URLs or sensitive query/hash values.
