@@ -36,6 +36,27 @@ Forbidden in this slice:
 - Browser visual/network/debug artifacts, auth-material exports, page HTML, or raw QA URLs.
 - External AI using real QA/ServiceNow content.
 
+## Morning checkpoint sequence before any real QA/dev autofill
+
+The next morning checkpoint is tracked in issue #90 and prompt `docs/prompts/gpt-5.5-pro/pre-real-qa-autofill-execution-checkpoint.md`.
+
+Alan's first actions after waking should be:
+
+1. Review the checkpoint prompt and paste only that sanitized prompt into GPT-5.5 Pro.
+2. Record GPT-5.5 Pro's verdict in issue #90: `READY`, `READY WITH CONDITIONS`, or `NOT READY`.
+3. If the verdict is not at least `READY WITH CONDITIONS`, stop and do only local/no-write follow-up.
+4. If conditions pass, re-run local gates and fixture smokes before any browser step.
+5. Only after the verdict is recorded, gates pass, and Alan is present, prepare the dedicated/tool-owned Chromium profile and manual-login path.
+6. Treat any real QA/dev browser autofill execution as a later reviewed slice. This runbook still stops before real browser execution.
+
+Forbidden until issue #90 has a recorded acceptable verdict and the later execution slice is reviewed:
+
+- unattended browser launch,
+- ServiceNow login or navigation by the agent,
+- DOM writes against a real QA/dev page,
+- Save, Submit, Update, Close,
+- screenshots, HAR, traces, storage-state, cookies, sessions, page HTML, raw QA URLs, ticket identifiers, or real field values.
+
 ## Required confirmations
 
 Before any later autofill-only execution action, Alan must confirm QA isolation:
@@ -138,7 +159,7 @@ pnpm --filter @servicenow-automation/cli --silent sda qa autofill-fixture \
   --json
 ```
 
-Expected negative result: `plan.blockedReason` is `selector-mismatch`, `execution.status` is `blocked`, and no fields are filled. Repeat the same negative smoke with `--selector-fixture wrong-description-type` to prove wrong DOM control types fail before readiness, and with `--selector-fixture unexpected-required-field` to prove unexpected required controls stop the fixture harness.
+Expected negative result: `plan.blockedReason` is `selector-mismatch`, `execution.status` is `blocked`, and no fields are filled. Repeat the same negative smoke with `--selector-fixture wrong-description-type` to prove wrong DOM control types fail before readiness, `--selector-fixture ambiguous-description` to prove duplicate selector matches fail closed, `--selector-fixture non-writable-work-notes` to prove non-writable controls fail closed, and `--selector-fixture unexpected-required-field` to prove unexpected required controls stop the fixture harness.
 
 ### Phase 2 — App-side planning review
 
