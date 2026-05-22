@@ -2030,6 +2030,7 @@ textarea:focus,
 .qa-smoke-summary-grid span,
 .qa-smoke-field-preview span,
 .qa-smoke-audit-preview dt,
+.qa-smoke-safe-scope h3,
 .qa-smoke-approval span {
   display: block;
   margin-bottom: 4px;
@@ -2076,6 +2077,31 @@ textarea:focus,
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.qa-smoke-safe-scope {
+  margin-top: 12px;
+  border: 1px solid #e3d5be;
+  border-radius: 12px;
+  padding: 12px;
+  color: #463923;
+  background: #fff8e9;
+}
+
+.qa-smoke-safe-scope h3 {
+  margin: 0 0 6px;
+}
+
+.qa-smoke-safe-scope ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 19px;
+  line-height: 1.42;
+}
+
+.qa-smoke-safe-scope li {
+  font-weight: 820;
 }
 
 .qa-smoke-approval {
