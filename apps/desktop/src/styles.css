@@ -216,10 +216,16 @@ h3 {
 }
 
 h1 {
-  max-width: 13ch;
-  font-size: clamp(2.7rem, 6vw, 4.25rem);
-  line-height: 1.05;
-  letter-spacing: -0.025em;
+  max-width: min(18ch, 100%);
+  font-size: clamp(2.25rem, 4.8vw, 3.55rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
+.hero-title {
+  word-break: keep-all;
+  overflow-wrap: normal;
+  text-wrap: balance;
 }
 
 h2 {

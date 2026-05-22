@@ -1734,7 +1734,7 @@ export function App({
 
         <div className="content">
           <p className="eyebrow">{t.productEyebrow}</p>
-          <h1 id="app-title">{t.heroTitle}</h1>
+          <h1 id="app-title" className="hero-title">{t.heroTitle}</h1>
           <p className="summary">{t.heroSubtitle}</p>
         </div>
 

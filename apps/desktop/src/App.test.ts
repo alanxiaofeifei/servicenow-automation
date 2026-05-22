@@ -29,6 +29,7 @@ describe("App", () => {
     const rendered = renderAppMarkup();
 
     expect(rendered).toContain("ServiceNow Automation");
+    expect(rendered).toContain('class="hero-title"');
     expect(rendered).toContain(
       "AI drafts only. Human review and manual submit required."
     );
