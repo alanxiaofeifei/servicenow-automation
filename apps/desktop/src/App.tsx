@@ -17,12 +17,15 @@ import {
 import {
   CapturedContextSchema,
   buildExcelDryRunWorkbookArtifact,
+  buildQaTextFieldAutofillPlan,
   buildServiceDeskWorkflowPreview,
   evaluateQaSingleTicketSmokePlan,
+  getRequiredQaAutofillApprovalPhrase,
   normalizeSourceContextText,
   type CapturedContext,
   type ExcelDryRunWorkbookArtifact,
   type FieldDraft,
+  type QaAutofillPlan,
   type QaManualFillWriteAction,
   type QaSingleTicketSmokePlan,
   type ServiceDeskWorkflowPreview,
@@ -1718,10 +1721,14 @@ export function buildDemoQueueItems(
 
 export type AppProps = {
   initialLanguage?: LanguageCode;
+  initialEnvironmentMode?: ServiceNowEnvironmentMode;
   initialHighSeverityState?: HighSeverityState;
   initialHighSeverityMonitoredGroups?: HighSeverityMonitorGroup[];
   initialQaSmokeWriteAction?: QaManualFillWriteAction;
   initialQaSmokeApprovalPhrase?: string;
+  initialQaAutofillApprovalPhrase?: string;
+  initialQaAutofillQaIsolationConfirmed?: boolean;
+  initialQaAutofillDedicatedProfileConfirmed?: boolean;
   initialEnvironmentUrlSettings?: ServiceNowEnvironmentUrlOverrides;
 };
 
@@ -1739,10 +1746,14 @@ export function getNextEnvironmentUrlOverrideFromDraft(mode: Exclude<ServiceNowE
 
 export function App({
   initialLanguage = "en-US",
+  initialEnvironmentMode = getDefaultServiceNowEnvironmentMode(),
   initialHighSeverityState = "normal",
   initialHighSeverityMonitoredGroups = defaultHighSeverityMonitoredGroups,
   initialQaSmokeWriteAction = "save_incident",
   initialQaSmokeApprovalPhrase = "",
+  initialQaAutofillApprovalPhrase = "",
+  initialQaAutofillQaIsolationConfirmed = false,
+  initialQaAutofillDedicatedProfileConfirmed = false,
   initialEnvironmentUrlSettings = {}
 }: AppProps = {}) {
   const [language, setLanguage] = useState<LanguageCode>(initialLanguage);
@@ -1765,9 +1776,16 @@ export function App({
   const [fillConfirmed, setFillConfirmed] = useState(false);
   const [qaSmokeApprovalPhrase, setQaSmokeApprovalPhrase] = useState(initialQaSmokeApprovalPhrase);
   const [qaSmokeWriteAction, setQaSmokeWriteAction] = useState<QaManualFillWriteAction>(initialQaSmokeWriteAction);
+  const [qaAutofillApprovalPhrase, setQaAutofillApprovalPhrase] = useState(initialQaAutofillApprovalPhrase);
+  const [qaAutofillQaIsolationConfirmed, setQaAutofillQaIsolationConfirmed] = useState(
+    initialQaAutofillQaIsolationConfirmed
+  );
+  const [qaAutofillDedicatedProfileConfirmed, setQaAutofillDedicatedProfileConfirmed] = useState(
+    initialQaAutofillDedicatedProfileConfirmed
+  );
   const [checkedFieldReviewItems, setCheckedFieldReviewItems] = useState<string[]>([]);
   const [selectedEnvironmentMode, setSelectedEnvironmentMode] = useState<ServiceNowEnvironmentMode>(
-    getDefaultServiceNowEnvironmentMode()
+    initialEnvironmentMode
   );
   const [environmentUrlSettings, setEnvironmentUrlSettings] = useState<ServiceNowEnvironmentUrlOverrides>(
     initialEnvironmentUrlSettings
@@ -1853,6 +1871,15 @@ export function App({
     language,
     templatePreset: selectedTemplatePresetId,
     now: new Date()
+  });
+  const qaAutofillPlan = buildQaTextFieldAutofillPlan({
+    draft,
+    environment: selectedEnvironment,
+    targetUrl: qaSmokeTargetUrl,
+    targetValidation: qaSmokeTargetValidation,
+    approvalPhrase: qaAutofillApprovalPhrase,
+    qaIsolationConfirmed: qaAutofillQaIsolationConfirmed,
+    dedicatedProfileConfirmed: qaAutofillDedicatedProfileConfirmed
   });
   const context = buildContextForQueueItem(selectedQueueItem);
   const sourceCleanup = normalizeSourceContextText({
@@ -2205,6 +2232,16 @@ export function App({
               plan={qaSmokePlan}
               onApprovalPhraseChange={setQaSmokeApprovalPhrase}
               writeAction={qaSmokeWriteAction}
+            />
+            <QaTextFieldAutofillPanel
+              approvalPhrase={qaAutofillApprovalPhrase}
+              dedicatedProfileConfirmed={qaAutofillDedicatedProfileConfirmed}
+              mode={selectedEnvironmentMode}
+              onApprovalPhraseChange={setQaAutofillApprovalPhrase}
+              onDedicatedProfileConfirmedChange={setQaAutofillDedicatedProfileConfirmed}
+              onQaIsolationConfirmedChange={setQaAutofillQaIsolationConfirmed}
+              plan={qaAutofillPlan}
+              qaIsolationConfirmed={qaAutofillQaIsolationConfirmed}
             />
           </div>
 
@@ -3960,6 +3997,137 @@ function ControlledQaSingleTicketSmokePanel({
     </section>
   );
 }
+
+function QaTextFieldAutofillPanel({
+  approvalPhrase,
+  dedicatedProfileConfirmed,
+  mode,
+  onApprovalPhraseChange,
+  onDedicatedProfileConfirmedChange,
+  onQaIsolationConfirmedChange,
+  plan,
+  qaIsolationConfirmed
+}: {
+  approvalPhrase: string;
+  dedicatedProfileConfirmed: boolean;
+  mode: ServiceNowEnvironmentMode;
+  onApprovalPhraseChange: (value: string) => void;
+  onDedicatedProfileConfirmedChange: (value: boolean) => void;
+  onQaIsolationConfirmedChange: (value: boolean) => void;
+  plan: QaAutofillPlan;
+  qaIsolationConfirmed: boolean;
+}) {
+  const requiredPhrase = mode === "qa" || mode === "dev" ? getRequiredQaAutofillApprovalPhrase(mode) : getRequiredQaAutofillApprovalPhrase("qa");
+  const statusText =
+    plan.status === "ready-for-autofill"
+      ? "Selector-verified plan ready; no browser fill from this panel"
+      : `Blocked: ${plan.blockedReason}`;
+  const panelStopMessage =
+    plan.status === "ready-for-autofill"
+      ? plan.stopMessage
+      : "Planning gate only: browser text-field execution remains blocked until a later selector-verified execution slice is reviewed.";
+
+  return (
+    <section className="qa-autofill-panel qa-smoke-panel" aria-labelledby="qa-autofill-title">
+      <header className="qa-smoke-header">
+        <div>
+          <p className="eyebrow">QA browser-assisted text-field autofill planning gate</p>
+          <h2 id="qa-autofill-title">QA browser-assisted text-field autofill planning gate</h2>
+          <p>
+            Planning/review only in this slice. Text fields only: Short description, Description, Work notes.
+            Autofill approval does not approve Save, Submit, Update, or Close.
+          </p>
+        </div>
+        <strong className={plan.status === "ready-for-autofill" ? "qa-smoke-status ready" : "qa-smoke-status"}>
+          {statusText}
+        </strong>
+      </header>
+
+      <section className="qa-smoke-safe-scope" aria-labelledby="qa-autofill-safe-scope-title">
+        <h3 id="qa-autofill-safe-scope-title">First autofill planning safe scope</h3>
+        <ul>
+          <li>QA/dev only, single ticket only, dedicated/tool-owned Chromium profile only, manual login only.</li>
+          <li>Text fields only: Short description, Description, Work notes.</li>
+          <li>Selector verification is mandatory; missing or mismatched selectors keep this panel blocked.</li>
+          <li>No ServiceNow API, bulk fill, browser artifacts, auth-material export, or external AI on QA content.</li>
+        </ul>
+      </section>
+
+      <div className="qa-smoke-summary-grid qa-autofill-summary-grid">
+        <div>
+          <span>Current environment mode</span>
+          <strong>{mode}</strong>
+        </div>
+        <div>
+          <span>Allowed action</span>
+          <strong>Planning/review only</strong>
+        </div>
+        <div>
+          <span>Write actions</span>
+          <strong>No Save / Submit / Update / Close</strong>
+        </div>
+        <div>
+          <span>Required approval phrase</span>
+          <code>{requiredPhrase}</code>
+        </div>
+      </div>
+
+      <label className="qa-smoke-approval qa-autofill-confirmation">
+        <input
+          checked={qaIsolationConfirmed}
+          type="checkbox"
+          onChange={(event) => onQaIsolationConfirmedChange(event.currentTarget.checked)}
+        />
+        <span>QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.</span>
+      </label>
+
+      <label className="qa-smoke-approval qa-autofill-confirmation">
+        <input
+          checked={dedicatedProfileConfirmed}
+          type="checkbox"
+          onChange={(event) => onDedicatedProfileConfirmedChange(event.currentTarget.checked)}
+        />
+        <span>Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.</span>
+      </label>
+
+      <label className="qa-smoke-approval">
+        <span>Exact autofill approval phrase</span>
+        <input
+          autoComplete="off"
+          placeholder={requiredPhrase}
+          value={approvalPhrase}
+          onChange={(event) => onApprovalPhraseChange(event.currentTarget.value)}
+        />
+      </label>
+
+      <div className="qa-smoke-field-preview" aria-label="QA autofill text-field review preview">
+        {(plan.allowedFields.length > 0 ? plan.allowedFields : qaAutofillFieldFallbacks).map((field) => (
+          <div key={field.key}>
+            <span>{field.label}</span>
+            <strong>{field.value}</strong>
+          </div>
+        ))}
+      </div>
+
+      <section className="qa-smoke-stop-rules" aria-labelledby="qa-autofill-stop-rules-title">
+        <h3 id="qa-autofill-stop-rules-title">Autofill stop rules</h3>
+        <ul>
+          {plan.stopRules.map((rule) => (
+            <li key={rule}>{rule}</li>
+          ))}
+        </ul>
+      </section>
+
+      <p className="qa-smoke-safety-copy">{panelStopMessage}</p>
+    </section>
+  );
+}
+
+const qaAutofillFieldFallbacks = [
+  { key: "shortDescription", label: "Short description", value: "Blocked until the safe gate is ready." },
+  { key: "description", label: "Description", value: "Blocked until the safe gate is ready." },
+  { key: "workNotes", label: "Work notes", value: "Blocked until the safe gate is ready." }
+] as const;
 
 function MockFormField({
   label,

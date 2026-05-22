@@ -418,6 +418,107 @@ describe("sda CLI", () => {
     expect(serialized).not.toContain("https" + "://");
   });
 
+  it("prepares a QA text-field autofill review plan without launching a browser or writing", async () => {
+    const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
+    const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
+    const approvalPhrase = "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED";
+
+    const result = await runCli([
+      "qa",
+      "autofill",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--approval-phrase",
+      approvalPhrase,
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--dedicated-profile-confirmation",
+      dedicatedProfileConfirmation,
+      "--json"
+    ], { cwd });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.command).toBe("qa autofill");
+    expect(payload.autofill.status).toBe("blocked");
+    expect(payload.autofill.qaIsolationConfirmed).toBe(true);
+    expect(payload.autofill.dedicatedProfileConfirmed).toBe(true);
+    expect(payload.autofill.allowedOperatorActions).toEqual([]);
+    expect(payload.autofill.prohibitedOperatorActions).toContain("Do not Save, Submit, Update, Close, upload attachments, send email, or trigger notifications.");
+    expect(payload.plan.status).toBe("blocked");
+    expect(payload.plan.blockedReason).toBe("selector-verification-required");
+    expect(payload.plan.allowedFields).toEqual([]);
+    expect(payload.plan.operations).toEqual([]);
+    expect(payload.plan.safety.noSaveSubmitUpdateClose).toBe(true);
+    expect(payload.plan.safety.noServiceNowApi).toBe(true);
+    expect(payload.plan.safety.noArtifactCapture).toBe(true);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(payload.safety.browserAutomationCalled).toBe(false);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+    expect(serialized).not.toContain(approvalPhrase);
+    expect(serialized).not.toContain("https" + "://");
+    expect(serialized).not.toContain("service-now.com");
+  });
+
+  it("blocks QA autofill with wrong approval or unsafe target without leaking denied URL details", async () => {
+    const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
+    const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
+    const sensitiveHost = "qa-example." + "service" + "-now.com";
+    const sensitiveQueryName = "sys" + "_id";
+    const sensitiveCookieName = "coo" + "kie";
+    const userInfoMarker = "user" + String.fromCharCode(58) + "masked" + String.fromCharCode(64);
+    const targetUrl = "https" + "://" + userInfoMarker + sensitiveHost + "/nav_to.do?" + sensitiveQueryName + "=abcdef&" + sensitiveCookieName + "=x";
+
+    const result = await runCli([
+      "qa",
+      "autofill",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--approval-phrase",
+      "I APPROVE QA SAVE ONLY",
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--dedicated-profile-confirmation",
+      dedicatedProfileConfirmation,
+      "--target-url",
+      targetUrl,
+      "--json"
+    ], { cwd });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.command).toBe("qa autofill");
+    expect(payload.autofill.status).toBe("blocked");
+    expect(payload.plan.status).toBe("blocked");
+    expect(payload.plan.blockedReason).toBe("target-validation-denied");
+    expect(payload.plan.operations).toEqual([]);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(payload.safety.browserAutomationCalled).toBe(false);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+    expect(serialized).not.toContain("I APPROVE QA SAVE ONLY");
+    expect(serialized).not.toContain(sensitiveHost);
+    expect(serialized).not.toContain("https" + "://");
+    expect(serialized).not.toContain("user:");
+    expect(serialized).not.toContain(String.fromCharCode(64));
+    expect(serialized).not.toContain(sensitiveQueryName);
+    expect(serialized).not.toContain(sensitiveCookieName);
+    expect(serialized).not.toContain("abcdef");
+  });
+
   it("generates work notes from a sample JSON file", async () => {
     const result = await runCli([
       "notes",
