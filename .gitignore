@@ -13,9 +13,15 @@ coverage/
 # Local runtime data - never commit sessions, cookies, screenshots, logs, DBs
 .local/
 .local*/
+**/.local/
+**/.local*/
 browser-profiles/
+**/browser-profiles/
+**/servicenow-browser-profiles/
 screenshots/
+**/screenshots/
 logs/
+**/logs/
 drafts/
 private/
 field-test-results/

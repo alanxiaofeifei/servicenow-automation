@@ -1,0 +1,30 @@
+# Defense-in-depth ignore rules for ripgrep/fd/editor search tools.
+# Git already ignores these in .gitignore; this file prevents routine
+# local scans from walking browser caches, cookies, sessions, screenshots,
+# traces, and other runtime artifacts.
+
+.local/
+.local*/
+**/.local/
+**/.local*/
+
+browser-profiles/
+**/browser-profiles/
+**/servicenow-browser-profiles/
+
+screenshots/
+**/screenshots/
+logs/
+**/logs/
+private/
+field-test-results/
+field-test-notes/
+
+*.har
+*.trace.zip
+*.webm
+storage-state*.json
+storageState.json
+*.storageState.json
+*.cookies.json
+*.session.json
