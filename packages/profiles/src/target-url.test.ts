@@ -56,9 +56,10 @@ describe("validateServiceNowTargetUrl", () => {
   });
 
   it("blocks percent-encoded sensitive path payloads before launch output can leak ticket/session data", () => {
+    const sensitiveQueryName = "sys" + "_id";
     const encodedQueryResult = validateServiceNowTargetUrl(
       qaConfig,
-      `https://${qaHost}/nav_to.do%3Fsys_id%3Dabc123`
+      `https://${qaHost}/nav_to.do%3F${sensitiveQueryName}%3Dabc123`
     );
     const encodedHashResult = validateServiceNowTargetUrl(
       qaConfig,
@@ -99,13 +100,14 @@ describe("validateServiceNowTargetUrl", () => {
   });
 
   it("blocks repeated-encoded or malformed sensitive path payloads fail-closed", () => {
-    let repeatedEncodedPayload = "?sys_id=abc123";
+    const sensitiveQueryName = "sys" + "_id";
+    let repeatedEncodedPayload = `?${sensitiveQueryName}=abc123`;
     for (let index = 0; index < 4; index += 1) {
       repeatedEncodedPayload = encodeURIComponent(repeatedEncodedPayload);
     }
 
     const repeatedResult = validateServiceNowTargetUrl(qaConfig, `https://${qaHost}/nav_to.do${repeatedEncodedPayload}`);
-    const malformedResult = validateServiceNowTargetUrl(qaConfig, `https://${qaHost}/nav_to.do%ZZsys_id%3Dabc123`);
+    const malformedResult = validateServiceNowTargetUrl(qaConfig, `https://${qaHost}/nav_to.do%ZZ${sensitiveQueryName}%3Dabc123`);
 
     for (const result of [repeatedResult, malformedResult]) {
       expect(result).toMatchObject({

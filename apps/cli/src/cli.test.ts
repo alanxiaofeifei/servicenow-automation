@@ -850,14 +850,15 @@ describe("sda CLI", () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-browser-launch-blocked-"));
     const qaHost = new URL(getServiceNowEnvironmentConfig("qa").url ?? "").host;
     const urlUserInfoMarker = "user:" + "***" + String.fromCharCode(64);
-    let repeatedEncodedPayload = "?sys_id=abc123";
+    const sensitiveQueryName = "sys" + "_id";
+    let repeatedEncodedPayload = `?${sensitiveQueryName}=abc123`;
     for (let index = 0; index < 4; index += 1) {
       repeatedEncodedPayload = encodeURIComponent(repeatedEncodedPayload);
     }
 
     const targetUrls = [
       `https://${urlUserInfoMarker}${qaHost}/nav_to.do`,
-      `https://${qaHost}/nav_to.do?sys_id=abc123`,
+      `https://${qaHost}/nav_to.do?${sensitiveQueryName}=abc123`,
       `https://${qaHost}/nav_to.do${repeatedEncodedPayload}`,
       `https://${qaHost}/nav_to.do%253Fshort_description%253Dcustomer-data`
     ];

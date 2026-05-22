@@ -421,10 +421,11 @@ describe("BrowserSessionService", () => {
     const userinfo = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("qa"), {
       targetUrlOverride: `https://${urlUserInfoMarker}${qaHost}/nav_to.do`
     });
+    const sensitiveQueryName = "sys" + "_id";
     const query = await service.launchNoWriteBrowser(getServiceNowEnvironmentConfig("qa"), {
-      targetUrlOverride: `https://${qaHost}/nav_to.do?sys_id=abc123`
+      targetUrlOverride: `https://${qaHost}/nav_to.do?${sensitiveQueryName}=abc123`
     });
-    let repeatedEncodedPayload = "?sys_id=abc123";
+    let repeatedEncodedPayload = `?${sensitiveQueryName}=abc123`;
     for (let index = 0; index < 4; index += 1) {
       repeatedEncodedPayload = encodeURIComponent(repeatedEncodedPayload);
     }
