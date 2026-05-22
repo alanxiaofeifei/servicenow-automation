@@ -467,6 +467,140 @@ describe("sda CLI", () => {
     expect(serialized).not.toContain("service-now.com");
   });
 
+  it("runs a sanitized QA autofill fixture harness without launching a browser or writing", async () => {
+    const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
+    const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
+    const approvalPhrase = "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED";
+
+    const result = await runCli([
+      "qa",
+      "autofill-fixture",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--approval-phrase",
+      approvalPhrase,
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--dedicated-profile-confirmation",
+      dedicatedProfileConfirmation,
+      "--selector-fixture",
+      "all-found",
+      "--json"
+    ], { cwd });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.command).toBe("qa autofill-fixture");
+    expect(payload.execution.status).toBe("completed");
+    expect(payload.execution.filledFields.map((field: { key: string }) => field.key)).toEqual(["shortDescription", "description", "workNotes"]);
+    expect(payload.execution.writeActionsAttempted).toBe(false);
+    expect(payload.execution.artifactsCaptured).toBe(false);
+    expect(payload.execution.browserProcessLaunched).toBe(false);
+    expect(payload.execution.realServiceNowPageTouched).toBe(false);
+    expect(payload.autofill.status).toBe("ready-for-autofill");
+    expect(payload.autofill.allowedOperatorActions).toContain("Use only the selector-verified fixture harness; no real QA page is touched by this command.");
+    expect(payload.plan.status).toBe("ready-for-autofill");
+    expect(payload.plan.allowedFields.every((field: { value?: string }) => field.value === "sanitized-draft-value")).toBe(true);
+    expect(payload.plan.operations.every((operation: { value?: string }) => operation.value === "sanitized-draft-value")).toBe(true);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(payload.safety.browserAutomationCalled).toBe(false);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+    expect(serialized).not.toContain(approvalPhrase);
+    expect(serialized).not.toContain("Fake Chat intake");
+    expect(serialized).not.toContain("VPN connection issue");
+    expect(serialized).not.toContain("https" + "://");
+    expect(serialized).not.toContain("service-now.com");
+    expect(serialized).not.toContain("querySelectorAll");
+    expect(serialized).not.toContain("dispatchEvent");
+  });
+
+  it("fails closed when the QA autofill fixture has missing selectors", async () => {
+    const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
+    const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
+
+    const result = await runCli([
+      "qa",
+      "autofill-fixture",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--approval-phrase",
+      "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED",
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--dedicated-profile-confirmation",
+      dedicatedProfileConfirmation,
+      "--selector-fixture",
+      "missing-work-notes",
+      "--json"
+    ], { cwd });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.command).toBe("qa autofill-fixture");
+    expect(payload.autofill.status).toBe("blocked");
+    expect(payload.plan.blockedReason).toBe("selector-mismatch");
+    expect(payload.execution.status).toBe("blocked");
+    expect(payload.execution.blockedReason).toBe("plan-not-ready");
+    expect(payload.execution.filledFields).toEqual([]);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(payload.safety.browserAutomationCalled).toBe(false);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+    expect(serialized).not.toContain("I APPROVE QA SINGLE-TICKET AUTOFILL ONLY");
+    expect(serialized).not.toContain("https" + "://");
+  });
+
+  it("fails closed when the QA autofill fixture has a wrong element type before reporting plan readiness", async () => {
+    const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
+    const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
+
+    const result = await runCli([
+      "qa",
+      "autofill-fixture",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--approval-phrase",
+      "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED",
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--dedicated-profile-confirmation",
+      dedicatedProfileConfirmation,
+      "--selector-fixture",
+      "wrong-description-type",
+      "--json"
+    ], { cwd });
+    const payload = JSON.parse(result.stdout);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.command).toBe("qa autofill-fixture");
+    expect(payload.autofill.status).toBe("blocked");
+    expect(payload.plan.status).toBe("blocked");
+    expect(payload.plan.blockedReason).toBe("selector-mismatch");
+    expect(payload.execution.status).toBe("blocked");
+    expect(payload.execution.filledFields).toEqual([]);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+  });
+
   it("blocks QA autofill with wrong approval or unsafe target without leaking denied URL details", async () => {
     const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
     const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";

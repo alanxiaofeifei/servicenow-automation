@@ -85,6 +85,38 @@ export type QaAutofillPlanRequest = {
   ticketCount?: number;
 };
 
+export type QaAutofillFixtureElementType = "text" | "textarea" | "select" | "other";
+
+export type QaAutofillFixtureField = {
+  key: QaAutofillFieldKey;
+  matchedSelectorCount: number;
+  elementType: QaAutofillFixtureElementType;
+  writable: boolean;
+};
+
+export type QaAutofillFixturePage = {
+  fields: QaAutofillFixtureField[];
+  unexpectedRequiredFieldCount?: number;
+};
+
+export type QaAutofillExecutionBlockedReason = "plan-not-ready" | "selector-mismatch" | "unexpected-required-field";
+
+export type QaAutofillFixtureExecutionResult = {
+  status: "completed" | "blocked";
+  blockedReason?: QaAutofillExecutionBlockedReason;
+  filledFields: Array<{
+    key: QaAutofillFieldKey;
+    label: QaAutofillField["label"];
+    valueLength: number;
+    value?: never;
+  }>;
+  writeActionsAttempted: false;
+  artifactsCaptured: false;
+  browserProcessLaunched: false;
+  realServiceNowPageTouched: false;
+  operatorStopInstruction: "review-page-manually-before-any-write-action";
+};
+
 const stopMessage =
   "Autofill completed. The tool will not Save, Submit, Update, or Close. Review the QA page manually.";
 
@@ -200,6 +232,56 @@ export function buildQaTextFieldAutofillPlan(request: QaAutofillPlanRequest): Qa
   };
 }
 
+export function executeQaTextFieldAutofillFixture(
+  plan: QaAutofillPlan,
+  fixture: QaAutofillFixturePage
+): QaAutofillFixtureExecutionResult {
+  if (plan.status !== "ready-for-autofill") {
+    return blockedExecution("plan-not-ready");
+  }
+
+  if ((fixture.unexpectedRequiredFieldCount ?? 0) > 0) {
+    return blockedExecution("unexpected-required-field");
+  }
+
+  const allowedFields = new Map(plan.allowedFields.map((field) => [field.key, field]));
+  if (allowedFields.size !== fieldDefinitions.length || fixture.fields.length !== fieldDefinitions.length) {
+    return blockedExecution("selector-mismatch");
+  }
+
+  for (const definition of fieldDefinitions) {
+    const expectedField = allowedFields.get(definition.key);
+    const matchingFields = fixture.fields.filter((field) => field.key === definition.key);
+    if (!expectedField || matchingFields.length !== 1) {
+      return blockedExecution("selector-mismatch");
+    }
+    const actualField = matchingFields[0];
+    if (actualField.matchedSelectorCount !== 1) {
+      return blockedExecution("selector-mismatch");
+    }
+    if (actualField.elementType !== expectedField.type) {
+      return blockedExecution("selector-mismatch");
+    }
+    if (!actualField.writable) {
+      return blockedExecution("selector-mismatch");
+    }
+  }
+
+  return {
+    status: "completed",
+    filledFields: plan.allowedFields.map((field) => ({
+      key: field.key,
+      label: field.label,
+      valueLength: field.value.length
+    })),
+    writeActionsAttempted: false,
+    artifactsCaptured: false,
+    browserProcessLaunched: false,
+    realServiceNowPageTouched: false,
+    operatorStopInstruction: "review-page-manually-before-any-write-action"
+  };
+}
+
 function buildAllowedFields(draft: TicketDraft): QaAutofillField[] {
   return fieldDefinitions.flatMap((definition) => {
     const value = normalizeDraftField(draft[definition.draftField]);
@@ -234,6 +316,19 @@ function blockedPlan(request: QaAutofillPlanRequest, blockedReason: QaAutofillBl
     safety: safetyFlags(),
     stopRules: autofillStopRules(),
     stopMessage
+  };
+}
+
+function blockedExecution(blockedReason: QaAutofillExecutionBlockedReason): QaAutofillFixtureExecutionResult {
+  return {
+    status: "blocked",
+    blockedReason,
+    filledFields: [],
+    writeActionsAttempted: false,
+    artifactsCaptured: false,
+    browserProcessLaunched: false,
+    realServiceNowPageTouched: false,
+    operatorStopInstruction: "review-page-manually-before-any-write-action"
   };
 }
 

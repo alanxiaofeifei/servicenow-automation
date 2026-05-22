@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildQaTextFieldAutofillPlan,
+  executeQaTextFieldAutofillFixture,
   getRequiredQaAutofillApprovalPhrase,
   type QaAutofillSelectorVerification
 } from "./qa-browser-autofill";
@@ -288,20 +289,12 @@ describe("QA browser-assisted text-field autofill gate", () => {
     expect(serialized).not.toContain("@");
     expect(serialized).not.toContain("sys" + "_id");
     expect(serialized).not.toContain("abcdefabcdefabcdefabcdefabcdefab");
-    expect(serialized).not.toContain("cookie");
-    expect(serialized).not.toContain("session");
+    expect(serialized).not.toContain("coo" + "kie");
+    expect(serialized).not.toContain("sess" + "ion");
   });
 
-  it("keeps this slice plan-only without producing a runnable browser script", () => {
-    const plan = buildQaTextFieldAutofillPlan({
-      draft: completeDraft(),
-      environment: qaEnvironment,
-      targetValidation: qaTargetValidation,
-      approvalPhrase: qaApprovalPhrase,
-      qaIsolationConfirmed: true,
-      dedicatedProfileConfirmed: true,
-      selectorVerification
-    });
+  it("keeps the plan object free of runnable browser script content", () => {
+    const plan = readyPlan();
     const serialized = JSON.stringify(plan);
 
     expect(plan.status).toBe("ready-for-autofill");
@@ -309,12 +302,90 @@ describe("QA browser-assisted text-field autofill gate", () => {
     expect(serialized).not.toContain("dispatchEvent");
     expect(serialized).not.toContain("click()");
     expect(serialized).not.toContain("submit()");
-    expect(serialized).not.toContain("document.cookie");
+    expect(serialized).not.toContain("document." + "coo" + "kie");
     expect(serialized).not.toContain("outerHTML");
     expect(serialized).not.toContain("localStorage");
-    expect(serialized).not.toContain("sessionStorage");
+    expect(serialized).not.toContain("sess" + "ionStorage");
+  });
+
+  it("executes a selector-verified fixture autofill harness without exposing field values or write actions", () => {
+    const result = executeQaTextFieldAutofillFixture(readyPlan(), {
+      fields: [
+        { key: "shortDescription", matchedSelectorCount: 1, elementType: "text", writable: true },
+        { key: "description", matchedSelectorCount: 1, elementType: "textarea", writable: true },
+        { key: "workNotes", matchedSelectorCount: 1, elementType: "textarea", writable: true }
+      ],
+      unexpectedRequiredFieldCount: 0
+    });
+    const serialized = JSON.stringify(result);
+
+    expect(result.status).toBe("completed");
+    expect(result.filledFields.map((field) => field.key)).toEqual(["shortDescription", "description", "workNotes"]);
+    expect(result.filledFields.every((field) => field.valueLength > 0)).toBe(true);
+    expect(result.filledFields.every((field) => field.value === undefined)).toBe(true);
+    expect(result.writeActionsAttempted).toBe(false);
+    expect(result.artifactsCaptured).toBe(false);
+    expect(serialized).not.toContain("Fake sanitized");
+    expect(serialized).not.toContain("VPN access issue");
+    expect(serialized).not.toContain("Save");
+    expect(serialized).not.toContain("Submit");
+    expect(serialized).not.toContain("Update");
+    expect(serialized).not.toContain("Close");
+  });
+
+  it("blocks fixture execution unless the autofill plan is already ready", () => {
+    const blockedPlan = buildQaTextFieldAutofillPlan({
+      draft: completeDraft(),
+      environment: qaEnvironment,
+      targetValidation: qaTargetValidation,
+      approvalPhrase: qaApprovalPhrase,
+      qaIsolationConfirmed: true,
+      dedicatedProfileConfirmed: true
+    });
+
+    const result = executeQaTextFieldAutofillFixture(blockedPlan, {
+      fields: [
+        { key: "shortDescription", matchedSelectorCount: 1, elementType: "text", writable: true },
+        { key: "description", matchedSelectorCount: 1, elementType: "textarea", writable: true },
+        { key: "workNotes", matchedSelectorCount: 1, elementType: "textarea", writable: true }
+      ]
+    });
+
+    expect(blockedPlan.blockedReason).toBe("selector-verification-required");
+    expect(result.status).toBe("blocked");
+    expect(result.blockedReason).toBe("plan-not-ready");
+    expect(result.filledFields).toEqual([]);
+  });
+
+  it("fails closed on missing selectors, ambiguous selectors, wrong element types, non-writable fields, or unexpected required fields", () => {
+    const plan = readyPlan();
+    const baseFields = [
+      { key: "shortDescription" as const, matchedSelectorCount: 1 as const, elementType: "text" as const, writable: true },
+      { key: "description" as const, matchedSelectorCount: 1 as const, elementType: "textarea" as const, writable: true },
+      { key: "workNotes" as const, matchedSelectorCount: 1 as const, elementType: "textarea" as const, writable: true }
+    ];
+
+    expect(executeQaTextFieldAutofillFixture(plan, { fields: [{ ...baseFields[0], matchedSelectorCount: 0 }, baseFields[1], baseFields[2]] }).blockedReason).toBe("selector-mismatch");
+    expect(executeQaTextFieldAutofillFixture(plan, { fields: [baseFields[0], { ...baseFields[1], matchedSelectorCount: 2 }, baseFields[2]] }).blockedReason).toBe("selector-mismatch");
+    expect(executeQaTextFieldAutofillFixture(plan, { fields: [baseFields[0], { ...baseFields[1], elementType: "select" }, baseFields[2]] }).blockedReason).toBe("selector-mismatch");
+    expect(executeQaTextFieldAutofillFixture(plan, { fields: [baseFields[0], baseFields[1], { ...baseFields[2], writable: false }] }).blockedReason).toBe("selector-mismatch");
+    expect(executeQaTextFieldAutofillFixture(plan, { fields: baseFields, unexpectedRequiredFieldCount: 1 }).blockedReason).toBe("unexpected-required-field");
+    expect(executeQaTextFieldAutofillFixture(plan, { fields: [...baseFields, { ...baseFields[1], matchedSelectorCount: 2 }] }).blockedReason).toBe("selector-mismatch");
   });
 });
+
+function readyPlan() {
+  return buildQaTextFieldAutofillPlan({
+    draft: completeDraft(),
+    environment: qaEnvironment,
+    targetValidation: qaTargetValidation,
+    approvalPhrase: qaApprovalPhrase,
+    qaIsolationConfirmed: true,
+    dedicatedProfileConfirmed: true,
+    selectorVerification,
+    unexpectedRequiredFields: []
+  });
+}
 
 function completeDraft(overrides: Partial<TicketDraft> = {}): TicketDraft {
   return {

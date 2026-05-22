@@ -19,10 +19,13 @@ import {
   buildQaTextFieldAutofillPlan,
   buildServiceDeskWorkflowPreview,
   evaluateQaSingleTicketSmokePlan,
+  executeQaTextFieldAutofillFixture,
   type CapturedContext,
   type FieldDraft,
   type KnowledgeMatch,
+  type QaAutofillFixturePage,
   type QaAutofillPlan,
+  type QaAutofillSelectorVerification,
   type QaManualFillWriteAction,
   type QaSingleTicketSmokePlan,
   type RawIntakeSource,
@@ -350,6 +353,62 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
       }, formatQaAutofillPlan(plan));
     }
 
+    if (namespace === "qa" && action === "autofill-fixture") {
+      const mode = parseEnvironmentMode(requiredFlag(parsed, "mode", "qa autofill-fixture"));
+      const template = requiredFlag(parsed, "template", "qa autofill-fixture");
+      const user = requiredFlag(parsed, "user", "qa autofill-fixture");
+      const summary = requiredFlag(parsed, "summary", "qa autofill-fixture");
+      const environment = getServiceNowEnvironmentConfig(mode);
+      const targetUrl = parsed.flags["target-url"] ?? environment.url;
+      const targetValidation = validateServiceNowTargetUrl(environment, targetUrl);
+      const ticketDraft = buildTicketDraft({ template, user, summary });
+      const fixture = qaAutofillSelectorFixture(parsed.flags["selector-fixture"] ?? "all-found");
+      const qaIsolationConfirmed = parsed.flags["qa-isolation-confirmation"] === autofillQaIsolationConfirmationPhrase;
+      const dedicatedProfileConfirmed = parsed.flags["dedicated-profile-confirmation"] === dedicatedProfileConfirmationPhrase;
+      const plan = buildQaTextFieldAutofillPlan({
+        draft: ticketDraft,
+        environment,
+        targetUrl,
+        targetValidation,
+        approvalPhrase: parsed.flags["approval-phrase"],
+        qaIsolationConfirmed,
+        dedicatedProfileConfirmed,
+        selectorVerification: qaAutofillSelectorVerification(fixture),
+        unexpectedRequiredFields: fixture.unexpectedRequiredFieldCount ? ["redacted-required-field"] : []
+      });
+      const execution = executeQaTextFieldAutofillFixture(plan, fixture);
+
+      return output(parsed, {
+        command: "qa autofill-fixture",
+        mode,
+        template,
+        autofill: {
+          status: plan.status,
+          qaIsolationConfirmed,
+          dedicatedProfileConfirmed,
+          requiredQaIsolationConfirmation: autofillQaIsolationConfirmationPhrase,
+          requiredDedicatedProfileConfirmation: dedicatedProfileConfirmationPhrase,
+          allowedOperatorActions:
+            plan.status === "ready-for-autofill"
+              ? ["Use only the selector-verified fixture harness; no real QA page is touched by this command."]
+              : [],
+          prohibitedOperatorActions: autofillProhibitedOperatorActions,
+          blockedReason: plan.blockedReason,
+          approvalPhraseAccepted: plan.status === "ready-for-autofill"
+        },
+        plan: sanitizeQaAutofillPlan(plan),
+        execution,
+        safety: safetyEnvelope({
+          browserProcessLaunched: false,
+          browserAutomationCalled: false,
+          noServiceNowWrite: true,
+          noExcelWrite: true,
+          noGraphWrite: true,
+          productionWriteAllowed: false
+        })
+      }, formatQaAutofillFixtureResult(plan, execution.status));
+    }
+
     if (namespace === "qa" && action === "manual-fill") {
       const mode = parseEnvironmentMode(requiredFlag(parsed, "mode", "qa manual-fill"));
       const writeAction = parseQaManualFillWriteAction(parsed.flags["write-action"] ?? "submit_incident");
@@ -674,13 +733,89 @@ function sanitizeQaAutofillPlan(plan: QaAutofillPlan): QaAutofillPlan {
     },
     operations: plan.operations.map((operation) => ({
       ...operation,
+      value: "sanitized-draft-value",
       selectors: operation.selectors.map(() => "approved-text-field-selector")
     })),
     allowedFields: plan.allowedFields.map((field) => ({
       ...field,
+      value: "sanitized-draft-value",
       selectors: field.selectors.map(() => "approved-text-field-selector")
     }))
   };
+}
+
+function qaAutofillSelectorFixture(name: string): QaAutofillFixturePage {
+  const allFound: QaAutofillFixturePage = {
+    fields: [
+      { key: "shortDescription", matchedSelectorCount: 1, elementType: "text", writable: true },
+      { key: "description", matchedSelectorCount: 1, elementType: "textarea", writable: true },
+      { key: "workNotes", matchedSelectorCount: 1, elementType: "textarea", writable: true }
+    ],
+    unexpectedRequiredFieldCount: 0
+  };
+
+  if (name === "all-found") {
+    return allFound;
+  }
+  if (name === "missing-work-notes") {
+    return {
+      ...allFound,
+      fields: allFound.fields.map((field) =>
+        field.key === "workNotes" ? { ...field, matchedSelectorCount: 0 } : field
+      )
+    };
+  }
+  if (name === "unexpected-required-field") {
+    return {
+      ...allFound,
+      unexpectedRequiredFieldCount: 1
+    };
+  }
+  if (name === "wrong-description-type") {
+    return {
+      ...allFound,
+      fields: allFound.fields.map((field) =>
+        field.key === "description" ? { ...field, elementType: "select" } : field
+      )
+    };
+  }
+
+  return {
+    fields: [],
+    unexpectedRequiredFieldCount: 1
+  };
+}
+
+function qaAutofillSelectorVerification(fixture: QaAutofillFixturePage): QaAutofillSelectorVerification {
+  const expectedElementTypes: Record<keyof QaAutofillSelectorVerification, "text" | "textarea"> = {
+    shortDescription: "text",
+    description: "textarea",
+    workNotes: "textarea"
+  };
+  const statusFor = (key: keyof QaAutofillSelectorVerification) => {
+    const matches = fixture.fields.filter((candidate) => candidate.key === key);
+    if (matches.length > 1) return "ambiguous";
+    const field = matches[0];
+    return field?.matchedSelectorCount === 1 &&
+      field.writable &&
+      field.elementType === expectedElementTypes[key]
+      ? "found"
+      : "missing";
+  };
+
+  return {
+    shortDescription: statusFor("shortDescription"),
+    description: statusFor("description"),
+    workNotes: statusFor("workNotes")
+  };
+}
+
+function formatQaAutofillFixtureResult(plan: QaAutofillPlan, executionStatus: "completed" | "blocked"): string {
+  return [
+    `QA selector-verified autofill fixture harness: ${executionStatus}`,
+    plan.blockedReason ? `Blocked reason: ${plan.blockedReason}` : "Fixture harness filled sanitized local fields only.",
+    "Safety: no browser launch, no real QA page, no Save, Submit, Update, Close, ServiceNow API, artifact capture, or bulk action."
+  ].join("\n");
 }
 
 function formatQaAutofillPlan(plan: QaAutofillPlan): string {
@@ -839,6 +974,7 @@ Commands:
   sda workflow preview --template <template> --user <sanitized_user> --summary <sanitized_summary> --source <source> --dry-run [--json]
   sda qa smoke --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> [--target-url <url>] [--approval-phrase <phrase>] [--language <lang>] [--template-preset <preset>] [--json]
   sda qa autofill --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> --dedicated-profile-confirmation <sentence> --approval-phrase <phrase> [--target-url <url>] [--json]
+  sda qa autofill-fixture --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> --dedicated-profile-confirmation <sentence> --approval-phrase <phrase> [--selector-fixture <all-found|missing-work-notes|wrong-description-type|unexpected-required-field>] [--target-url <url>] [--json]
   sda qa manual-fill --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> [--write-action <save_incident|submit_incident|update_incident|close_incident>] [--target-url <url>] [--approval-phrase <phrase>] [--browser-executable <path>] [--execute --confirm-no-write-launch] [--json]
   sda run --workflow <workflow_name> --input <json_file> --dry-run [--json]
 
