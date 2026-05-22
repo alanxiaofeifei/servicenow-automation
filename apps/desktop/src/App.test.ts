@@ -427,6 +427,21 @@ describe("App", () => {
     expect(output).not.toContain("graph.microsoft.com");
   });
 
+  it("does not label invalid ServiceNow environment URL drafts as active targets", () => {
+    const output = renderAppMarkup(undefined, {
+      initialEnvironmentUrlSettings: {
+        qa: "https://not-servicenow.example.invalid/nav_to.do"
+      }
+    });
+    const settingsStart = output.indexOf('id="app-settings-sidebar"');
+    const settingsEnd = output.indexOf("</aside>", settingsStart);
+    const settingsMarkup = output.slice(settingsStart, settingsEnd);
+
+    expect(settingsMarkup).toContain("Blocked URL setting: host must be a ServiceNow host or approved non-routable placeholder");
+    expect(settingsMarkup).toContain("Built-in/default target active; raw target URL stays hidden until a safe custom URL is accepted.");
+    expect(settingsMarkup).not.toContain("Custom target active for this session");
+  });
+
   it("clears active ServiceNow URL overrides when a draft URL becomes invalid", () => {
     expect(
       getNextEnvironmentUrlOverrideFromDraft(

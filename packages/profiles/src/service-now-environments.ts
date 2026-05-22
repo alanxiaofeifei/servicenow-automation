@@ -175,7 +175,7 @@ export function validateServiceNowEnvironmentUrlSetting(
     };
   }
 
-  if (!host.endsWith(".service-now.com")) {
+  if (!isAllowedServiceNowEnvironmentHost(host)) {
     return {
       allowed: false,
       reason: "service-now-host-required",
@@ -214,6 +214,10 @@ const allowedServiceNowEnvironmentLandingPaths = new Set([
   "/nav_to.do",
   "/now/nav/ui/classic/params/target/home_splash.do"
 ]);
+
+function isAllowedServiceNowEnvironmentHost(host: string): boolean {
+  return host.endsWith(".service-now.com") || host.endsWith(".service-now.example.invalid");
+}
 
 function isAllowedServiceNowEnvironmentLandingPath(pathname: string): boolean {
   if (allowedServiceNowEnvironmentLandingPaths.has(pathname)) {

@@ -17,7 +17,7 @@ If GPT asks for raw evidence, refuse and continue from this sanitized synthesis 
 This document intentionally does not include:
 
 - real requester names;
-- real stakeholder / coworker names;
+- real stakeholder names;
 - real ticket numbers;
 - internal URLs or hostnames;
 - raw chat/email body text;

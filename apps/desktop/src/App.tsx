@@ -2243,12 +2243,8 @@ function EnvironmentUrlSettingsPanel({
 }) {
   const [draftUrls, setDraftUrls] = useState<ServiceNowEnvironmentUrlOverrides>(environmentUrlSettings);
 
-  useEffect(() => {
-    setDraftUrls(environmentUrlSettings);
-  }, [environmentUrlSettings]);
-
   function updateDraftUrl(mode: Exclude<ServiceNowEnvironmentMode, "mock">, value: string) {
-    setDraftUrls((current) => ({ ...current, [mode]: value }));
+    setDraftUrls((current: ServiceNowEnvironmentUrlOverrides) => ({ ...current, [mode]: value }));
     onEnvironmentUrlSettingChange(mode, getNextEnvironmentUrlOverrideFromDraft(mode, value));
   }
 
@@ -2271,7 +2267,7 @@ function EnvironmentUrlSettingsPanel({
             const draftUrl = draftUrls[mode] ?? environmentUrlSettings[mode] ?? "";
             const validation = validateServiceNowEnvironmentUrlSetting(mode, draftUrl);
             const effectiveConfig = getServiceNowEnvironmentConfig(mode, environmentUrlSettings);
-            const hasActiveCustomTarget = Boolean(environmentUrlSettings[mode]);
+            const hasActiveCustomTarget = validation.allowed && Boolean(environmentUrlSettings[mode]);
 
             return (
               <article className="environment-url-card" key={mode}>
@@ -2344,7 +2340,7 @@ function formatEnvironmentUrlValidationReason(reason: string): string {
     case "sensitive-url-component-denied":
       return "query/hash/sys_id/token/session/cookie payload denied";
     case "service-now-host-required":
-      return "host must end with .service-now.com";
+      return "host must be a ServiceNow host or approved non-routable placeholder";
     case "mock-url-denied":
       return "mock mode cannot set a URL";
     default:
