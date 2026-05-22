@@ -80,6 +80,21 @@ export type ExcelDryRunRowPreview = {
   safetyCopy: string;
 };
 
+export type ExcelDryRunWorkbookArtifact = {
+  fileName: string;
+  mimeType: typeof excelDryRunWorkbookMimeType;
+  sheetName: string;
+  bytes: Uint8Array;
+  safetyCopy: string;
+};
+
+export type ExcelDryRunWorkbookArtifactOptions = {
+  fileTimestamp?: string;
+  sheetName?: string;
+};
+
+export const excelDryRunWorkbookMimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
 export type ServiceDeskWorkflowPreviewInput = {
   createdAt: string;
   rawIntakeSource: RawIntakeSource;
@@ -195,14 +210,14 @@ export function buildExcelDryRunRowPreview(input: ExcelDryRunRowPreviewInput): E
     "QA Isolation Check": input.qaIsolationCheck ?? "Pending explicit QA isolation confirmation before field trial.",
     "QA Dry-run Outcome": input.qaDryRunOutcome ?? "Not ready for QA write; dry-run preview only.",
     "QA Trial Result": input.qaTrialResult,
-    "Dry-run Result": "Preview only - no Excel workbook is connected or written."
+    "Dry-run Result": "Preview only - local XLSX artifact generated; no Graph, cloud workbook, or ServiceNow write."
   };
 
   return {
     row,
     csvRow: buildCsvRow(row),
     markdownSummary: buildExcelRowMarkdownSummary(row),
-    safetyCopy: "This row is generated locally from the reviewed draft. No workbook is connected or written."
+    safetyCopy: "This row is generated locally from the reviewed draft. XLSX export creates a local dry-run file only; no Graph, cloud workbook, or ServiceNow write is performed."
   };
 }
 
@@ -315,6 +330,34 @@ function defaultStopRuleCheck(): string {
   return "Stop on production mode, real customer data, notification/escalation risk, missing QA isolation, unexpected ServiceNow workflow, DOM autofill, API use, or bulk path.";
 }
 
+export function buildExcelDryRunWorkbookArtifact(
+  row: ExcelDryRunRow,
+  options: ExcelDryRunWorkbookArtifactOptions = {}
+): ExcelDryRunWorkbookArtifact {
+  const sheetName = sanitizeWorksheetName(options.sheetName ?? "Excel Dry-run Row");
+  const fileTimestamp = normalizeWorkbookFileTimestamp(options.fileTimestamp ?? row["Created At"]);
+  const sheetXml = buildWorksheetXml(row);
+  const archiveEntries = [
+    { path: "[Content_Types].xml", content: contentTypesXml() },
+    { path: "_rels/.rels", content: packageRelationshipsXml() },
+    { path: "docProps/app.xml", content: appPropertiesXml(sheetName) },
+    { path: "docProps/core.xml", content: corePropertiesXml() },
+    { path: "xl/workbook.xml", content: workbookXml(sheetName) },
+    { path: "xl/_rels/workbook.xml.rels", content: workbookRelationshipsXml() },
+    { path: "xl/styles.xml", content: stylesXml() },
+    { path: "xl/worksheets/sheet1.xml", content: sheetXml }
+  ];
+
+  return {
+    fileName: `servicenow-dry-run-${fileTimestamp}.xlsx`,
+    mimeType: excelDryRunWorkbookMimeType,
+    sheetName,
+    bytes: buildStoredZipArchive(archiveEntries),
+    safetyCopy:
+      "Local deterministic XLSX dry-run artifact only. It does not connect to Microsoft Graph, a cloud workbook, ServiceNow, browser automation, or any real write path."
+  };
+}
+
 export function buildCsvRow(row: ExcelDryRunRow): string {
   return excelDryRunRowColumns.map((column) => csvEscape(row[column])).join(",");
 }
@@ -359,6 +402,248 @@ function buildWorkflowMarkdownSummary(preview: Omit<ServiceDeskWorkflowPreview, 
     "## Safety",
     `- ${preview.safety.message}`
   ].join("\n");
+}
+
+function buildWorksheetXml(row: ExcelDryRunRow): string {
+  const rows = [
+    ["Excel Dry-run Row", "Preview only - local XLSX artifact generated; no Graph, cloud workbook, or ServiceNow write."],
+    ["Column", "Value"],
+    ...excelDryRunRowColumns.map((column) => [column, row[column]])
+  ];
+  const sheetRows = rows
+    .map((cells, rowIndex) => {
+      const rowNumber = rowIndex + 1;
+      const xmlCells = cells
+        .map((cell, columnIndex) => inlineStringCell(`${columnLetter(columnIndex)}${rowNumber}`, cell))
+        .join("");
+      return `<row r="${rowNumber}">${xmlCells}</row>`;
+    })
+    .join("");
+
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+    '<sheetViews><sheetView workbookViewId="0"/></sheetViews>',
+    '<sheetFormatPr defaultRowHeight="15"/>',
+    '<cols><col min="1" max="1" width="34" customWidth="1"/><col min="2" max="2" width="92" customWidth="1"/></cols>',
+    `<sheetData>${sheetRows}</sheetData>`,
+    '</worksheet>'
+  ].join("");
+}
+
+function inlineStringCell(reference: string, value: string): string {
+  return `<c r="${reference}" t="inlineStr"><is><t>${xmlEscape(sanitizeExcelCellText(value))}</t></is></c>`;
+}
+
+function sanitizeExcelCellText(value: string): string {
+  return /^[=+\-@]/.test(value) ? `'${value}` : value;
+}
+
+function columnLetter(index: number): string {
+  return String.fromCharCode("A".charCodeAt(0) + index);
+}
+
+function sanitizeWorksheetName(value: string): string {
+  const sanitized = value.replace(/[\\/?*\[\]:]/g, " ").replace(/\s+/g, " ").trim();
+  return (sanitized || "Dry-run").slice(0, 31);
+}
+
+function normalizeWorkbookFileTimestamp(value: string): string {
+  const normalized = value.trim().replace(/\s+/g, "T").replace(/:/g, "-").replace(/[^0-9A-Za-zTZ-]/g, "-");
+  return normalized.replace(/-+/g, "-").replace(/^-|-$/g, "") || "local-preview";
+}
+
+function contentTypesXml(): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
+    '<Default Extension="xml" ContentType="application/xml"/>',
+    '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>',
+    '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>',
+    '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>',
+    '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>',
+    '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>',
+    '</Types>'
+  ].join("");
+}
+
+function packageRelationshipsXml(): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>',
+    '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>',
+    '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>',
+    '</Relationships>'
+  ].join("");
+}
+
+function workbookXml(sheetName: string): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+    '<sheets>',
+    `<sheet name="${xmlEscape(sheetName)}" sheetId="1" r:id="rId1"/>`,
+    '</sheets>',
+    '</workbook>'
+  ].join("");
+}
+
+function workbookRelationshipsXml(): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>',
+    '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>',
+    '</Relationships>'
+  ].join("");
+}
+
+function stylesXml(): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<fonts count="1"><font><sz val="11"/><name val="Aptos"/></font></fonts>',
+    '<fills count="1"><fill><patternFill patternType="none"/></fill></fills>',
+    '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>',
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>',
+    '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>',
+    '</styleSheet>'
+  ].join("");
+}
+
+function appPropertiesXml(sheetName: string): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">',
+    '<Application>ServiceNow Automation Local Dry-run</Application>',
+    `<TitlesOfParts><vt:vector size="1" baseType="lpstr"><vt:lpstr>${xmlEscape(sheetName)}</vt:lpstr></vt:vector></TitlesOfParts>`,
+    '</Properties>'
+  ].join("");
+}
+
+function corePropertiesXml(): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
+    '<dc:title>ServiceNow Automation Local Dry-run</dc:title>',
+    '<dc:creator>ServiceNow Automation</dc:creator>',
+    '<cp:lastModifiedBy>ServiceNow Automation</cp:lastModifiedBy>',
+    '<dcterms:created xsi:type="dcterms:W3CDTF">2026-05-18T00:00:00Z</dcterms:created>',
+    '<dcterms:modified xsi:type="dcterms:W3CDTF">2026-05-18T00:00:00Z</dcterms:modified>',
+    '</cp:coreProperties>'
+  ].join("");
+}
+
+function buildStoredZipArchive(entries: { path: string; content: string }[]): Uint8Array {
+  const encoder = new TextEncoder();
+  const localRecords: Uint8Array[] = [];
+  const centralRecords: Uint8Array[] = [];
+  let localOffset = 0;
+
+  for (const entry of entries) {
+    const pathBytes = encoder.encode(entry.path);
+    const dataBytes = encoder.encode(entry.content);
+    const crc = crc32(dataBytes);
+    const localHeader = new Uint8Array(30 + pathBytes.length);
+    writeUint32LE(localHeader, 0, 0x04034b50);
+    writeUint16LE(localHeader, 4, 20);
+    writeUint16LE(localHeader, 6, 0);
+    writeUint16LE(localHeader, 8, 0);
+    writeUint16LE(localHeader, 10, 0);
+    writeUint16LE(localHeader, 12, 33);
+    writeUint32LE(localHeader, 14, crc);
+    writeUint32LE(localHeader, 18, dataBytes.length);
+    writeUint32LE(localHeader, 22, dataBytes.length);
+    writeUint16LE(localHeader, 26, pathBytes.length);
+    writeUint16LE(localHeader, 28, 0);
+    localHeader.set(pathBytes, 30);
+    localRecords.push(concatUint8Arrays([localHeader, dataBytes]));
+
+    const centralHeader = new Uint8Array(46 + pathBytes.length);
+    writeUint32LE(centralHeader, 0, 0x02014b50);
+    writeUint16LE(centralHeader, 4, 20);
+    writeUint16LE(centralHeader, 6, 20);
+    writeUint16LE(centralHeader, 8, 0);
+    writeUint16LE(centralHeader, 10, 0);
+    writeUint16LE(centralHeader, 12, 0);
+    writeUint16LE(centralHeader, 14, 33);
+    writeUint32LE(centralHeader, 16, crc);
+    writeUint32LE(centralHeader, 20, dataBytes.length);
+    writeUint32LE(centralHeader, 24, dataBytes.length);
+    writeUint16LE(centralHeader, 28, pathBytes.length);
+    writeUint16LE(centralHeader, 30, 0);
+    writeUint16LE(centralHeader, 32, 0);
+    writeUint16LE(centralHeader, 34, 0);
+    writeUint16LE(centralHeader, 36, 0);
+    writeUint32LE(centralHeader, 38, 0);
+    writeUint32LE(centralHeader, 42, localOffset);
+    centralHeader.set(pathBytes, 46);
+    centralRecords.push(centralHeader);
+    localOffset += localHeader.length + dataBytes.length;
+  }
+
+  const centralDirectory = concatUint8Arrays(centralRecords);
+  const endOfCentralDirectory = new Uint8Array(22);
+  writeUint32LE(endOfCentralDirectory, 0, 0x06054b50);
+  writeUint16LE(endOfCentralDirectory, 4, 0);
+  writeUint16LE(endOfCentralDirectory, 6, 0);
+  writeUint16LE(endOfCentralDirectory, 8, entries.length);
+  writeUint16LE(endOfCentralDirectory, 10, entries.length);
+  writeUint32LE(endOfCentralDirectory, 12, centralDirectory.length);
+  writeUint32LE(endOfCentralDirectory, 16, localOffset);
+  writeUint16LE(endOfCentralDirectory, 20, 0);
+
+  return concatUint8Arrays([...localRecords, centralDirectory, endOfCentralDirectory]);
+}
+
+function crc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (let index = 0; index < bytes.length; index += 1) {
+    crc = (crc >>> 8) ^ crc32Table[(crc ^ bytes[index]) & 0xff];
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+const crc32Table = Array.from({ length: 256 }, (_, index) => {
+  let current = index;
+  for (let bit = 0; bit < 8; bit += 1) {
+    current = current & 1 ? 0xedb88320 ^ (current >>> 1) : current >>> 1;
+  }
+  return current >>> 0;
+});
+
+function writeUint16LE(bytes: Uint8Array, offset: number, value: number): void {
+  bytes[offset] = value & 0xff;
+  bytes[offset + 1] = (value >>> 8) & 0xff;
+}
+
+function writeUint32LE(bytes: Uint8Array, offset: number, value: number): void {
+  bytes[offset] = value & 0xff;
+  bytes[offset + 1] = (value >>> 8) & 0xff;
+  bytes[offset + 2] = (value >>> 16) & 0xff;
+  bytes[offset + 3] = (value >>> 24) & 0xff;
+}
+
+function concatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
+  const totalLength = arrays.reduce((sum, array) => sum + array.length, 0);
+  const combined = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const array of arrays) {
+    combined.set(array, offset);
+    offset += array.length;
+  }
+  return combined;
+}
+
+function xmlEscape(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
 
 function draftFieldValue(field: TicketDraft[keyof TicketDraft] | undefined): string {
