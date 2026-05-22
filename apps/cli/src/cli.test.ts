@@ -71,7 +71,7 @@ describe("sda CLI", () => {
     expect(result.exitCode).toBe(0);
     expect(payload.command).toBe("qa smoke");
     expect(payload.plan.status).toBe("ready-for-manual-fill");
-    expect(payload.plan.targetHost).toBe("yageoqa.service-now.com");
+    expect(payload.plan.targetHost).toBe("qa-example.service-now.com");
     expect(payload.plan.requiredApprovalPhrase).toBe("I APPROVE QA SUBMIT ONLY");
     expect(payload.plan.fieldMappings.find((field: { key: string }) => field.key === "shortDescription").value).toContain("VPN");
     expect(payload.plan.safety.manualFillOnly).toBe(true);
@@ -510,7 +510,7 @@ describe("sda CLI", () => {
     expect(result.exitCode).toBe(0);
     expect(payload.command).toBe("browser plan");
     expect(payload.plan.status).toBe("ready");
-    expect(payload.plan.targetUrl).toContain("https://yageoqa.service-now.com");
+    expect(payload.plan.targetUrl).toContain("https://qa-example.service-now.com");
     expect(payload.plan.browserProfileDirectory).toContain(".local/servicenow-browser-profiles/qa");
     expect(payload.plan.safety.browserAutomationImplemented).toBe(false);
     expect(payload.plan.safety.realSubmitAllowed).toBe(false);

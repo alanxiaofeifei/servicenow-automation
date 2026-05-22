@@ -20,11 +20,7 @@ This is the fallback path that must always work.
 
 Purpose: validate whether the workflow maps correctly into a safe ServiceNow test/development environment.
 
-Known QA target, private repository only:
-
-```text
-https://yageoqa.service-now.com/now/nav/ui/classic/params/target/home_splash.do%3Fsysparm_direct%3Dtrue
-```
+Known QA/dev targets are configured locally by the authorized operator and are intentionally not committed here. Use placeholder examples such as `https://qa-example.service-now.com` in docs/tests.
 
 Rules:
 
@@ -65,7 +61,7 @@ A mock-only demo is useful for hiring/transfer storytelling, but Alan also needs
 
 Before any public release or showcase, remove:
 
-- `yageoqa.service-now.com`
+- real ServiceNow hostnames
 - customer names
 - real URLs
 - real assignment groups

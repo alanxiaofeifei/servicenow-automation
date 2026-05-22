@@ -21,7 +21,7 @@ describe("BrowserSessionService", () => {
 
     expect(plan.status).toBe("ready");
     expect(plan.mode).toBe("qa");
-    expect(plan.targetUrl).toContain("https://yageoqa.service-now.com");
+    expect(plan.targetUrl).toContain("https://qa-example.service-now.com");
     expect(plan.browserProfileDirectory).toBe(resolve(projectRoot, ".local/servicenow-browser-profiles/qa"));
     expect(plan.actions).toEqual(["open-controlled-browser", "wait-for-manual-login", "capture-page-context-only"]);
     expect(plan.safety.manualLoginRequired).toBe(true);

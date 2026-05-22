@@ -428,17 +428,20 @@ h3 {
 
 .display-settings-panel summary,
 .template-settings-panel summary,
+.environment-url-settings-panel summary,
 .field-review-checklist summary {
   list-style: none;
 }
 
 .display-settings-panel summary::-webkit-details-marker,
 .template-settings-panel summary::-webkit-details-marker,
+.environment-url-settings-panel summary::-webkit-details-marker,
 .field-review-checklist summary::-webkit-details-marker {
   display: none;
 }
 
-.display-settings-panel summary {
+.display-settings-panel summary,
+.environment-url-settings-panel summary {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -465,7 +468,8 @@ details[open] > summary .details-indicator {
   transform: rotate(180deg);
 }
 
-.display-settings-panel summary strong {
+.display-settings-panel summary strong,
+.environment-url-settings-panel summary strong {
   flex: 0 0 auto;
   border: 1px solid #bdd6cc;
   border-radius: 999px;
@@ -475,7 +479,8 @@ details[open] > summary .details-indicator {
   font-size: 0.78rem;
 }
 
-.display-settings-body {
+.display-settings-body,
+.environment-url-settings-body {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
@@ -585,6 +590,138 @@ details[open] > summary .details-indicator {
   width: 18px;
   height: 18px;
   accent-color: #2f756c;
+}
+
+.environment-url-settings-panel {
+  margin: 0 0 14px;
+  border: 1px solid #d8c8ae;
+  border-radius: 8px;
+  background: var(--surface-strong);
+}
+
+.environment-url-settings-body {
+  grid-template-columns: 1fr;
+}
+
+.environment-url-safety-copy,
+.environment-url-local-copy,
+.environment-url-gate-copy {
+  margin: 0;
+  line-height: 1.4;
+  font-weight: 850;
+}
+
+.environment-url-safety-copy {
+  border: 1px solid #d09231;
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: #68430c;
+  background: #fff4dc;
+}
+
+.environment-url-card-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.environment-url-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #d7e2dc;
+  border-radius: 10px;
+  padding: 11px;
+  background: #ffffff;
+}
+
+.environment-url-card header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.environment-url-card h4,
+.xlsx-artifact-panel h4 {
+  margin: 0;
+  color: #263b35;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  text-wrap: balance;
+}
+
+.environment-url-card header p {
+  margin: 6px 0 0;
+  color: #52655b;
+  line-height: 1.4;
+  font-weight: 740;
+}
+
+.environment-url-card header > span {
+  flex: 0 0 auto;
+  border: 1px solid #bad4cb;
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #214f49;
+  background: #e9f7f1;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.environment-url-field {
+  margin-bottom: 0;
+}
+
+.environment-url-validation {
+  margin: 0;
+  border-radius: 8px;
+  padding: 8px 9px;
+  font-weight: 900;
+}
+
+.environment-url-validation.accepted {
+  border: 1px solid #b7d2c8;
+  color: #214f49;
+  background: #eef8f2;
+}
+
+.environment-url-validation.blocked {
+  border: 1px solid #e0c493;
+  color: #68430c;
+  background: #fff4dc;
+}
+
+.environment-url-gate-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.environment-url-gate-list div {
+  border: 1px solid #e0d0b6;
+  border-radius: 8px;
+  padding: 8px;
+  background: #fff8ea;
+}
+
+.environment-url-gate-list dt {
+  color: #617066;
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.environment-url-gate-list dd {
+  margin: 4px 0 0;
+  color: #243b36;
+  font-weight: 850;
+}
+
+.environment-url-local-copy,
+.environment-url-gate-copy {
+  color: #52655b;
 }
 
 .runtime-safety-panel {
@@ -1165,6 +1302,7 @@ details[open] > summary .details-indicator {
 .routing-plan-panel h4,
 .work-notes-plan-panel h4,
 .excel-row-preview-panel h4,
+.xlsx-artifact-panel h4,
 .routing-stage-grid h5 {
   margin: 0;
   color: #263b35;
@@ -1174,7 +1312,8 @@ details[open] > summary .details-indicator {
 .workflow-mini-panel h4,
 .routing-plan-panel h4,
 .work-notes-plan-panel h4,
-.excel-row-preview-panel h4 {
+.excel-row-preview-panel h4,
+.xlsx-artifact-panel h4 {
   font-size: 0.96rem;
 }
 
@@ -1192,7 +1331,8 @@ details[open] > summary .details-indicator {
 
 .routing-plan-panel,
 .work-notes-plan-panel,
-.excel-row-preview-panel {
+.excel-row-preview-panel,
+.xlsx-artifact-panel {
   border: 1px solid #d7e2dc;
   border-radius: 8px;
   padding: 12px;

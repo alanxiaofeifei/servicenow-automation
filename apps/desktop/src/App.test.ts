@@ -12,6 +12,7 @@ import {
   draftTemplatePresets,
   getCtrlWheelZoomDelta,
   getNextAppZoomPercent,
+  getNextEnvironmentUrlOverrideFromDraft,
   updateQaSmokeWriteActionSelection,
   type AppProps,
   type LanguageCode
@@ -377,11 +378,65 @@ describe("App", () => {
     expect(output).toContain("QA Isolation Check");
     expect(output).toContain("QA Dry-run Outcome");
     expect(output).toContain(
-      "This row is generated locally from the reviewed draft. No workbook is connected or written."
+      "This row is generated locally from the reviewed draft. XLSX export creates a local dry-run file only; no Graph, cloud workbook, or ServiceNow write is performed."
     );
     expect(output).toContain("Copy CSV Row");
     expect(output).toContain("Copy Markdown Summary");
     expect(output).toContain("No real ServiceNow, Excel workbook, Graph, browser, API, mailbox, Teams, or portal write is performed.");
+  });
+
+  it("renders local XLSX dry-run artifact metadata without Graph or ServiceNow writes", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Local XLSX Dry-run Artifact");
+    expect(output).toContain("Download Local XLSX Dry-run");
+    expect(output).toContain("Copy XLSX Metadata");
+    expect(output).toContain("servicenow-dry-run-2026-05-18T08-15.xlsx");
+    expect(output).toContain("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    expect(output).toContain("Excel Dry-run Row");
+    expect(output).toContain("Artifact byte size");
+    expect(output).toContain(
+      "Local deterministic XLSX dry-run artifact only. It does not connect to Microsoft Graph, a cloud workbook, ServiceNow, browser automation, or any real write path."
+    );
+  });
+
+  it("renders local-only ServiceNow environment URL settings with unchanged write gates", () => {
+    const output = renderAppMarkup(undefined, {
+      initialEnvironmentUrlSettings: {
+        qa: "https://qa-example.service-now.com/now/nav/ui/classic/params/target/home_splash.do"
+      }
+    });
+    const settingsStart = output.indexOf('id="app-settings-sidebar"');
+    const settingsEnd = output.indexOf("</aside>", settingsStart);
+    const settingsMarkup = output.slice(settingsStart, settingsEnd);
+
+    expect(settingsMarkup).toContain("ServiceNow Environment URL settings");
+    expect(settingsMarkup).toContain("Local state only");
+    expect(settingsMarkup).toContain("Custom URL");
+    expect(settingsMarkup).toContain("QA Test Environment");
+    expect(settingsMarkup).toContain("Development Test Environment");
+    expect(settingsMarkup).toContain("Production Shadow Mode");
+    expect(settingsMarkup).toContain("Accepted ServiceNow host");
+    expect(settingsMarkup).toContain("qa-example.service-now.com");
+    expect(settingsMarkup).toContain("Custom target active for this session");
+    expect(settingsMarkup).toContain("Built-in/default target active; raw target URL stays hidden until a safe custom URL is accepted.");
+    expect(settingsMarkup).toContain(
+      "Write gate unchanged: each Save/Submit/Update/Close still requires the exact action approval phrase."
+    );
+    expect(output).not.toContain('href="https://');
+    expect(output).not.toContain("graph.microsoft.com");
+  });
+
+  it("clears active ServiceNow URL overrides when a draft URL becomes invalid", () => {
+    expect(
+      getNextEnvironmentUrlOverrideFromDraft(
+        "qa",
+        "https://qa-example.service-now.com/now/nav/ui/classic/params/target/home_splash.do"
+      )
+    ).toBe("https://qa-example.service-now.com/now/nav/ui/classic/params/target/home_splash.do");
+    expect(getNextEnvironmentUrlOverrideFromDraft("qa", "https://qa-example.service-now.com/incident.do/fake-record-123")).toBe("");
+    expect(getNextEnvironmentUrlOverrideFromDraft("qa", "https://example.invalid/nav_to.do")).toBe("");
+    expect(getNextEnvironmentUrlOverrideFromDraft("qa", "")).toBe("");
   });
 
   it("renders one FIFO intake item for each deterministic manual scenario", () => {
