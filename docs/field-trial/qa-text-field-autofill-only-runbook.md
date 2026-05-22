@@ -1,10 +1,10 @@
-# QA Text-Field Autofill-Only Planning Gate Runbook
+# QA Text-Field Autofill-Only Planning + Fixture Harness Runbook
 
 ## Purpose
 
 This runbook covers the first implementation slice after the GPT-5.5 Pro checkpoint returned **READY WITH CONDITIONS** for QA browser-assisted autofill.
 
-This slice is a **planning/review gate only**. It prepares the safety contract, field preview, approval phrase, and selector-verification requirement. It does **not** authorize a real browser fill yet, and it does **not** authorize Save, Submit, Update, Close, attachment upload, notification-triggering actions, ServiceNow API writes, bulk fill, or production/prod-shadow use.
+This slice contains the **planning/review gate** plus a **local fixture-only selector harness**. It prepares the safety contract, field preview, approval phrase, selector-verification requirement, and deterministic local execution checks. It does **not** authorize a real browser fill yet, and it does **not** authorize Save, Submit, Update, Close, attachment upload, notification-triggering actions, ServiceNow API writes, bulk fill, or production/prod-shadow use.
 
 ## Scope
 
@@ -14,13 +14,14 @@ Allowed in this planning slice:
 - One fake/sanitized ticket only.
 - Dedicated/tool-owned Chromium profile only.
 - App-side field review planning.
+- Local fixture harness execution that touches no real QA/dev page.
 - Exact approval phrase for autofill-only.
 - Selector verification must be present before any later execution slice can become ready.
 - Text fields only:
   - Short description
   - Description
   - Work notes
-- Stop before any browser execution.
+- Stop before any real browser execution.
 - Sanitized outcome note only.
 
 Forbidden in this slice:
@@ -90,9 +91,54 @@ pnpm test
 3. Run privacy/safety scan for raw QA URLs, ticket IDs, ServiceNow record IDs, credentials, auth-material exports, browser artifacts, page HTML, OAuth codes, and real user/customer text.
 4. Confirm only fake/sanitized `vpn-issue` style scenario data is used.
 
-### Phase 1 — No browser execution in this slice
+### Phase 1 — No real browser execution in this slice
 
-Do not open or automate the real QA/dev browser from this planning gate. A later selector-verified execution PR/runbook must define the controlled browser launch and runtime selector verification path before Alan performs a real QA text-field fill.
+Do not open or automate the real QA/dev browser from this planning gate. A later browser execution PR/runbook must define the controlled browser launch and runtime selector verification path before Alan performs a real QA text-field fill.
+
+### Phase 1A — Local fixture harness smoke
+
+The fixture harness is allowed because it does not launch a browser and does not touch a real QA/dev page.
+
+Use `pnpm --silent` so JSON output is not mixed with package banners:
+
+```bash
+pnpm --filter @servicenow-automation/cli --silent sda qa autofill-fixture \
+  --mode qa \
+  --template vpn_issue \
+  --user "Demo requester A" \
+  --summary "Fake Chat intake — VPN connection issue after password or MFA change" \
+  --qa-isolation-confirmation "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team." \
+  --dedicated-profile-confirmation "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile." \
+  --approval-phrase "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED" \
+  --selector-fixture all-found \
+  --json
+```
+
+Expected fixture-only result:
+
+- `command` is `qa autofill-fixture`.
+- `execution.status` is `completed` only for the local `all-found` fixture.
+- `execution.browserProcessLaunched` is `false`.
+- `execution.realServiceNowPageTouched` is `false`.
+- `execution.writeActionsAttempted` is `false`.
+- Field values in CLI JSON are sanitized.
+
+Negative fixture smoke:
+
+```bash
+pnpm --filter @servicenow-automation/cli --silent sda qa autofill-fixture \
+  --mode qa \
+  --template vpn_issue \
+  --user "Demo requester A" \
+  --summary "Fake Chat intake — VPN connection issue after password or MFA change" \
+  --qa-isolation-confirmation "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team." \
+  --dedicated-profile-confirmation "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile." \
+  --approval-phrase "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED" \
+  --selector-fixture missing-work-notes \
+  --json
+```
+
+Expected negative result: `plan.blockedReason` is `selector-mismatch`, `execution.status` is `blocked`, and no fields are filled. Repeat the same negative smoke with `--selector-fixture wrong-description-type` to prove wrong DOM control types fail before readiness, and with `--selector-fixture unexpected-required-field` to prove unexpected required controls stop the fixture harness.
 
 ### Phase 2 — App-side planning review
 
@@ -113,9 +159,9 @@ Alan provides the exact QA or dev autofill-only phrase shown above.
 
 A Save/Submit/Update/Close phrase does not approve autofill. An autofill phrase does not approve Save/Submit/Update/Close.
 
-### Phase 4 — Autofill-only execution requirements for the later slice
+### Phase 4 — Real-browser autofill-only execution requirements for the later slice
 
-The later execution slice may fill only:
+The later real-browser execution slice may fill only:
 
 - Short description
 - Description
@@ -131,12 +177,12 @@ The later execution slice must fail closed if:
 - the dedicated profile boundary is unclear,
 - any write button automation path appears.
 
-### Phase 5 — Stop before browser execution here
+### Phase 5 — Stop before real browser execution here
 
-This planning slice stops before browser execution and shows:
+This planning plus fixture slice stops before real browser execution and shows:
 
 ```text
-Planning gate only: browser text-field execution remains blocked until a later selector-verified execution slice is reviewed.
+Planning plus local fixture gate only: real browser text-field execution remains blocked until a later browser execution slice is reviewed.
 ```
 
 If Alan wants to perform real browser autofill later, that requires a selector-verified execution PR/runbook. If Alan wants to Save later, that is a separate checkpoint and separate phrase, not part of this runbook.
@@ -158,7 +204,7 @@ QA autofill-only planning gate
 Short description / Description / Work notes
 
 ## Action attempted
-None — planning/review only
+Planning/review only, or local fixture harness smoke
 
 ## Write actions
 No Save / Submit / Update / Close
