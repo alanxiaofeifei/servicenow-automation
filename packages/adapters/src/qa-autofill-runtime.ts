@@ -105,6 +105,8 @@ export type QaIncidentDefaultFieldRuntimeFillBlockedReason =
   | QaIncidentFieldRuntimeBlockedReason
   | "execute-flag-required"
   | "plan-not-ready"
+  | "approval-page-fingerprint-required"
+  | "runtime-text-fields-only"
   | "approval-stale-after-page-change"
   | "field-control-missing"
   | "field-control-ambiguous"
@@ -200,6 +202,12 @@ export type RunQaTextFieldAutofillRuntimeRequest = {
 export type CdpQaAutofillRuntimePageDriverOptions = {
   endpoint: string;
 };
+
+const QA_INCIDENT_DEFAULT_RUNTIME_TEXT_FIELD_KEYS = new Set<QaIncidentDefaultFieldKey>([
+  "shortDescription",
+  "description",
+  "workNotes"
+]);
 
 export async function runQaTextFieldAutofillRuntime(
   request: RunQaTextFieldAutofillRuntimeRequest
@@ -399,6 +407,12 @@ export async function runQaIncidentDefaultFieldAutofillRuntime(
   if (request.plannedFields.length === 0) {
     return blockedDefaultFieldAutofillRuntimeResult("plan-not-ready", false);
   }
+  if (!request.plannedFields.every((field) => QA_INCIDENT_DEFAULT_RUNTIME_TEXT_FIELD_KEYS.has(field.key))) {
+    return blockedDefaultFieldAutofillRuntimeResult("runtime-text-fields-only", false);
+  }
+  if (request.execute && !request.approvalPageFingerprint?.trim()) {
+    return blockedDefaultFieldAutofillRuntimeResult("approval-page-fingerprint-required", false);
+  }
 
   let inspection: QaIncidentFieldRuntimeInspection;
   try {
@@ -409,7 +423,7 @@ export async function runQaIncidentDefaultFieldAutofillRuntime(
 
   const targetValidation = validateRuntimeCurrentPageTarget(request.environment, inspection.currentUrl);
   if (!targetValidation.allowed || !targetValidation.allowedHost) {
-    return blockedDefaultFieldAutofillRuntimeResult("current-page-target-denied", true, inspection.pageFingerprint);
+    return blockedDefaultFieldAutofillRuntimeResult("current-page-target-denied", true);
   }
 
   if (!request.execute) {
@@ -422,9 +436,12 @@ export async function runQaIncidentDefaultFieldAutofillRuntime(
     };
   }
 
-  const expectedPageFingerprint = request.approvalPageFingerprint ?? inspection.pageFingerprint;
-  if (request.approvalPageFingerprint && request.approvalPageFingerprint !== inspection.pageFingerprint) {
-    return blockedDefaultFieldAutofillRuntimeResult("approval-stale-after-page-change", true, inspection.pageFingerprint);
+  const expectedPageFingerprint = request.approvalPageFingerprint?.trim();
+  if (!expectedPageFingerprint) {
+    return blockedDefaultFieldAutofillRuntimeResult("approval-page-fingerprint-required", true);
+  }
+  if (expectedPageFingerprint !== inspection.pageFingerprint) {
+    return blockedDefaultFieldAutofillRuntimeResult("approval-stale-after-page-change", true);
   }
 
   let execution: QaIncidentDefaultFieldRuntimeFillResult;
@@ -441,7 +458,7 @@ export async function runQaIncidentDefaultFieldAutofillRuntime(
   return {
     status: execution.status,
     blockedReason: execution.blockedReason,
-    pageFingerprint: inspection.pageFingerprint,
+    pageFingerprint: undefined,
     pageFingerprintMatched: execution.status === "completed",
     filledFields: execution.filledFields,
     safety: defaultFieldAutofillRuntimeSafety(true)
@@ -638,13 +655,12 @@ function defaultFieldAutofillRuntimeSafety(
 
 function blockedDefaultFieldAutofillRuntimeResult(
   blockedReason: QaIncidentDefaultFieldRuntimeFillBlockedReason,
-  browserAutomationCalled: boolean,
-  pageFingerprint?: string
+  browserAutomationCalled: boolean
 ): QaIncidentDefaultFieldAutofillRuntimeResult {
   return {
     status: "blocked",
     blockedReason,
-    pageFingerprint,
+    pageFingerprint: undefined,
     pageFingerprintMatched: false,
     filledFields: [],
     safety: defaultFieldAutofillRuntimeSafety(browserAutomationCalled)
@@ -854,12 +870,20 @@ const incidentDefaultFieldFillScript = async (
   },
   inspectionScriptSource: string
 ): Promise<QaIncidentDefaultFieldRuntimeFillResult> => {
+  if (!request.plannedFields.every((field) => isRuntimeTextOnlyDefaultField(field.key))) {
+    return blocked("runtime-text-fields-only");
+  }
+  const expectedPageFingerprint = request.expectedPageFingerprint?.trim();
+  if (!expectedPageFingerprint) {
+    return blocked("approval-page-fingerprint-required");
+  }
+
   const inspect = (0, eval)(`(${inspectionScriptSource})`) as () => Promise<QaIncidentFieldRuntimeInspection>;
   const inspection = await inspect();
   if (!currentPageTargetAllowed(request.allowedHost)) {
     return blocked("current-page-target-denied");
   }
-  if (request.expectedPageFingerprint && inspection.pageFingerprint !== request.expectedPageFingerprint) {
+  if (inspection.pageFingerprint !== expectedPageFingerprint) {
     return blocked("approval-stale-after-page-change");
   }
 
@@ -870,6 +894,7 @@ const incidentDefaultFieldFillScript = async (
     const control = findIncidentControl(documents, field.key, field.label);
     if (!control) return blocked("field-control-missing");
     if (control.ambiguous) return blocked("field-control-ambiguous");
+    if (!runtimeTextControlMatches(control.element, field.key)) return blocked("runtime-text-fields-only");
     if (!isWritable(control.element)) return blocked("non-writable-control");
     const fillStatus = fillControl(control.element, field.key, field.value);
     if (fillStatus !== "ok") return blocked(fillStatus);
@@ -938,7 +963,7 @@ const incidentDefaultFieldFillScript = async (
     const scored: Array<{ element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement; score: number }> = [];
     for (const doc of docs) {
       for (const element of Array.from(doc.querySelectorAll("input, textarea, select"))) {
-        if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement)) continue;
+        if (!isIncidentControlElement(element)) continue;
         if (!isVisibleElement(element)) continue;
         const score = scoreControl(element, key, label);
         if (score > 0) scored.push({ element, score });
@@ -971,22 +996,15 @@ const incidentDefaultFieldFillScript = async (
     if (canonical && (associated === canonical || aria === canonical || title === canonical)) score = Math.max(score, 90);
     if (canonical && (associated.includes(canonical) || aria.includes(canonical) || title.includes(canonical))) score = Math.max(score, 70);
     if (!preferredElementTypeMatches(element, key)) score -= 40;
-    if (element instanceof HTMLInputElement && element.type === "hidden") return 0;
+    if (isInputControl(element) && element.type === "hidden") return 0;
     return score;
   }
 
   function fillControl(
-    element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+    element: HTMLInputElement | HTMLTextAreaElement,
     key: QaIncidentDefaultFieldKey,
     value: string
   ): "ok" | "field-option-not-found" {
-    if (element instanceof HTMLSelectElement) {
-      const option = findSelectOption(element, value);
-      if (!option) return "field-option-not-found";
-      element.value = option.value;
-      dispatchFieldEvents(element);
-      return "ok";
-    }
     setNativeTextValue(element, value);
     dispatchFieldEvents(element);
     if (isReferenceField(key)) {
@@ -995,19 +1013,11 @@ const incidentDefaultFieldFillScript = async (
     return "ok";
   }
 
-  function findSelectOption(select: HTMLSelectElement, value: string): HTMLOptionElement | undefined {
-    const normalizedValue = normalizeText(value);
-    const options = Array.from(select.options);
-    return (
-      options.find((option) => normalizeText(option.textContent ?? option.label) === normalizedValue) ??
-      options.find((option) => normalizeText(option.label) === normalizedValue) ??
-      options.find((option) => normalizeText(option.value) === normalizedValue) ??
-      options.find((option) => normalizeText(option.textContent ?? option.label).includes(normalizedValue))
-    );
-  }
-
   function setNativeTextValue(element: HTMLInputElement | HTMLTextAreaElement, value: string): void {
-    const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const ownerWindow = element.ownerDocument.defaultView;
+    const prototype = isTextAreaControl(element)
+      ? (ownerWindow?.HTMLTextAreaElement ?? HTMLTextAreaElement).prototype
+      : (ownerWindow?.HTMLInputElement ?? HTMLInputElement).prototype;
     const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
     if (descriptor?.set) {
       descriptor.set.call(element, value);
@@ -1022,7 +1032,7 @@ const incidentDefaultFieldFillScript = async (
   }
 
   function isWritable(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): boolean {
-    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+    if (isInputControl(element) || isTextAreaControl(element)) {
       return !element.disabled && !element.readOnly && element.getAttribute("aria-disabled") !== "true";
     }
     return !element.disabled && element.getAttribute("aria-disabled") !== "true";
@@ -1082,15 +1092,54 @@ const incidentDefaultFieldFillScript = async (
     return map[key];
   }
 
+  function isRuntimeTextOnlyDefaultField(key: QaIncidentDefaultFieldKey): boolean {
+    return key === "shortDescription" || key === "description" || key === "workNotes";
+  }
+
   function preferredElementTypeMatches(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, key: QaIncidentDefaultFieldKey): boolean {
-    if (["category", "subcategory", "channel", "impact", "urgency", "state"].includes(key)) return element instanceof HTMLSelectElement;
-    if (["description", "workNotes"].includes(key)) return element instanceof HTMLTextAreaElement;
-    return element instanceof HTMLInputElement;
+    if (key === "shortDescription") return isTextInputControl(element);
+    if (key === "description" || key === "workNotes") return isTextAreaControl(element);
+    return false;
+  }
+
+  function runtimeTextControlMatches(
+    element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+    key: QaIncidentDefaultFieldKey
+  ): element is HTMLInputElement | HTMLTextAreaElement {
+    if (key === "shortDescription") return isTextInputControl(element);
+    if (key === "description" || key === "workNotes") return isTextAreaControl(element);
+    return false;
+  }
+
+  function isIncidentControlElement(element: Element): element is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
+    return isInputControl(element) || isTextAreaControl(element) || isSelectControl(element);
+  }
+
+  function isInputControl(element: Element): element is HTMLInputElement {
+    return element.tagName.toLowerCase() === "input";
+  }
+
+  function isTextAreaControl(element: Element): element is HTMLTextAreaElement {
+    return element.tagName.toLowerCase() === "textarea";
+  }
+
+  function isSelectControl(element: Element): element is HTMLSelectElement {
+    return element.tagName.toLowerCase() === "select";
+  }
+
+  function isTextInputControl(element: Element): element is HTMLInputElement {
+    if (!isInputControl(element)) return false;
+    const type = (element.getAttribute("type") || element.type || "text").toLowerCase();
+    return ["", "text", "search", "email", "url", "tel"].includes(type);
   }
 
   function isReferenceField(key: QaIncidentDefaultFieldKey): boolean {
     return ["requester", "location", "assignmentGroup", "assignedTo"].includes(key);
   }
+};
+
+export const qaAutofillRuntimeTestHooks = {
+  incidentDefaultFieldFillScript
 };
 
 const incidentFieldInspectionScript = async (): Promise<QaIncidentFieldRuntimeInspection> => {

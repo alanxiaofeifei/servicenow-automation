@@ -2347,6 +2347,60 @@ textarea:focus,
   background: #fffaf0;
 }
 
+.operator-scope-card {
+  background: linear-gradient(135deg, #fff8e9 0%, #fffdf7 100%);
+}
+
+.operator-action-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 12px;
+}
+
+.operator-action-card {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+  border: 1px solid #e0c48e;
+  border-radius: 16px;
+  padding: 14px;
+  background: #fffdf8;
+  color: #463923;
+  box-shadow: 0 8px 24px rgba(90, 68, 33, 0.08);
+}
+
+.operator-action-card > span {
+  width: fit-content;
+  border: 1px solid #d3a461;
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: #5a4421;
+  background: #fff8e9;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.operator-action-card strong {
+  color: #263b45;
+  font-size: 1.02rem;
+}
+
+.operator-action-card p {
+  margin: 0;
+  color: #5d6d65;
+  line-height: 1.35;
+  font-weight: 750;
+}
+
+.operator-action-card button {
+  width: 100%;
+  justify-self: stretch;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -2445,7 +2499,8 @@ textarea:focus,
   .risk-control-gate,
   .runtime-safety-panel,
   .high-severity-body,
-  .field-reference-strip {
+  .field-reference-strip,
+  .operator-action-grid {
     grid-template-columns: 1fr;
   }
 

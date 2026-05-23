@@ -1,8 +1,11 @@
 param(
   [string]$TargetUrl = "about:blank",
   [string]$Purpose = "qa-autofill-cdp",
+  [ValidateSet("qa", "dev", "mock", "production-shadow")]
+  [string]$EnvironmentMode = "qa",
   [int]$TimeoutSeconds = 60,
-  [switch]$ExposeToWsl
+  [switch]$ExposeToWsl,
+  [switch]$ConfirmDevOnlyWslExposure
 )
 
 $ErrorActionPreference = "Stop"
@@ -55,6 +58,21 @@ function Test-SafeTargetUrl([string]$Url) {
     sanitizedTarget = "https://<service-now-host>$($parsed.AbsolutePath)"
     reason = "service-now-landing-url"
   }
+}
+
+if ($ExposeToWsl -and (($EnvironmentMode -ne "dev") -or -not $ConfirmDevOnlyWslExposure)) {
+  Write-JsonAndExit @{
+    status = "blocked"
+    blockedReason = "wsl-cdp-exposure-dev-only"
+    safety = @{
+      browserProcessLaunched = $false
+      cdpBoundToLoopbackOnly = $true
+      wslBridgeRequired = $false
+      serviceNowWritePerformed = $false
+      saveSubmitUpdateClosePerformed = $false
+      artifactsCaptured = $false
+    }
+  } 1
 }
 
 if (-not $env:LOCALAPPDATA) {

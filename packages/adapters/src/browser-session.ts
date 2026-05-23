@@ -158,6 +158,7 @@ export type DedicatedCdpBrowserHelperCommand = {
   helperScriptPath: string;
   rawTargetUrl: string;
   exposeToWsl: boolean;
+  environmentMode: ServiceNowEnvironmentMode;
 };
 
 export type DedicatedCdpBrowserHelperResult = {
@@ -224,6 +225,7 @@ export type StartQaDedicatedCdpBrowserOptions = CreateLaunchPlanOptions & {
   helperScriptPath?: string;
   powershellExecutable?: string;
   exposeToWsl?: boolean;
+  confirmDevOnlyWslExposure?: boolean;
   helperLauncher?: DedicatedCdpBrowserHelperLauncher;
 };
 
@@ -663,11 +665,25 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
       };
     }
 
+    const exposeToWsl = startOptions.exposeToWsl ?? false;
+    if (exposeToWsl && (environment.mode !== "dev" || !startOptions.confirmDevOnlyWslExposure)) {
+      return {
+        ...baseResult,
+        blockedReason: "WSL CDP exposure is dev-only and requires explicit --confirm-dev-only-wsl-exposure.",
+        auditNotes: [
+          ...baseResult.auditNotes,
+          "WSL CDP exposure was blocked before helper command construction; default QA operator launch remains loopback-only."
+        ]
+      };
+    }
+
     const command = buildDedicatedCdpHelperCommand({
       executable: startOptions.powershellExecutable ?? "powershell.exe",
       helperScriptPath: toWindowsInteropPath(startOptions.helperScriptPath ?? defaultDedicatedCdpHelperScriptPath(projectRoot)),
       targetUrl: plan.targetUrl,
-      exposeToWsl: startOptions.exposeToWsl ?? false
+      environmentMode: environment.mode,
+      exposeToWsl,
+      confirmDevOnlyWslExposure: startOptions.confirmDevOnlyWslExposure === true
     });
     const commandPreview = sanitizeDedicatedCdpHelperCommandPreview(command);
 
@@ -696,11 +712,17 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
     try {
       const helperResult = await helperLauncher(command);
       const helperPayload = parseDedicatedCdpHelperPayload(helperResult.stdout);
-      if (helperResult.exitCode !== 0 || helperPayload.status !== "ready" || !isSafeLoopbackCdpEndpoint(helperPayload.cdpEndpoint)) {
+      const helperReportedLoopbackOnly = helperPayload.safety?.cdpBoundToLoopbackOnly !== false;
+      if (
+        helperResult.exitCode !== 0 ||
+        helperPayload.status !== "ready" ||
+        !isSafeLoopbackCdpEndpoint(helperPayload.cdpEndpoint) ||
+        (!exposeToWsl && !helperReportedLoopbackOnly)
+      ) {
         return {
           ...baseResult,
           commandPreview,
-          blockedReason: helperPayload.blockedReason ?? "Dedicated CDP browser helper did not report a ready loopback endpoint.",
+          blockedReason: helperPayload.blockedReason ?? "Dedicated CDP browser helper did not report a ready loopback-only endpoint.",
           auditNotes: [
             ...baseResult.auditNotes,
             "Dedicated CDP browser helper returned a blocked or non-loopback result; raw helper output was not exposed."
@@ -912,7 +934,9 @@ function buildDedicatedCdpHelperCommand(input: {
   executable: string;
   helperScriptPath: string;
   targetUrl: string;
+  environmentMode: ServiceNowEnvironmentMode;
   exposeToWsl: boolean;
+  confirmDevOnlyWslExposure: boolean;
 }): DedicatedCdpBrowserHelperCommand {
   const args = [
     "-NoProfile",
@@ -923,11 +947,13 @@ function buildDedicatedCdpHelperCommand(input: {
     "-TargetUrl",
     input.targetUrl,
     "-Purpose",
-    "qa-autofill-cdp"
+    "qa-autofill-cdp",
+    "-EnvironmentMode",
+    input.environmentMode
   ];
 
-  if (input.exposeToWsl) {
-    args.push("-ExposeToWsl");
+  if (input.exposeToWsl && input.confirmDevOnlyWslExposure) {
+    args.push("-ExposeToWsl", "-ConfirmDevOnlyWslExposure");
   }
 
   return {
@@ -935,7 +961,8 @@ function buildDedicatedCdpHelperCommand(input: {
     args,
     helperScriptPath: input.helperScriptPath,
     rawTargetUrl: input.targetUrl,
-    exposeToWsl: input.exposeToWsl
+    exposeToWsl: input.exposeToWsl,
+    environmentMode: input.environmentMode
   };
 }
 

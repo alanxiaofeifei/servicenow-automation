@@ -120,6 +120,7 @@ type OperatorRuntimeRequest = {
   mode: ServiceNowEnvironmentMode;
   targetUrl?: string;
   cdpEndpoint?: string;
+  approvalPageFingerprint?: string;
   draft?: TicketDraft;
   scenario?: QaIncidentDefaultScenario;
   routeOutAssignmentGroup?: string;
@@ -1780,6 +1781,9 @@ export type AppProps = {
   initialQaAutofillQaIsolationConfirmed?: boolean;
   initialQaAutofillDedicatedProfileConfirmed?: boolean;
   initialEnvironmentUrlSettings?: ServiceNowEnvironmentUrlOverrides;
+  initialOperatorCdpEndpoint?: string;
+  initialOperatorVerifiedPageFingerprint?: string;
+  initialOperatorLastResponse?: OperatorRuntimeResponse | null;
 };
 
 export function updateQaSmokeWriteActionSelection(nextAction: QaManualFillWriteAction) {
@@ -1804,7 +1808,10 @@ export function App({
   initialQaAutofillApprovalPhrase = "",
   initialQaAutofillQaIsolationConfirmed = false,
   initialQaAutofillDedicatedProfileConfirmed = false,
-  initialEnvironmentUrlSettings = {}
+  initialEnvironmentUrlSettings = {},
+  initialOperatorCdpEndpoint = "",
+  initialOperatorVerifiedPageFingerprint = "",
+  initialOperatorLastResponse = null
 }: AppProps = {}) {
   const [language, setLanguage] = useState<LanguageCode>(initialLanguage);
   const [displayTheme, setDisplayTheme] = useState<DisplayTheme>("warm");
@@ -1840,8 +1847,13 @@ export function App({
   const [environmentUrlSettings, setEnvironmentUrlSettings] = useState<ServiceNowEnvironmentUrlOverrides>(
     initialEnvironmentUrlSettings
   );
-  const [operatorCdpEndpoint, setOperatorCdpEndpoint] = useState("");
-  const [operatorLastResponse, setOperatorLastResponse] = useState<OperatorRuntimeResponse | null>(null);
+  const [operatorCdpEndpoint, setOperatorCdpEndpoint] = useState(initialOperatorCdpEndpoint);
+  const [operatorVerifiedPageFingerprint, setOperatorVerifiedPageFingerprint] = useState(
+    initialOperatorVerifiedPageFingerprint
+  );
+  const [operatorLastResponse, setOperatorLastResponse] = useState<OperatorRuntimeResponse | null>(
+    initialOperatorLastResponse
+  );
   const [operatorBusyAction, setOperatorBusyAction] = useState<"launch" | "verify" | "autofill" | null>(null);
   const [operatorStatus, setOperatorStatus] = useState<OperatorActionStatus>({
     label: "Ready",
@@ -2097,6 +2109,7 @@ export function App({
       mode: selectedEnvironmentMode,
       targetUrl: qaSmokeTargetUrl,
       cdpEndpoint: operatorCdpEndpoint,
+      approvalPageFingerprint: action === "autofill" ? operatorVerifiedPageFingerprint : undefined,
       draft,
       scenario: "initial-create"
     };
@@ -2108,6 +2121,19 @@ export function App({
       setOperatorLastResponse(response);
       if (response.launch?.cdpEndpoint) {
         setOperatorCdpEndpoint(response.launch.cdpEndpoint);
+      }
+      if (action === "launch") {
+        setOperatorVerifiedPageFingerprint("");
+      }
+      if (action === "verify") {
+        setOperatorVerifiedPageFingerprint(
+          response.ok && response.fieldInspection?.status === "verified" && response.fieldInspection.pageFingerprint
+            ? response.fieldInspection.pageFingerprint
+            : ""
+        );
+      }
+      if (action === "autofill" && response.runtime?.blockedReason === "approval-stale-after-page-change") {
+        setOperatorVerifiedPageFingerprint("");
       }
       setOperatorStatus(operatorStatusFromResponse(action, response));
     } catch (error) {
@@ -2340,6 +2366,7 @@ export function App({
               draft={draft}
               lastResponse={operatorLastResponse}
               mode={selectedEnvironmentMode}
+              verifiedPageFingerprintReady={Boolean(operatorVerifiedPageFingerprint)}
               onAutofill={autofillQaOperatorIncident}
               onLaunchBrowser={launchQaOperatorBrowser}
               onVerify={verifyQaOperatorIncident}
@@ -4150,12 +4177,12 @@ function operatorStatusFromResponse(
   if (action === "verify") {
     const plannedCount = response.defaultPlan?.plannedFields?.length ?? 0;
     return response.ok
-      ? { label: "Incident form verified", tone: "success", details: `${plannedCount} fields are ready for QA autofill. Review the preview, then click Autofill current Incident.` }
+      ? { label: "Incident form verified", tone: "success", details: `${plannedCount} fields are ready for local review. Runtime autofill remains text-only; click Autofill text fields only after reviewing the preview.` }
       : { label: "Verify blocked", tone: "blocked", details: response.fieldInspection?.blockedReason ?? response.defaultPlan?.blockedReason ?? "Current page is not a verified QA Incident form." };
   }
   const filledCount = response.runtime?.filledFields?.length ?? 0;
   return response.ok
-    ? { label: "Autofill completed", tone: "success", details: `${filledCount} fields were filled. Review manually in ServiceNow. This tool did not Save, Submit, Update, Resolve, Close, upload, email, or call ServiceNow API.` }
+    ? { label: "Autofill completed", tone: "success", details: `${filledCount} text fields were filled. Review manually in ServiceNow. This tool did not Save, Submit, Update, Resolve, Close, upload, email, or call ServiceNow API.` }
     : { label: "Autofill blocked", tone: "blocked", details: response.runtime?.blockedReason ?? response.defaultPlan?.blockedReason ?? "No field was changed." };
 }
 
@@ -4165,6 +4192,7 @@ function QaOperatorRuntimePanel({
   draft,
   lastResponse,
   mode,
+  verifiedPageFingerprintReady,
   onAutofill,
   onLaunchBrowser,
   onVerify,
@@ -4176,6 +4204,7 @@ function QaOperatorRuntimePanel({
   draft: TicketDraft;
   lastResponse: OperatorRuntimeResponse | null;
   mode: ServiceNowEnvironmentMode;
+  verifiedPageFingerprintReady: boolean;
   onAutofill: () => void;
   onLaunchBrowser: () => void;
   onVerify: () => void;
@@ -4186,17 +4215,17 @@ function QaOperatorRuntimePanel({
   const filledFields = lastResponse?.runtime?.filledFields ?? [];
   const canUseRuntime = mode === "qa" || mode === "dev";
   const verifyDisabled = !canUseRuntime || !cdpEndpointReady || busyAction !== null;
-  const autofillDisabled = !canUseRuntime || !cdpEndpointReady || busyAction !== null;
+  const autofillDisabled = !canUseRuntime || !cdpEndpointReady || busyAction !== null || !verifiedPageFingerprintReady;
 
   return (
     <section className="qa-autofill-panel qa-smoke-panel operator-runtime-panel" aria-labelledby="operator-runtime-title">
       <header className="qa-smoke-header">
         <div>
           <p className="eyebrow">Windows operator runtime</p>
-          <h2 id="operator-runtime-title">ServiceNow Automation operator</h2>
+          <h2 id="operator-runtime-title">Operator Control Center</h2>
           <p>
-            This is the AIA SD-tool style path: prepare the draft here, open a dedicated QA Chromium, autofill QA Incident fields,
-            then you manually review and decide whether to submit in ServiceNow.
+            This is the AIA SD-tool style path: prepare the draft here, open a dedicated QA Chromium, verify the current Incident,
+            then autofill only the approved text fields for manual review in ServiceNow.
           </p>
         </div>
         <strong className={status.tone === "success" ? "qa-smoke-status ready" : "qa-smoke-status"}>
@@ -4223,12 +4252,14 @@ function QaOperatorRuntimePanel({
         </div>
       </div>
 
-      <section className="qa-smoke-safe-scope" aria-labelledby="operator-safe-scope-title">
+      <section className="qa-smoke-safe-scope operator-scope-card" aria-labelledby="operator-safe-scope-title">
         <h3 id="operator-safe-scope-title">What the tool will do now</h3>
         <ul>
           <li>Open a dedicated Chromium profile for QA/dev ServiceNow.</li>
-          <li>Read the current Incident form structure and build a default-field plan.</li>
-          <li>Autofill Requester, Category, Subcategory, Location, Channel, Impact, Urgency, Assignment group, Assigned to, Short description, Description, and Work notes when present.</li>
+          <li>Read the current Incident form structure and build a default-field review plan.</li>
+          <li>Text-field runtime only: Short description, Description, and Work notes.</li>
+          <li>Reference/select/status/routing defaults stay verify-only in the review plan until a separate control-type slice is approved.</li>
+          <li>Raw CDP endpoint stays local-only and is not displayed as a clickable URL.</li>
           <li>Never click Save, Submit, Update, Resolve, Close, upload attachment, send email, or call the ServiceNow API.</li>
         </ul>
       </section>
@@ -4260,16 +4291,31 @@ function QaOperatorRuntimePanel({
         </div>
       </div>
 
-      <div className="qa-smoke-actions">
-        <button disabled={!canUseRuntime || busyAction !== null} type="button" onClick={onLaunchBrowser}>
-          {busyAction === "launch" ? "Starting..." : "1. Start QA Chromium"}
-        </button>
-        <button disabled={verifyDisabled} type="button" onClick={onVerify}>
-          {busyAction === "verify" ? "Verifying..." : "2. Verify current Incident"}
-        </button>
-        <button disabled={autofillDisabled} type="button" onClick={onAutofill}>
-          {busyAction === "autofill" ? "Autofilling..." : "3. Autofill current Incident"}
-        </button>
+      <div className="qa-smoke-actions operator-action-grid" aria-label="Operator action sequence">
+        <article className="operator-action-card">
+          <span>Step 1</span>
+          <strong>Dedicated browser</strong>
+          <p>Open QA/dev ServiceNow in the tool-owned Chromium profile. Manual login only.</p>
+          <button disabled={!canUseRuntime || busyAction !== null} type="button" onClick={onLaunchBrowser}>
+            {busyAction === "launch" ? "Starting..." : "1. Start QA Chromium"}
+          </button>
+        </article>
+        <article className="operator-action-card">
+          <span>Step 2</span>
+          <strong>Verify current form</strong>
+          <p>Inspect only field structure and fingerprint the current Incident page.</p>
+          <button disabled={verifyDisabled} type="button" onClick={onVerify}>
+            {busyAction === "verify" ? "Verifying..." : "2. Verify current Incident"}
+          </button>
+        </article>
+        <article className="operator-action-card">
+          <span>Step 3</span>
+          <strong>Text-only autofill</strong>
+          <p>Requires a prior Verify fingerprint, then fills Short description, Description, and Work notes only; no Save/Submit/Update/Close.</p>
+          <button disabled={autofillDisabled} type="button" onClick={onAutofill}>
+            {busyAction === "autofill" ? "Autofilling..." : "3. Autofill text fields only"}
+          </button>
+        </article>
       </div>
 
       <p className="qa-smoke-safety-copy">{status.details}</p>
@@ -4280,7 +4326,7 @@ function QaOperatorRuntimePanel({
           <ul>
             {plannedFields.map((field) => (
               <li key={field.key ?? field.label}>
-                {field.label}: {field.value ?? `${field.valueLength ?? 0} chars`}
+                {field.label}: {field.valueLength ?? 0} chars
               </li>
             ))}
           </ul>

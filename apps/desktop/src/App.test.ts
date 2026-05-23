@@ -712,6 +712,53 @@ describe("App", () => {
     expect(output).not.toContain('class="field-review-checklist" open');
   });
 
+  it("renders a three-step operator workbench that exposes only text-field runtime autofill", () => {
+    const output = renderAppMarkup(undefined, { initialEnvironmentMode: "qa" });
+
+    expect(output).toContain("Operator Control Center");
+    expect(output).toContain("1. Start QA Chromium");
+    expect(output).toContain("2. Verify current Incident");
+    expect(output).toContain("3. Autofill text fields only");
+    expect(output).toContain("Text-field runtime only: Short description, Description, and Work notes.");
+    expect(output).toContain("Requires a prior Verify fingerprint");
+    expect(output).toContain("Reference/select/status/routing defaults stay verify-only in the review plan until a separate control-type slice is approved.");
+    expect(output).toContain("Raw CDP endpoint stays local-only and is not displayed as a clickable URL.");
+    expect(output).not.toContain("Autofill Requester, Category, Subcategory, Location, Channel, Impact, Urgency, Assignment group, Assigned to");
+  });
+
+  it("keeps operator autofill disabled until a prior verify fingerprint is available without rendering the raw fingerprint", () => {
+    const fingerprint = "a".repeat(64);
+    const pendingOutput = renderAppMarkup(undefined, {
+      initialEnvironmentMode: "qa",
+      initialOperatorCdpEndpoint: "http://127.0.0.1:54656"
+    });
+    const pendingButton = pendingOutput.match(/<button[^>]*>3\. Autofill text fields only<\/button>/)?.[0] ?? "";
+
+    expect(pendingButton).toContain("disabled");
+
+    const readyOutput = renderAppMarkup(undefined, {
+      initialEnvironmentMode: "qa",
+      initialOperatorCdpEndpoint: "http://127.0.0.1:54656",
+      initialOperatorVerifiedPageFingerprint: fingerprint,
+      initialOperatorLastResponse: {
+        ok: true,
+        fieldInspection: {
+          status: "verified",
+          pageFingerprint: fingerprint,
+          fields: []
+        },
+        defaultPlan: {
+          status: "ready-for-local-review",
+          plannedFields: []
+        }
+      }
+    });
+    const readyButton = readyOutput.match(/<button[^>]*>3\. Autofill text fields only<\/button>/)?.[0] ?? "";
+
+    expect(readyButton).not.toContain("disabled");
+    expect(readyOutput).not.toContain(fingerprint);
+  });
+
   it("renders a QA browser-assisted text-field autofill gate that remains separate from Save/Submit", () => {
     const output = renderAppMarkup(undefined, {
       initialEnvironmentMode: "qa",

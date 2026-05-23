@@ -621,6 +621,125 @@ describe("BrowserSessionService", () => {
     expect(serialized).not.toContain("sysparm_direct");
   });
 
+  it("blocks WSL-exposed dedicated CDP unless dev mode and explicit exposure confirmation are both present", async () => {
+    const launchedCommands: unknown[] = [];
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-qa-cdp-browser-wsl-expose-"));
+    const service = createBrowserSessionService({ projectRoot });
+    const helperLauncher = async (command: { args: string[] }) => {
+      launchedCommands.push(command);
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify({
+          status: "ready",
+          processId: 24681,
+          cdpEndpoint: "http://127.0.0.1:54656",
+          profile: {
+            toolOwned: true,
+            disposable: true,
+            purpose: "qa-autofill-cdp",
+            sessionId: "session-wsl-expose"
+          },
+          safety: {
+            browserProcessLaunched: true,
+            cdpBoundToLoopbackOnly: false,
+            wslBridgeRequired: true,
+            manualLoginRequired: true,
+            serviceNowWritePerformed: false,
+            saveSubmitUpdateClosePerformed: false,
+            artifactsCaptured: false
+          }
+        }),
+        stderr: ""
+      };
+    };
+    const devConfig = getServiceNowEnvironmentConfig("dev", {
+      dev: "https://dev.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
+    });
+
+    const qaBlocked = await service.startQaDedicatedCdpBrowser(getServiceNowEnvironmentConfig("qa"), {
+      execute: true,
+      confirmNoWriteLaunch: true,
+      exposeToWsl: true,
+      confirmDevOnlyWslExposure: true,
+      helperLauncher
+    });
+    const devMissingConfirmation = await service.startQaDedicatedCdpBrowser(devConfig, {
+      execute: true,
+      confirmNoWriteLaunch: true,
+      exposeToWsl: true,
+      helperLauncher
+    });
+    const devReady = await service.startQaDedicatedCdpBrowser(devConfig, {
+      execute: true,
+      confirmNoWriteLaunch: true,
+      exposeToWsl: true,
+      confirmDevOnlyWslExposure: true,
+      helperLauncher
+    });
+
+    expect(qaBlocked.status).toBe("blocked");
+    expect(qaBlocked.blockedReason).toBe("WSL CDP exposure is dev-only and requires explicit --confirm-dev-only-wsl-exposure.");
+    expect(qaBlocked.commandPreview).toBeUndefined();
+    expect(qaBlocked.safety.browserProcessLaunched).toBe(false);
+    expect(devMissingConfirmation.status).toBe("blocked");
+    expect(devMissingConfirmation.blockedReason).toBe("WSL CDP exposure is dev-only and requires explicit --confirm-dev-only-wsl-exposure.");
+    expect(devMissingConfirmation.commandPreview).toBeUndefined();
+    expect(devReady.status).toBe("ready");
+    expect(devReady.commandPreview?.exposeToWsl).toBe(true);
+    expect(devReady.safety.cdpBoundToLoopbackOnly).toBe(false);
+    expect(devReady.safety.wslBridgeRequired).toBe(true);
+    expect(launchedCommands).toHaveLength(1);
+    expect(JSON.stringify(launchedCommands[0])).toContain("-ExposeToWsl");
+    expect(JSON.stringify(launchedCommands[0])).toContain("-ConfirmDevOnlyWslExposure");
+    expect(JSON.stringify(launchedCommands[0])).toContain("-EnvironmentMode");
+    expect(JSON.stringify(launchedCommands[0])).toContain("dev");
+  });
+
+  it("keeps the PowerShell helper fail-closed for WSL exposure unless the helper receives dev mode", async () => {
+    const helperScript = await readFile(
+      new URL("../../../scripts/windows/start-dedicated-chromium-cdp.ps1", import.meta.url),
+      "utf8"
+    );
+
+    expect(helperScript).toContain('[string]$EnvironmentMode = "qa"');
+    expect(helperScript).toContain('$EnvironmentMode -ne "dev"');
+    expect(helperScript).toContain("wsl-cdp-exposure-dev-only");
+  });
+
+  it("blocks helper payloads that report non-loopback CDP binding even when their endpoint is local", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-qa-cdp-browser-loopback-safety-"));
+    const service = createBrowserSessionService({ projectRoot });
+
+    const result = await service.startQaDedicatedCdpBrowser(getServiceNowEnvironmentConfig("qa"), {
+      execute: true,
+      confirmNoWriteLaunch: true,
+      helperLauncher: async () => ({
+        exitCode: 0,
+        stdout: JSON.stringify({
+          status: "ready",
+          processId: 24682,
+          cdpEndpoint: "http://127.0.0.1:54656",
+          safety: {
+            browserProcessLaunched: true,
+            cdpBoundToLoopbackOnly: false,
+            wslBridgeRequired: true,
+            manualLoginRequired: true,
+            serviceNowWritePerformed: false,
+            saveSubmitUpdateClosePerformed: false,
+            artifactsCaptured: false
+          }
+        }),
+        stderr: ""
+      })
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(result.cdpEndpoint).toBeUndefined();
+    expect(result.blockedReason).toBe("Dedicated CDP browser helper did not report a ready loopback-only endpoint.");
+    expect(result.safety.browserProcessLaunched).toBe(false);
+    expect(result.safety.cdpEndpointReady).toBe(false);
+  });
+
   it("starts a QA dedicated CDP browser only with execute confirmation and sanitized helper output", async () => {
     const launchedCommands: unknown[] = [];
     const projectRoot = await mkdtemp(join(tmpdir(), "sda-qa-cdp-browser-execute-"));

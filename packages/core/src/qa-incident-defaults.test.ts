@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { FieldDraft, TicketDraft } from "./models";
 import {
   applyQaWorkNotesPrefix,
+  buildQaIncidentDefaultRuntimeTextFieldPlan,
   buildQaIncidentDefaultValuePlan,
   executeQaIncidentDefaultFieldEvidenceVerification,
   executeQaIncidentDefaultFieldFixture,
@@ -59,6 +60,41 @@ describe("QA incident default value planning", () => {
     expect(JSON.stringify(plan)).not.toContain("querySelector");
     expect(JSON.stringify(plan)).not.toContain("dispatchEvent");
     expect(JSON.stringify(plan)).not.toContain("sysverb");
+  });
+
+  it("builds a runtime text-field-only execution plan from the full default-field review plan", () => {
+    const fullPlan = buildQaIncidentDefaultValuePlan({
+      draft: completeDraft(),
+      fields: initialCreateEvidence(),
+      scenario: "initial-create"
+    });
+
+    const runtimePlan = buildQaIncidentDefaultRuntimeTextFieldPlan(fullPlan);
+
+    expect(fullPlan.plannedFields.map((field) => field.key)).toContain("requester");
+    expect(fullPlan.plannedFields.map((field) => field.key)).toContain("category");
+    expect(fullPlan.plannedFields.map((field) => field.key)).toContain("assignmentGroup");
+    expect(runtimePlan.status).toBe("ready-for-local-review");
+    expect(runtimePlan.plannedFields.map((field) => field.key)).toEqual([
+      "shortDescription",
+      "description",
+      "workNotes"
+    ]);
+    expect(runtimePlan.plannedFields.every((field) => field.autofillAllowed === false)).toBe(true);
+    expect(runtimePlan.excludedFieldKeys).toEqual([
+      "requester",
+      "category",
+      "subcategory",
+      "location",
+      "channel",
+      "impact",
+      "urgency",
+      "assignmentGroup",
+      "assignedTo"
+    ]);
+    expect(runtimePlan.stopRules).toContain(
+      "Runtime autofill is limited to text fields only: Short description, Description, and Work notes. Reference, select, assignment, requester, state, and routing fields remain verify-only."
+    );
   });
 
   it("plans route-out with State set to New before assignment group and Assigned to left blank", () => {

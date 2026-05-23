@@ -13,6 +13,7 @@ import { getServiceNowEnvironmentConfig } from "@servicenow-automation/profiles"
 
 import {
   inspectQaIncidentDefaultFieldsRuntime,
+  qaAutofillRuntimeTestHooks,
   runQaIncidentDefaultFieldAutofillRuntime,
   runQaTextFieldAutofillRuntime,
   type QaIncidentDefaultFieldAutofillRuntimePageDriver,
@@ -289,7 +290,7 @@ describe("QA incident default field read-only runtime", () => {
 });
 
 describe("QA incident default field autofill runtime", () => {
-  it("autofills all planned default fields after a current-page fingerprint check", async () => {
+  it("blocks broad default-field plans before the runtime sink can fill reference/select/routing controls", async () => {
     const plannedFields = plannedIncidentDefaultFields();
     const driver = fakeDefaultFieldDriver(incidentFieldInspection({ pageFingerprint: "stable-incident-form" }));
 
@@ -301,35 +302,199 @@ describe("QA incident default field autofill runtime", () => {
       approvalPageFingerprint: "stable-incident-form"
     });
 
-    expect(result.status).toBe("completed");
-    expect(result.pageFingerprintMatched).toBe(true);
-    expect(result.filledFields.map((field) => field.key)).toEqual(plannedFields.map((field) => field.key));
-    expect(driver.fillCalls).toHaveLength(1);
-    expect(driver.fillCalls[0].plannedFields.map((field) => field.value)).toEqual(plannedFields.map((field) => field.value));
+    expect(result.status).toBe("blocked");
+    expect(result.blockedReason).toBe("runtime-text-fields-only");
+    expect(result.pageFingerprintMatched).toBe(false);
+    expect(result.filledFields).toEqual([]);
+    expect(driver.fillCalls).toHaveLength(0);
     expect(result.safety).toMatchObject({
-      browserAutomationCalled: true,
+      browserAutomationCalled: false,
       noServiceNowWrite: true,
       noSaveSubmitUpdateClose: true,
       artifactsCaptured: false
     });
   });
 
+  it("autofills only the three approved text fields after an explicit verify fingerprint", async () => {
+    const textOnlyFields = plannedIncidentDefaultFields().filter((field) =>
+      ["shortDescription", "description", "workNotes"].includes(field.key)
+    );
+    const driver = fakeDefaultFieldDriver(incidentFieldInspection({ pageFingerprint: "stable-incident-form" }));
+
+    const result = await runQaIncidentDefaultFieldAutofillRuntime({
+      environment: qaEnvironment,
+      driver,
+      plannedFields: textOnlyFields,
+      execute: true,
+      approvalPageFingerprint: "stable-incident-form"
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.pageFingerprint).toBeUndefined();
+    expect(result.pageFingerprintMatched).toBe(true);
+    expect(result.filledFields.map((field) => field.key)).toEqual([
+      "shortDescription",
+      "description",
+      "workNotes"
+    ]);
+    expect(driver.fillCalls).toHaveLength(1);
+    expect(driver.fillCalls[0].plannedFields.map((field) => field.key)).toEqual([
+      "shortDescription",
+      "description",
+      "workNotes"
+    ]);
+  });
+
+  it("blocks execute-mode default-field autofill when the prior verify fingerprint is missing", async () => {
+    const textOnlyFields = plannedIncidentDefaultFields().filter((field) =>
+      ["shortDescription", "description", "workNotes"].includes(field.key)
+    );
+    const driver = fakeDefaultFieldDriver(incidentFieldInspection({ pageFingerprint: "stable-incident-form" }));
+
+    const result = await runQaIncidentDefaultFieldAutofillRuntime({
+      environment: qaEnvironment,
+      driver,
+      plannedFields: textOnlyFields,
+      execute: true
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(result.blockedReason).toBe("approval-page-fingerprint-required");
+    expect(result.pageFingerprintMatched).toBe(false);
+    expect(result.filledFields).toEqual([]);
+    expect(driver.inspectCalls).toBe(0);
+    expect(driver.fillCalls).toHaveLength(0);
+  });
+
   it("blocks autofill when the page fingerprint changed after verification", async () => {
+    const textOnlyFields = plannedIncidentDefaultFields().filter((field) =>
+      ["shortDescription", "description", "workNotes"].includes(field.key)
+    );
     const driver = fakeDefaultFieldDriver(incidentFieldInspection({ pageFingerprint: "changed-incident-form" }));
 
     const result = await runQaIncidentDefaultFieldAutofillRuntime({
       environment: qaEnvironment,
       driver,
-      plannedFields: plannedIncidentDefaultFields(),
+      plannedFields: textOnlyFields,
       execute: true,
       approvalPageFingerprint: "previous-incident-form"
     });
 
     expect(result.status).toBe("blocked");
     expect(result.blockedReason).toBe("approval-stale-after-page-change");
+    expect(result.pageFingerprint).toBeUndefined();
     expect(driver.fillCalls).toHaveLength(0);
   });
+
+  it("blocks the browser-evaluated default-field sink when an approved text key resolves to a select control", async () => {
+    const selectControl = fakeIncidentDomControl("select", { name: "incident.short_description" });
+    const restoreGlobals = installFakeBrowserGlobals({
+      controls: [selectControl],
+      href: "https://qa.service-now.example.invalid/nav_to.do"
+    });
+
+    try {
+      const result = await qaAutofillRuntimeTestHooks.incidentDefaultFieldFillScript(
+        {
+          plannedFields: [{ key: "shortDescription", label: "Short description", value: "safe text", valueLength: 9 }],
+          expectedPageFingerprint: "verified-page",
+          allowedHost: "qa.service-now.example.invalid"
+        },
+        "async () => ({ currentUrl: globalThis.location.href, pageFingerprint: 'verified-page', fields: [] })"
+      );
+
+      expect(result.status).toBe("blocked");
+      expect(result.blockedReason).toBe("runtime-text-fields-only");
+      expect(selectControl.value).toBe("");
+    } finally {
+      restoreGlobals();
+    }
+  });
 });
+
+type FakeIncidentDomControl = {
+  tagName: string;
+  value: string;
+  type: string;
+  disabled: boolean;
+  readOnly: boolean;
+  ownerDocument?: FakeIncidentDocument;
+  getAttribute(name: string): string | null;
+  getBoundingClientRect(): { width: number; height: number };
+  closest(): null;
+  dispatchEvent(): boolean;
+};
+
+type FakeIncidentDocument = {
+  title: string;
+  readyState: string;
+  defaultView: {
+    frames: unknown[];
+    getComputedStyle(): { display: string; visibility: string };
+  };
+  querySelectorAll(selector: string): FakeIncidentDomControl[];
+  querySelector(): null;
+};
+
+function fakeIncidentDomControl(
+  tagName: "input" | "textarea" | "select",
+  attributes: Record<string, string>
+): FakeIncidentDomControl {
+  return {
+    tagName: tagName.toUpperCase(),
+    value: "",
+    type: attributes.type ?? (tagName === "input" ? "text" : tagName),
+    disabled: false,
+    readOnly: false,
+    getAttribute(name: string) {
+      return attributes[name] ?? null;
+    },
+    getBoundingClientRect() {
+      return { width: 160, height: 24 };
+    },
+    closest() {
+      return null;
+    },
+    dispatchEvent() {
+      return true;
+    }
+  };
+}
+
+function installFakeBrowserGlobals(options: { controls: FakeIncidentDomControl[]; href: string }): () => void {
+  const fakeWindow = {
+    frames: [],
+    getComputedStyle: () => ({ display: "block", visibility: "visible" })
+  };
+  const fakeDocument: FakeIncidentDocument = {
+    title: "Incident form",
+    readyState: "complete",
+    defaultView: fakeWindow,
+    querySelectorAll(selector: string) {
+      return selector === "input, textarea, select" ? options.controls : [];
+    },
+    querySelector() {
+      return null;
+    }
+  };
+  for (const control of options.controls) {
+    control.ownerDocument = fakeDocument;
+  }
+
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const previousDocument = globals.document;
+  const previousWindow = globals.window;
+  const previousLocation = globals.location;
+  globals.document = fakeDocument;
+  globals.window = fakeWindow;
+  globals.location = { href: options.href };
+
+  return () => {
+    globals.document = previousDocument;
+    globals.window = previousWindow;
+    globals.location = previousLocation;
+  };
+}
 
 function fakeDriver(
   inspections: QaAutofillRuntimeInspection[]

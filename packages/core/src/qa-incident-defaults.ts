@@ -85,6 +85,14 @@ export type QaIncidentDefaultValuePlan = {
   stopRules: string[];
 };
 
+export type QaIncidentDefaultRuntimeTextFieldPlan = QaIncidentDefaultValuePlan & {
+  /**
+   * Non-text default fields intentionally excluded from first live runtime autofill.
+   * They remain visible in the local review plan and require a later control-type slice.
+   */
+  excludedFieldKeys: QaIncidentDefaultFieldKey[];
+};
+
 export type QaIncidentDefaultFixtureControl = {
   key: QaIncidentDefaultFieldKey;
   matchedControlCount: number;
@@ -229,6 +237,11 @@ const recommendedKeys = new Set<QaIncidentDefaultFieldKey>([
   "workNotes"
 ]);
 
+const runtimeTextFieldOrder: QaIncidentDefaultFieldKey[] = ["shortDescription", "description", "workNotes"];
+
+const runtimeTextFieldStopRule =
+  "Runtime autofill is limited to text fields only: Short description, Description, and Work notes. Reference, select, assignment, requester, state, and routing fields remain verify-only.";
+
 export function buildQaIncidentDefaultValuePlan(
   request: QaIncidentDefaultValuePlanRequest
 ): QaIncidentDefaultValuePlan {
@@ -283,6 +296,34 @@ export function buildQaIncidentDefaultValuePlan(
     unrecognizedRequiredFields: [],
     safety: safetyFlags(),
     stopRules: stopRules()
+  };
+}
+
+export function buildQaIncidentDefaultRuntimeTextFieldPlan(
+  plan: QaIncidentDefaultValuePlan
+): QaIncidentDefaultRuntimeTextFieldPlan {
+  if (plan.status !== "ready-for-local-review") {
+    return {
+      ...plan,
+      plannedFields: [],
+      excludedFieldKeys: []
+    };
+  }
+
+  const plannedByKey = new Map(plan.plannedFields.map((field) => [field.key, field]));
+  const plannedFields = runtimeTextFieldOrder.flatMap((key) => {
+    const field = plannedByKey.get(key);
+    return field ? [field] : [];
+  });
+  const excludedFieldKeys = plan.plannedFields
+    .map((field) => field.key)
+    .filter((key) => !runtimeTextFieldOrder.includes(key));
+
+  return {
+    ...plan,
+    plannedFields,
+    excludedFieldKeys,
+    stopRules: [runtimeTextFieldStopRule, ...plan.stopRules.filter((rule) => rule !== runtimeTextFieldStopRule)]
   };
 }
 

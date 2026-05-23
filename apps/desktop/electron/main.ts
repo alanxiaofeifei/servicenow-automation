@@ -11,6 +11,7 @@ import {
   type QaDedicatedCdpBrowserStartResult
 } from "@servicenow-automation/adapters";
 import {
+  buildQaIncidentDefaultRuntimeTextFieldPlan,
   buildQaIncidentDefaultValuePlan,
   type QaIncidentDefaultScenario,
   type TicketDraft
@@ -25,6 +26,7 @@ type OperatorRequest = {
   mode?: OperatorMode;
   targetUrl?: string;
   cdpEndpoint?: string;
+  approvalPageFingerprint?: string;
   draft?: TicketDraft;
   scenario?: QaIncidentDefaultScenario;
   routeOutAssignmentGroup?: string;
@@ -93,8 +95,12 @@ function registerOperatorIpc(): void {
     const mode = safeOperatorMode(request.mode);
     const environment = getServiceNowEnvironmentConfig(mode, targetUrlOverrides(mode, request.targetUrl));
     const endpoint = requireCdpEndpoint(request.cdpEndpoint);
+    const approvalPageFingerprint = safeApprovalPageFingerprint(request.approvalPageFingerprint);
     if (!request.draft) {
       throw new Error("Missing editable draft for QA autofill.");
+    }
+    if (!approvalPageFingerprint) {
+      return blockedAutofillResponse("approval-page-fingerprint-required");
     }
 
     const driver = createCdpQaIncidentDefaultFieldAutofillRuntimePageDriver({ endpoint });
@@ -105,18 +111,20 @@ function registerOperatorIpc(): void {
       scenario: request.scenario ?? "initial-create",
       routeOutAssignmentGroup: request.routeOutAssignmentGroup
     });
+    const runtimeTextFieldPlan = buildQaIncidentDefaultRuntimeTextFieldPlan(defaultPlan);
     const runtime = await runQaIncidentDefaultFieldAutofillRuntime({
       environment,
       driver,
-      plannedFields: defaultPlan.status === "ready-for-local-review" ? defaultPlan.plannedFields : [],
+      plannedFields: runtimeTextFieldPlan.status === "ready-for-local-review" ? runtimeTextFieldPlan.plannedFields : [],
       execute: true,
-      approvalPageFingerprint: fieldInspection.pageFingerprint
+      approvalPageFingerprint
     });
+    const { pageFingerprint: _redactedAutofillPageFingerprint, ...autofillFieldInspection } = fieldInspection;
 
     return {
       ok: runtime.status === "completed",
-      fieldInspection,
-      defaultPlan,
+      fieldInspection: autofillFieldInspection,
+      defaultPlan: runtimeTextFieldPlan,
       runtime
     };
   });
@@ -142,6 +150,32 @@ function requireCdpEndpoint(value?: string): string {
     throw new Error("Start QA Chromium first, then open/log in to the Incident form before running this action.");
   }
   return trimmed;
+}
+
+function safeApprovalPageFingerprint(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && /^[a-f0-9]{64}$/i.test(trimmed) ? trimmed : undefined;
+}
+
+function blockedAutofillResponse(blockedReason: string) {
+  return {
+    ok: false,
+    runtime: {
+      status: "blocked",
+      blockedReason,
+      pageFingerprintMatched: false,
+      filledFields: [],
+      safety: {
+        browserProcessLaunched: false,
+        browserAutomationCalled: false,
+        realServiceNowApiCalled: false,
+        noServiceNowWrite: true,
+        noSaveSubmitUpdateClose: true,
+        artifactsCaptured: false,
+        productionWriteAllowed: false
+      }
+    }
+  };
 }
 
 function sanitizeLaunchForRenderer(launch: QaDedicatedCdpBrowserStartResult): QaDedicatedCdpBrowserStartResult {
