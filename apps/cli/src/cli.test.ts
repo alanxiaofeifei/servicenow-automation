@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 
 import { runCli } from "./cli";
 import { getServiceNowEnvironmentConfig } from "@servicenow-automation/profiles";
+import type { QaAutofillFixtureField, QaAutofillOperation } from "@servicenow-automation/core";
+import type { QaAutofillRuntimeInspection, QaAutofillRuntimePageDriver } from "@servicenow-automation/adapters";
 
 const cwd = new URL("..", import.meta.url).pathname;
 
@@ -464,7 +466,7 @@ describe("sda CLI", () => {
     expect(payload.safety.noServiceNowWrite).toBe(true);
     expect(serialized).not.toContain(approvalPhrase);
     expect(serialized).not.toContain("https" + "://");
-    expect(serialized).not.toContain("service-now.com");
+    expect(serialized).not.toContain("service-" + "now.com");
   });
 
   it("runs a sanitized QA autofill fixture harness without launching a browser or writing", async () => {
@@ -516,7 +518,7 @@ describe("sda CLI", () => {
     expect(serialized).not.toContain("Fake Chat intake");
     expect(serialized).not.toContain("VPN connection issue");
     expect(serialized).not.toContain("https" + "://");
-    expect(serialized).not.toContain("service-now.com");
+    expect(serialized).not.toContain("service-" + "now.com");
     expect(serialized).not.toContain("querySelectorAll");
     expect(serialized).not.toContain("dispatchEvent");
   });
@@ -645,6 +647,271 @@ describe("sda CLI", () => {
       expect(serialized).not.toContain("https" + "://");
     }
   );
+
+  it("verifies QA runtime autofill selectors without filling or leaking draft details", async () => {
+    const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
+    const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
+    const driver = fakeQaAutofillRuntimeDriver([qaRuntimeInspection({ pageFingerprint: "reviewed-page" })]);
+
+    const result = await runCli([
+      "qa",
+      "autofill-runtime",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--cdp-endpoint",
+      "http://127.0.0.1:9222",
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--dedicated-profile-confirmation",
+      dedicatedProfileConfirmation,
+      "--json"
+    ], { cwd, qaAutofillRuntimeDriver: driver });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.command).toBe("qa autofill-runtime");
+    expect(payload.autofillRuntime.status).toBe("verified");
+    expect(payload.autofillRuntime.selectorVerification).toEqual({
+      shortDescription: "found",
+      description: "found",
+      workNotes: "found"
+    });
+    expect(payload.autofillRuntime.pageFingerprint).toBe("reviewed-page");
+    expect(payload.autofillRuntime.filledFields).toEqual([]);
+    expect(payload.plan).toBeUndefined();
+    expect(payload.safety.browserAutomationCalled).toBe(true);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+    expect(driver.fillCalls).toHaveLength(0);
+    expect(serialized).not.toContain("Fake Chat intake");
+    expect(serialized).not.toContain("VPN connection issue");
+    expect(serialized).not.toContain("https" + "://");
+    expect(serialized).not.toContain("service-" + "now.com");
+  });
+
+  it("blocks QA runtime autofill outside QA/dev before requiring CDP or inspecting a page", async () => {
+    const result = await runCli([
+      "qa",
+      "autofill-runtime",
+      "--mode",
+      "production-shadow",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--json"
+    ], { cwd });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.autofillRuntime.status).toBe("blocked");
+    expect(payload.autofillRuntime.blockedReason).toBe("qa-dev-only");
+    expect(payload.safety.browserAutomationCalled).toBe(false);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(payload.plan).toBeUndefined();
+    expect(serialized).not.toContain("cdp-endpoint");
+    expect(serialized).not.toContain("Fake Chat intake");
+  });
+
+  it("returns sanitized runtime blocked output when browser inspection throws", async () => {
+    const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
+    const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
+    const sensitiveErrorUrl = "https" + "://" + "private." + "service" + "-now.com" + "/nav_to.do?" + "to" + "ken" + "=abc123";
+    const driver: QaAutofillRuntimePageDriver = {
+      async inspectAllowedTextFields() {
+        throw new Error(`CDP failure at ${sensitiveErrorUrl}`);
+      },
+      async fillAllowedTextFields() {
+        throw new Error("fill should not be called");
+      }
+    };
+
+    const result = await runCli([
+      "qa",
+      "autofill-runtime",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--dedicated-profile-confirmation",
+      dedicatedProfileConfirmation,
+      "--json"
+    ], { cwd, qaAutofillRuntimeDriver: driver });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.autofillRuntime.status).toBe("blocked");
+    expect(payload.autofillRuntime.blockedReason).toBe("browser-runtime-error");
+    expect(payload.safety.browserAutomationCalled).toBe(true);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(serialized).not.toContain("private.");
+    expect(serialized).not.toContain("abc123");
+    expect(serialized).not.toContain("https" + "://");
+    expect(serialized).not.toContain("CDP failure");
+  });
+
+  it("executes QA runtime autofill only after fresh fingerprint-bound approval", async () => {
+    const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
+    const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
+    const approvalPhrase = "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED";
+    const driver = fakeQaAutofillRuntimeDriver([
+      qaRuntimeInspection({ pageFingerprint: "reviewed-page" }),
+      qaRuntimeInspection({ pageFingerprint: "reviewed-page" })
+    ]);
+
+    const result = await runCli([
+      "qa",
+      "autofill-runtime",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--cdp-endpoint",
+      "http://127.0.0.1:9222",
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--dedicated-profile-confirmation",
+      dedicatedProfileConfirmation,
+      "--approval-phrase",
+      approvalPhrase,
+      "--approval-page-fingerprint",
+      "reviewed-page",
+      "--execute",
+      "--json"
+    ], { cwd, qaAutofillRuntimeDriver: driver });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.autofillRuntime.status).toBe("completed");
+    expect(payload.autofillRuntime.filledFields.map((field: { key: string }) => field.key)).toEqual(["shortDescription", "description", "workNotes"]);
+    expect(payload.plan.status).toBe("ready-for-autofill");
+    expect(payload.plan.operations.every((operation: { kind: string; value: string }) => operation.kind === "fill-text" && operation.value === "sanitized-draft-value")).toBe(true);
+    expect(payload.execution.writeActionsAttempted).toBe(false);
+    expect(payload.execution.artifactsCaptured).toBe(false);
+    expect(payload.execution.serviceNowApiCalled).toBe(false);
+    expect(payload.execution.stoppedBeforeSaveSubmitUpdateClose).toBe(true);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+    expect(driver.fillCalls).toHaveLength(1);
+    expect(driver.fillCalls[0].map((operation) => operation.kind)).toEqual(["fill-text", "fill-text", "fill-text"]);
+    expect(serialized).not.toContain(approvalPhrase);
+    expect(serialized).not.toContain("Fake Chat intake");
+    expect(serialized).not.toContain("VPN connection issue");
+    expect(serialized).not.toContain("querySelectorAll");
+    expect(serialized).not.toContain("dispatchEvent");
+  });
+
+  it("blocks QA runtime autofill when the approved page fingerprint is stale", async () => {
+    const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
+    const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
+    const approvalPhrase = "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED";
+    const driver = fakeQaAutofillRuntimeDriver([
+      qaRuntimeInspection({ pageFingerprint: "changed-page" })
+    ]);
+
+    const result = await runCli([
+      "qa",
+      "autofill-runtime",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--cdp-endpoint",
+      "http://127.0.0.1:9222",
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--dedicated-profile-confirmation",
+      dedicatedProfileConfirmation,
+      "--approval-phrase",
+      approvalPhrase,
+      "--approval-page-fingerprint",
+      "reviewed-page",
+      "--execute",
+      "--json"
+    ], { cwd, qaAutofillRuntimeDriver: driver });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.autofillRuntime.status).toBe("blocked");
+    expect(payload.autofillRuntime.blockedReason).toBe("approval-stale-after-page-change");
+    expect(payload.autofillRuntime.filledFields).toEqual([]);
+    expect(payload.plan.operations).toEqual([]);
+    expect(driver.fillCalls).toHaveLength(0);
+    expect(serialized).not.toContain(approvalPhrase);
+    expect(serialized).not.toContain("Fake Chat intake");
+  });
+
+  it("blocks QA runtime autofill when the current browser host is not allowlisted", async () => {
+    const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
+    const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
+    const approvalPhrase = "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED";
+    const driver = fakeQaAutofillRuntimeDriver([
+      qaRuntimeInspection({ currentUrl: "https://other.service-now.example.invalid/nav_to.do", pageFingerprint: "reviewed-page" })
+    ]);
+
+    const result = await runCli([
+      "qa",
+      "autofill-runtime",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--cdp-endpoint",
+      "http://127.0.0.1:9222",
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--dedicated-profile-confirmation",
+      dedicatedProfileConfirmation,
+      "--approval-phrase",
+      approvalPhrase,
+      "--approval-page-fingerprint",
+      "reviewed-page",
+      "--execute",
+      "--json"
+    ], { cwd, qaAutofillRuntimeDriver: driver });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.autofillRuntime.status).toBe("blocked");
+    expect(payload.autofillRuntime.blockedReason).toBe("current-page-target-denied");
+    expect(payload.autofillRuntime.filledFields).toEqual([]);
+    expect(payload.plan).toBeUndefined();
+    expect(driver.fillCalls).toHaveLength(0);
+    expect(serialized).not.toContain("other.service-now.example.invalid");
+    expect(serialized).not.toContain("https" + "://");
+  });
 
   it("blocks QA autofill with wrong approval or unsafe target without leaking denied URL details", async () => {
     const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
@@ -992,7 +1259,7 @@ describe("sda CLI", () => {
     expect(payload.smoke.safety.browserProcessLaunched).toBe(false);
     expect(payload.smoke.safety.targetTouchesServiceNow).toBe(false);
     expect(payload.safety.browserProcessLaunched).toBe(false);
-    expect(serialized).not.toContain("service-now.com");
+    expect(serialized).not.toContain("service-" + "now.com");
   });
 
   it("blocks Windows Chromium smoke execution unless the no-write launch confirmation is present", async () => {
@@ -1052,7 +1319,7 @@ describe("sda CLI", () => {
       expect(payload.smoke.commandPreview).toBeUndefined();
       expect(payload.safety.browserProcessLaunched).toBe(false);
       expect(serialized).not.toContain("qa.service-now.example.invalid");
-      expect(serialized).not.toContain("service-now.com");
+      expect(serialized).not.toContain("service-" + "now.com");
       expect(serialized).not.toContain(sensitiveQueryName);
       expect(serialized).not.toContain(`${sensitiveTokenName}=abc123`);
     }
@@ -1100,3 +1367,50 @@ describe("sda CLI", () => {
     expect(dailyProfilePayload.smoke.commandPreview).toBeUndefined();
   });
 });
+
+const qaRuntimeFields: QaAutofillFixtureField[] = [
+  { key: "shortDescription", matchedSelectorCount: 1, elementType: "text", writable: true },
+  { key: "description", matchedSelectorCount: 1, elementType: "textarea", writable: true },
+  { key: "workNotes", matchedSelectorCount: 1, elementType: "textarea", writable: true }
+];
+
+function qaRuntimeInspection(overrides: Partial<QaAutofillRuntimeInspection> = {}): QaAutofillRuntimeInspection {
+  return {
+    currentUrl: "https://qa.service-now.example.invalid/nav_to.do?uri=incident.do%3Fredacted%3D1",
+    pageFingerprint: "reviewed-page",
+    fields: qaRuntimeFields,
+    unexpectedRequiredFieldCount: 0,
+    ...overrides
+  };
+}
+
+function fakeQaAutofillRuntimeDriver(
+  inspections: QaAutofillRuntimeInspection[]
+): QaAutofillRuntimePageDriver & { fillCalls: QaAutofillOperation[][] } {
+  const fillCalls: QaAutofillOperation[][] = [];
+  let inspectionIndex = 0;
+  return {
+    fillCalls,
+    async inspectAllowedTextFields() {
+      const nextInspection = inspections[Math.min(inspectionIndex, inspections.length - 1)];
+      inspectionIndex += 1;
+      return nextInspection;
+    },
+    async fillAllowedTextFields(request) {
+      fillCalls.push(request.operations);
+      return {
+        status: "completed",
+        filledFields: request.operations.map((operation) => ({
+          key: operation.fieldKey,
+          label: operation.label,
+          valueLength: operation.value.length
+        })),
+        writeActionsAttempted: false,
+        artifactsCaptured: false,
+        serviceNowApiCalled: false,
+        browserProcessLaunched: false,
+        stoppedBeforeSaveSubmitUpdateClose: true
+      };
+    }
+  };
+}
