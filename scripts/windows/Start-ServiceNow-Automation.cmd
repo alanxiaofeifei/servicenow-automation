@@ -10,13 +10,16 @@ echo Starting %APP_TITLE% from WSL...
 echo Project: %PROJECT_DIR%
 echo.
 echo Keep this window open while the app is running.
-echo If the app does not open, copy the error text from this window.
+echo Startup details are written to .local/startup-logs inside the project.
 echo.
 
-wsl.exe -d %WSL_DISTRO% --cd %PROJECT_DIR% bash -lc "set -e; if ! command -v pnpm >/dev/null 2>&1; then corepack enable pnpm >/dev/null 2>&1 || true; fi; pnpm --filter @servicenow-automation/desktop build && pnpm --filter @servicenow-automation/desktop start"
+wsl.exe -d %WSL_DISTRO% --cd %PROJECT_DIR% -- bash "./scripts/wsl/start-desktop.sh"
 
 set "EXIT_CODE=%ERRORLEVEL%"
 echo.
 echo ServiceNow Automation exited with code %EXIT_CODE%.
+if not "%EXIT_CODE%"=="0" (
+  echo If the app did not open, copy the error text above and the startup log path.
+)
 pause
 exit /b %EXIT_CODE%

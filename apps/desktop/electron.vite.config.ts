@@ -4,10 +4,17 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
+const bundledWorkspaceDeps = [
+  "@servicenow-automation/adapters",
+  "@servicenow-automation/ai",
+  "@servicenow-automation/core",
+  "@servicenow-automation/kb",
+  "@servicenow-automation/profiles"
+];
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: bundledWorkspaceDeps })],
     build: {
       rollupOptions: {
         input: {

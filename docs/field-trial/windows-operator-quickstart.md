@@ -8,7 +8,9 @@ Double-click this file on the Windows desktop:
 
 `C:\Users\alanx\Desktop\ServiceNow Automation.cmd`
 
-Keep the black command window open while the app is running. It builds/starts the WSL Electron app and then opens the ServiceNow Automation window.
+Keep the black command window open while the app is running. The desktop launcher now calls a WSL bootstrap script that loads Node/NVM safely, starts an existing desktop build directly, and rebuilds only when build output is missing or stale.
+
+If the app does not open, copy only the visible error text and the printed startup log path. Startup logs are written under `.local/startup-logs/`, which is git-ignored and must not contain ServiceNow URLs, cookies, sessions, HARs, screenshots, or ticket content.
 
 ## Operator flow
 
