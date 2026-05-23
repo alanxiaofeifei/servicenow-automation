@@ -206,7 +206,7 @@ This planning plus fixture slice stops before real browser execution and shows:
 Planning plus local fixture gate only: real browser text-field execution remains blocked until a later browser execution slice is reviewed.
 ```
 
-If Alan wants to perform real browser autofill later, that requires a selector-verified execution PR/runbook. If Alan wants to Save later, that is a separate checkpoint and separate phrase, not part of this runbook.
+If Alan wants to perform real browser autofill later, that requires a selector-verified execution PR/runbook such as `docs/field-trial/qa-dev-text-field-autofill-execution-runbook.md`, plus independent review of the execution-slice diff. If Alan wants to Save later, that is a separate checkpoint and separate phrase, not part of this runbook.
 
 ## Sanitized outcome note
 
