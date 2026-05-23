@@ -2314,6 +2314,39 @@ textarea:focus,
   font-weight: 850;
 }
 
+.qa-smoke-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.qa-smoke-actions button {
+  border: 1px solid #b8894c;
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: #fff8e9;
+  color: #593d17;
+  font-weight: 900;
+}
+
+.qa-smoke-actions button:hover:not(:disabled),
+.qa-smoke-actions button:focus-visible:not(:disabled) {
+  border-color: #2f756c;
+  background: #e9f5f1;
+  color: #1f5f58;
+}
+
+.qa-smoke-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.operator-runtime-panel {
+  border-color: #d3a461;
+  background: #fffaf0;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

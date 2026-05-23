@@ -63,7 +63,11 @@ export type TicketDraft = {
   caller?: FieldDraft;
   category?: FieldDraft;
   subcategory?: FieldDraft;
+  location?: FieldDraft;
+  channel?: FieldDraft;
   assignmentGroup?: FieldDraft;
+  assignedTo?: FieldDraft;
+  state?: FieldDraft;
   configurationItem?: FieldDraft;
   impact?: FieldDraft;
   urgency?: FieldDraft;

@@ -26,6 +26,7 @@ import {
   type ExcelDryRunWorkbookArtifact,
   type FieldDraft,
   type QaAutofillPlan,
+  type QaIncidentDefaultScenario,
   type QaManualFillWriteAction,
   type QaSingleTicketSmokePlan,
   type ServiceDeskWorkflowPreview,
@@ -113,6 +114,55 @@ type FieldReviewChecklistItem = {
 type PreparedCopyDraft = {
   confirmation: string;
   text: string;
+};
+
+type OperatorRuntimeRequest = {
+  mode: ServiceNowEnvironmentMode;
+  targetUrl?: string;
+  cdpEndpoint?: string;
+  draft?: TicketDraft;
+  scenario?: QaIncidentDefaultScenario;
+  routeOutAssignmentGroup?: string;
+};
+
+type OperatorRuntimeResponse = {
+  ok?: boolean;
+  launch?: {
+    status?: string;
+    blockedReason?: string;
+    cdpEndpoint?: string;
+    safety?: { browserProcessLaunched?: boolean; cdpEndpointReady?: boolean; noWriteMode?: boolean };
+  };
+  fieldInspection?: {
+    status?: string;
+    blockedReason?: string;
+    pageFingerprint?: string;
+    fields?: Array<{ name?: string; label?: string; type?: string; required?: boolean; writable?: boolean }>;
+  };
+  defaultPlan?: {
+    status?: string;
+    blockedReason?: string;
+    plannedFields?: Array<{ key?: string; label?: string; value?: string; valueLength?: number }>;
+  };
+  runtime?: {
+    status?: string;
+    blockedReason?: string;
+    pageFingerprint?: string;
+    pageFingerprintMatched?: boolean;
+    filledFields?: Array<{ key?: string; label?: string; valueLength?: number }>;
+  };
+};
+
+type SdaOperatorApi = {
+  launchQaBrowser(request: OperatorRuntimeRequest): Promise<OperatorRuntimeResponse>;
+  verifyCurrentIncident(request: OperatorRuntimeRequest): Promise<OperatorRuntimeResponse>;
+  autofillCurrentIncidentDefaults(request: OperatorRuntimeRequest): Promise<OperatorRuntimeResponse>;
+};
+
+type OperatorActionStatus = {
+  label: string;
+  tone: "idle" | "working" | "success" | "blocked";
+  details: string;
 };
 
 type DraftTemplatePresetId = "standard-service-desk" | "escalation-ready-notes";
@@ -1790,6 +1840,14 @@ export function App({
   const [environmentUrlSettings, setEnvironmentUrlSettings] = useState<ServiceNowEnvironmentUrlOverrides>(
     initialEnvironmentUrlSettings
   );
+  const [operatorCdpEndpoint, setOperatorCdpEndpoint] = useState("");
+  const [operatorLastResponse, setOperatorLastResponse] = useState<OperatorRuntimeResponse | null>(null);
+  const [operatorBusyAction, setOperatorBusyAction] = useState<"launch" | "verify" | "autofill" | null>(null);
+  const [operatorStatus, setOperatorStatus] = useState<OperatorActionStatus>({
+    label: "Ready",
+    tone: "idle",
+    details: "Use the buttons below to start the dedicated QA Chromium, verify the current Incident form, then autofill fields for manual review."
+  });
 
   useEffect(() => {
     if (!settingsOpen) {
@@ -2021,6 +2079,60 @@ export function App({
     });
   }
 
+  async function runOperatorAction(
+    action: "launch" | "verify" | "autofill",
+    invoke: (api: SdaOperatorApi, request: OperatorRuntimeRequest) => Promise<OperatorRuntimeResponse>
+  ) {
+    const api = getSdaOperatorApi();
+    if (!api) {
+      setOperatorStatus({
+        label: "Desktop backend unavailable",
+        tone: "blocked",
+        details: "Open this app with the Windows desktop launcher, not as a static browser page."
+      });
+      return;
+    }
+
+    const request: OperatorRuntimeRequest = {
+      mode: selectedEnvironmentMode,
+      targetUrl: qaSmokeTargetUrl,
+      cdpEndpoint: operatorCdpEndpoint,
+      draft,
+      scenario: "initial-create"
+    };
+
+    setOperatorBusyAction(action);
+    setOperatorStatus({ label: operatorActionLabel(action), tone: "working", details: "Working..." });
+    try {
+      const response = await invoke(api, request);
+      setOperatorLastResponse(response);
+      if (response.launch?.cdpEndpoint) {
+        setOperatorCdpEndpoint(response.launch.cdpEndpoint);
+      }
+      setOperatorStatus(operatorStatusFromResponse(action, response));
+    } catch (error) {
+      setOperatorStatus({
+        label: `${operatorActionLabel(action)} failed`,
+        tone: "blocked",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      setOperatorBusyAction(null);
+    }
+  }
+
+  function launchQaOperatorBrowser() {
+    void runOperatorAction("launch", (api, request) => api.launchQaBrowser(request));
+  }
+
+  function verifyQaOperatorIncident() {
+    void runOperatorAction("verify", (api, request) => api.verifyCurrentIncident(request));
+  }
+
+  function autofillQaOperatorIncident() {
+    void runOperatorAction("autofill", (api, request) => api.autofillCurrentIncidentDefaults(request));
+  }
+
   return (
     <main
       className="app-shell"
@@ -2222,6 +2334,18 @@ export function App({
             </div>
 
             <MockServiceNowForm draft={draft} fillConfirmed={fillConfirmed} item={selectedQueueItem} chrome={chrome} t={t} />
+            <QaOperatorRuntimePanel
+              busyAction={operatorBusyAction}
+              cdpEndpointReady={Boolean(operatorCdpEndpoint)}
+              draft={draft}
+              lastResponse={operatorLastResponse}
+              mode={selectedEnvironmentMode}
+              onAutofill={autofillQaOperatorIncident}
+              onLaunchBrowser={launchQaOperatorBrowser}
+              onVerify={verifyQaOperatorIncident}
+              status={operatorStatus}
+              targetLabel={selectedEnvironmentDisplay.label}
+            />
             <ControlledQaSingleTicketSmokePanel
               approvalPhrase={qaSmokeApprovalPhrase}
               onWriteActionChange={(nextAction) => {
@@ -3994,6 +4118,187 @@ function ControlledQaSingleTicketSmokePanel({
         Manual fill only. Single ticket only. No browser DOM filling, no ServiceNow API, no auto-submit, no bulk create,
         and productionWriteAllowed=false.
       </p>
+    </section>
+  );
+}
+
+function getSdaOperatorApi(): SdaOperatorApi | undefined {
+  return (globalThis as unknown as { sdaOperator?: SdaOperatorApi }).sdaOperator;
+}
+
+function operatorActionLabel(action: "launch" | "verify" | "autofill"): string {
+  switch (action) {
+    case "launch":
+      return "Start QA Chromium";
+    case "verify":
+      return "Verify current Incident";
+    case "autofill":
+      return "Autofill current Incident";
+  }
+}
+
+function operatorStatusFromResponse(
+  action: "launch" | "verify" | "autofill",
+  response: OperatorRuntimeResponse
+): OperatorActionStatus {
+  if (action === "launch") {
+    const status = response.launch?.status ?? "unknown";
+    return response.ok
+      ? { label: "QA Chromium ready", tone: "success", details: "A dedicated Chromium window is open. Log in and open an Incident form, then click Verify current Incident." }
+      : { label: "QA Chromium blocked", tone: "blocked", details: response.launch?.blockedReason ?? status };
+  }
+  if (action === "verify") {
+    const plannedCount = response.defaultPlan?.plannedFields?.length ?? 0;
+    return response.ok
+      ? { label: "Incident form verified", tone: "success", details: `${plannedCount} fields are ready for QA autofill. Review the preview, then click Autofill current Incident.` }
+      : { label: "Verify blocked", tone: "blocked", details: response.fieldInspection?.blockedReason ?? response.defaultPlan?.blockedReason ?? "Current page is not a verified QA Incident form." };
+  }
+  const filledCount = response.runtime?.filledFields?.length ?? 0;
+  return response.ok
+    ? { label: "Autofill completed", tone: "success", details: `${filledCount} fields were filled. Review manually in ServiceNow. This tool did not Save, Submit, Update, Resolve, Close, upload, email, or call ServiceNow API.` }
+    : { label: "Autofill blocked", tone: "blocked", details: response.runtime?.blockedReason ?? response.defaultPlan?.blockedReason ?? "No field was changed." };
+}
+
+function QaOperatorRuntimePanel({
+  busyAction,
+  cdpEndpointReady,
+  draft,
+  lastResponse,
+  mode,
+  onAutofill,
+  onLaunchBrowser,
+  onVerify,
+  status,
+  targetLabel
+}: {
+  busyAction: "launch" | "verify" | "autofill" | null;
+  cdpEndpointReady: boolean;
+  draft: TicketDraft;
+  lastResponse: OperatorRuntimeResponse | null;
+  mode: ServiceNowEnvironmentMode;
+  onAutofill: () => void;
+  onLaunchBrowser: () => void;
+  onVerify: () => void;
+  status: OperatorActionStatus;
+  targetLabel: string;
+}) {
+  const plannedFields = lastResponse?.defaultPlan?.plannedFields ?? [];
+  const filledFields = lastResponse?.runtime?.filledFields ?? [];
+  const canUseRuntime = mode === "qa" || mode === "dev";
+  const verifyDisabled = !canUseRuntime || !cdpEndpointReady || busyAction !== null;
+  const autofillDisabled = !canUseRuntime || !cdpEndpointReady || busyAction !== null;
+
+  return (
+    <section className="qa-autofill-panel qa-smoke-panel operator-runtime-panel" aria-labelledby="operator-runtime-title">
+      <header className="qa-smoke-header">
+        <div>
+          <p className="eyebrow">Windows operator runtime</p>
+          <h2 id="operator-runtime-title">ServiceNow Automation operator</h2>
+          <p>
+            This is the AIA SD-tool style path: prepare the draft here, open a dedicated QA Chromium, autofill QA Incident fields,
+            then you manually review and decide whether to submit in ServiceNow.
+          </p>
+        </div>
+        <strong className={status.tone === "success" ? "qa-smoke-status ready" : "qa-smoke-status"}>
+          {status.label}
+        </strong>
+      </header>
+
+      <div className="qa-smoke-summary-grid qa-autofill-summary-grid">
+        <div>
+          <span>Runtime target</span>
+          <strong>{targetLabel}</strong>
+        </div>
+        <div>
+          <span>CDP browser</span>
+          <strong>{cdpEndpointReady ? "Ready" : "Not started"}</strong>
+        </div>
+        <div>
+          <span>Mode</span>
+          <strong>{mode}</strong>
+        </div>
+        <div>
+          <span>Submit boundary</span>
+          <strong>Human-only</strong>
+        </div>
+      </div>
+
+      <section className="qa-smoke-safe-scope" aria-labelledby="operator-safe-scope-title">
+        <h3 id="operator-safe-scope-title">What the tool will do now</h3>
+        <ul>
+          <li>Open a dedicated Chromium profile for QA/dev ServiceNow.</li>
+          <li>Read the current Incident form structure and build a default-field plan.</li>
+          <li>Autofill Requester, Category, Subcategory, Location, Channel, Impact, Urgency, Assignment group, Assigned to, Short description, Description, and Work notes when present.</li>
+          <li>Never click Save, Submit, Update, Resolve, Close, upload attachment, send email, or call the ServiceNow API.</li>
+        </ul>
+      </section>
+
+      <div className="qa-smoke-field-preview" aria-label="Operator draft preview">
+        <div>
+          <span>Requester</span>
+          <strong>Zheng Zhu</strong>
+        </div>
+        <div>
+          <span>Category / Subcategory</span>
+          <strong>Desktop / Password reset</strong>
+        </div>
+        <div>
+          <span>Assignment</span>
+          <strong>SN YAGEO Service Desk - China / Zheng Zhu</strong>
+        </div>
+        <div>
+          <span>Work notes prefix</span>
+          <strong>SD_China</strong>
+        </div>
+        <div>
+          <span>Short description</span>
+          <strong>{fieldValue(draft.shortDescription)}</strong>
+        </div>
+        <div>
+          <span>Work notes length</span>
+          <strong>{fieldValue(draft.workNotes).length} chars</strong>
+        </div>
+      </div>
+
+      <div className="qa-smoke-actions">
+        <button disabled={!canUseRuntime || busyAction !== null} type="button" onClick={onLaunchBrowser}>
+          {busyAction === "launch" ? "Starting..." : "1. Start QA Chromium"}
+        </button>
+        <button disabled={verifyDisabled} type="button" onClick={onVerify}>
+          {busyAction === "verify" ? "Verifying..." : "2. Verify current Incident"}
+        </button>
+        <button disabled={autofillDisabled} type="button" onClick={onAutofill}>
+          {busyAction === "autofill" ? "Autofilling..." : "3. Autofill current Incident"}
+        </button>
+      </div>
+
+      <p className="qa-smoke-safety-copy">{status.details}</p>
+
+      {plannedFields.length > 0 ? (
+        <section className="qa-smoke-stop-rules" aria-labelledby="operator-planned-fields-title">
+          <h3 id="operator-planned-fields-title">Last verified autofill plan</h3>
+          <ul>
+            {plannedFields.map((field) => (
+              <li key={field.key ?? field.label}>
+                {field.label}: {field.value ?? `${field.valueLength ?? 0} chars`}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {filledFields.length > 0 ? (
+        <section className="qa-smoke-stop-rules" aria-labelledby="operator-filled-fields-title">
+          <h3 id="operator-filled-fields-title">Filled fields from last run</h3>
+          <ul>
+            {filledFields.map((field) => (
+              <li key={field.key ?? field.label}>
+                {field.label}: {field.valueLength ?? 0} chars
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </section>
   );
 }

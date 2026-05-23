@@ -253,6 +253,20 @@ describe("BrowserSessionService", () => {
     });
 
     expect(
+      classifyWindowsBrowserRuntimePath("%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\CloakBrowser\\chrome.exe")
+    ).toMatchObject({
+      status: "allowed",
+      reason: "tool-owned-dedicated-chromium-runtime"
+    });
+
+    expect(
+      classifyWindowsBrowserRuntimePath("%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\CloakBrowserEvil\\chrome.exe")
+    ).toMatchObject({
+      status: "blocked",
+      reason: "not-tool-owned-dedicated-chromium-runtime"
+    });
+
+    expect(
       classifyWindowsBrowserRuntimePath("%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Chromium\\msedge.exe")
     ).toMatchObject({
       status: "blocked",
@@ -503,6 +517,204 @@ describe("BrowserSessionService", () => {
       captureArtifactsAllowed: false
     });
     expect(JSON.stringify(result)).not.toContain("service-now.com");
+  });
+
+  it("prepares a QA dedicated CDP browser dry-run without exposing the raw ServiceNow target", async () => {
+    const launchedCommands: unknown[] = [];
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-qa-cdp-browser-dry-run-"));
+    const service = createBrowserSessionService({ projectRoot });
+
+    const result = await service.startQaDedicatedCdpBrowser(getServiceNowEnvironmentConfig("qa"), {
+      helperLauncher: async (command) => {
+        launchedCommands.push(command);
+        return { exitCode: 0, stdout: "{}", stderr: "" };
+      }
+    });
+    const serialized = JSON.stringify(result);
+
+    expect(result.status).toBe("dry-run");
+    expect(launchedCommands).toEqual([]);
+    expect(result.cdpEndpoint).toBeUndefined();
+    expect(result.target).toMatchObject({ hostRedacted: true });
+    expect(result.commandPreview).toMatchObject({
+      target: { hostRedacted: true },
+      exposeToWsl: false
+    });
+    expect(result.commandPreview?.args).toContain("-TargetUrl");
+    expect(result.commandPreview?.args).not.toContain(getServiceNowEnvironmentConfig("qa").url);
+    expect(result.safety).toMatchObject({
+      browserProcessLaunched: false,
+      cdpEndpointReady: false,
+      noWriteMode: true,
+      fieldFillAllowed: false,
+      writeOperationsAllowed: false,
+      serviceNowWritePerformed: false,
+      saveSubmitUpdateClosePerformed: false,
+      artifactsCaptured: false
+    });
+    expect(serialized).not.toContain("qa.service-now.example.invalid");
+    expect(serialized).not.toContain("nav_to.do");
+    expect(serialized).not.toContain("sys_id");
+  });
+
+  it("accepts a custom safe QA ServiceNow landing URL for dedicated CDP dry-run without exposing the raw target", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-qa-cdp-browser-custom-target-"));
+    const customQaHost = `custom-qa.${["service", "now"].join("-")}.com`;
+    const customQaLandingUrl = `https://${customQaHost}/now/nav/ui/classic/params/target/home_splash.do`;
+    const service = createBrowserSessionService({ projectRoot });
+
+    const result = await service.startQaDedicatedCdpBrowser(
+      getServiceNowEnvironmentConfig("qa", { qa: customQaLandingUrl })
+    );
+    const serialized = JSON.stringify(result);
+
+    expect(result.status).toBe("dry-run");
+    expect(result.commandPreview?.args).toContain("[REDACTED_SERVICE_NOW_TARGET]");
+    expect(result.commandPreview?.args).not.toContain(customQaLandingUrl);
+    expect(serialized).not.toContain(customQaHost);
+    expect(serialized).not.toContain("home_splash.do");
+  });
+
+  it("explains angle-bracket URL placeholder mistakes without echoing the target", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-qa-cdp-browser-angle-bracket-"));
+    const service = createBrowserSessionService({ projectRoot });
+    const wrappedTarget = "<https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do>";
+
+    const result = await service.startQaDedicatedCdpBrowser(getServiceNowEnvironmentConfig("qa"), {
+      targetUrlOverride: wrappedTarget,
+      execute: true,
+      confirmNoWriteLaunch: true,
+      helperLauncher: async () => {
+        throw new Error("helper should not be called for invalid target URLs");
+      }
+    });
+    const serialized = JSON.stringify(result);
+
+    expect(result.status).toBe("blocked");
+    expect(result.blockedReason).toBe("Target URL is invalid. Paste only the HTTPS ServiceNow landing URL value; do not include angle brackets or shell placeholders.");
+    expect(result.commandPreview).toBeUndefined();
+    expect(result.safety.browserProcessLaunched).toBe(false);
+    expect(serialized).not.toContain(wrappedTarget);
+    expect(serialized).not.toContain("qa.service-now.example.invalid");
+  });
+
+  it("explains encoded query/deep-link target mistakes without echoing the target", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-qa-cdp-browser-encoded-query-"));
+    const service = createBrowserSessionService({ projectRoot });
+    const encodedQueryTarget = "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do%3Fsysparm_direct%3Dtrue";
+
+    const result = await service.startQaDedicatedCdpBrowser(getServiceNowEnvironmentConfig("qa"), {
+      targetUrlOverride: encodedQueryTarget,
+      execute: true,
+      confirmNoWriteLaunch: true,
+      helperLauncher: async () => {
+        throw new Error("helper should not be called for unsafe target URLs");
+      }
+    });
+    const serialized = JSON.stringify(result);
+
+    expect(result.status).toBe("blocked");
+    expect(result.blockedReason).toBe("Target URL must be a safe ServiceNow landing URL with no query, hash, encoded query, ticket id, credential marker, or deep record payload.");
+    expect(result.commandPreview).toBeUndefined();
+    expect(result.safety.browserProcessLaunched).toBe(false);
+    expect(serialized).not.toContain(encodedQueryTarget);
+    expect(serialized).not.toContain("sysparm_direct");
+  });
+
+  it("starts a QA dedicated CDP browser only with execute confirmation and sanitized helper output", async () => {
+    const launchedCommands: unknown[] = [];
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-qa-cdp-browser-execute-"));
+    const service = createBrowserSessionService({ projectRoot });
+    const helperLauncher = async (command: { args: string[] }) => {
+      launchedCommands.push(command);
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify({
+          status: "ready",
+          processId: 24680,
+          cdpEndpoint: "http://127.0.0.1:54656",
+          target: "https://<service-now-host>/nav_to.do",
+          profile: {
+            toolOwned: true,
+            disposable: true,
+            purpose: "qa-autofill-cdp",
+            sessionId: "session-123"
+          },
+          safety: {
+            browserProcessLaunched: true,
+            cdpBoundToLoopbackOnly: true,
+            wslBridgeRequired: false,
+            manualLoginRequired: true,
+            serviceNowWritePerformed: false,
+            saveSubmitUpdateClosePerformed: false,
+            artifactsCaptured: false
+          }
+        }),
+        stderr: ""
+      };
+    };
+
+    const blocked = await service.startQaDedicatedCdpBrowser(getServiceNowEnvironmentConfig("qa"), {
+      execute: true,
+      helperLauncher
+    });
+    const ready = await service.startQaDedicatedCdpBrowser(getServiceNowEnvironmentConfig("qa"), {
+      execute: true,
+      confirmNoWriteLaunch: true,
+      helperLauncher
+    });
+    const serialized = JSON.stringify(ready);
+
+    expect(blocked.status).toBe("blocked");
+    expect(blocked.blockedReason).toBe("Explicit --confirm-no-write-launch is required before starting a QA/dev dedicated CDP browser.");
+    expect(ready.status).toBe("ready");
+    expect(ready.processId).toBe(24680);
+    expect(ready.cdpEndpoint).toBe("http://127.0.0.1:54656");
+    expect(ready.profile).toMatchObject({ toolOwned: true, disposable: true, sessionId: "session-123" });
+    expect(ready.safety.browserProcessLaunched).toBe(true);
+    expect(ready.safety.cdpEndpointReady).toBe(true);
+    expect(launchedCommands).toHaveLength(1);
+    expect(launchedCommands[0]).toMatchObject({ executable: expect.stringContaining("powershell") });
+    expect(JSON.stringify(launchedCommands[0])).toContain(getServiceNowEnvironmentConfig("qa").url);
+    expect(serialized).not.toContain("qa.service-now.example.invalid");
+    expect(serialized).not.toContain("nav_to.do");
+    expect(serialized).not.toContain("sys_id");
+  });
+
+  it("accepts concrete Windows LocalAppData tool-owned Chromium paths for smoke", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-smoke-real-localappdata-"));
+    const service = createBrowserSessionService({ projectRoot });
+
+    const result = await service.smokeWindowsDedicatedChromium({
+      browserExecutablePath: "C:\\Users\\someuser\\AppData\\Local\\ServiceNowAutomation\\Runtime\\Chromium\\chrome.exe",
+      profileDirectory: "C:\\Users\\someuser\\AppData\\Local\\ServiceNowAutomation\\Profiles\\smoke\\session-123"
+    });
+
+    expect(result.status).toBe("dry-run");
+    expect(result.runtimeClassification).toMatchObject({
+      status: "allowed",
+      reason: "tool-owned-dedicated-chromium-runtime"
+    });
+    expect(result.profileValidation).toMatchObject({
+      status: "allowed",
+      reason: "tool-owned-disposable-profile-root"
+    });
+  });
+
+  it("prepares loopback-only dynamic CDP flags for Windows dedicated Chromium smoke", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-smoke-cdp-flags-"));
+    const service = createBrowserSessionService({ projectRoot });
+
+    const result = await service.smokeWindowsDedicatedChromium({
+      browserExecutablePath: "%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Chromium\\chrome.exe",
+      profileDirectory: "%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\smoke\\session-cdp"
+    });
+
+    expect(result.status).toBe("dry-run");
+    expect(result.commandPreview?.args).toContain("--remote-debugging-address=127.0.0.1");
+    expect(result.commandPreview?.args).toContain("--remote-debugging-port=0");
+    expect(result.commandPreview?.args).toContain("--no-default-browser-check");
+    expect(result.commandPreview?.args).not.toContain("--remote-debugging-address=0.0.0.0");
   });
 
   it("runs a Windows dedicated Chromium about:blank smoke launch only with execute and confirmation", async () => {

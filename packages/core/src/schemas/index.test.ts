@@ -51,6 +51,22 @@ describe("core schemas", () => {
         ...fieldDraft,
         value: "Draft generated from manual paste for human review."
       },
+      location: {
+        ...fieldDraft,
+        value: "Demo location"
+      },
+      channel: {
+        ...fieldDraft,
+        value: "Self-service / manual paste"
+      },
+      assignedTo: {
+        ...fieldDraft,
+        value: "Demo assignee"
+      },
+      state: {
+        ...fieldDraft,
+        value: "New"
+      },
       kbMatches: [
         {
           articleId: "kb_demo_printer",
@@ -65,6 +81,11 @@ describe("core schemas", () => {
     });
 
     expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.location?.value).toBe("Demo location");
+    expect(result.data.channel?.value).toBe("Self-service / manual paste");
+    expect(result.data.assignedTo?.value).toBe("Demo assignee");
+    expect(result.data.state?.value).toBe("New");
   });
 
   it("rejects a TicketDraft with confidence greater than 1", () => {

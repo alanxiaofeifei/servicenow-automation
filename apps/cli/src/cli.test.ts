@@ -6,8 +6,13 @@ import { describe, expect, it } from "vitest";
 
 import { runCli } from "./cli";
 import { getServiceNowEnvironmentConfig } from "@servicenow-automation/profiles";
-import type { QaAutofillFixtureField, QaAutofillOperation } from "@servicenow-automation/core";
-import type { QaAutofillRuntimeInspection, QaAutofillRuntimePageDriver } from "@servicenow-automation/adapters";
+import type { QaAutofillFixtureField, QaAutofillOperation, QaIncidentFormFieldEvidence } from "@servicenow-automation/core";
+import type {
+  QaAutofillRuntimeInspection,
+  QaAutofillRuntimePageDriver,
+  QaIncidentFieldRuntimeInspection,
+  QaIncidentFieldRuntimePageDriver
+} from "@servicenow-automation/adapters";
 
 const cwd = new URL("..", import.meta.url).pathname;
 
@@ -50,6 +55,220 @@ describe("sda CLI", () => {
     expect(payload.dryRun).toBe(true);
     expect(payload.ticketDraft.shortDescription.value).toContain("VPN");
     expect(payload.safety.noExternalActionPerformed).toBe(true);
+  });
+
+  it("builds a local QA required/recommended default field plan without browser automation or writes", async () => {
+    const result = await runCli([
+      "qa",
+      "default-plan",
+      "--template",
+      "password_reset",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake local QA password reset intake",
+      "--field-fixture",
+      "initial-create",
+      "--json"
+    ], { cwd });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.command).toBe("qa default-plan");
+    expect(payload.defaultPlan.status).toBe("ready-for-local-review");
+    expect(payload.defaultPlan.plannedFields.map((field: { key: string }) => field.key)).toEqual([
+      "requester",
+      "category",
+      "subcategory",
+      "location",
+      "channel",
+      "impact",
+      "urgency",
+      "assignmentGroup",
+      "assignedTo",
+      "shortDescription",
+      "description",
+      "workNotes"
+    ]);
+    expect(payload.defaultPlan.plannedFields.find((field: { key: string }) => field.key === "requester").value).toBe("Zheng Zhu");
+    expect(payload.defaultPlan.plannedFields.find((field: { key: string }) => field.key === "category").value).toBe("Desktop");
+    expect(payload.defaultPlan.plannedFields.find((field: { key: string }) => field.key === "subcategory").value).toBe("Password reset");
+    expect(payload.defaultPlan.plannedFields.find((field: { key: string }) => field.key === "impact").value).toBe("3 - Low");
+    expect(payload.defaultPlan.plannedFields.find((field: { key: string }) => field.key === "urgency").value).toBe("3 - Low");
+    expect(payload.defaultPlan.plannedFields.find((field: { key: string }) => field.key === "workNotes").value).toContain("SD_China -");
+    expect(payload.defaultPlan.plannedFields.every((field: { autofillAllowed: boolean }) => field.autofillAllowed === false)).toBe(true);
+    expect(payload.defaultPlan.operations).toEqual([]);
+    expect(payload.defaultPlan.safety.browserAutomationAllowed).toBe(false);
+    expect(payload.defaultPlan.safety.serviceNowApiAllowed).toBe(false);
+    expect(payload.safety.browserAutomationCalled).toBe(false);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+    expect(serialized).not.toContain("querySelector");
+    expect(serialized).not.toContain("dispatchEvent");
+    expect(serialized).not.toContain("sysverb");
+  });
+
+  it("verifies the default required/reference/select field plan in a local fixture harness", async () => {
+    const result = await runCli([
+      "qa",
+      "default-plan",
+      "--template",
+      "password_reset",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake local QA password reset intake",
+      "--field-fixture",
+      "initial-create",
+      "--control-fixture",
+      "initial-create",
+      "--json"
+    ], { cwd });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.fieldFixtureVerification.status).toBe("verified");
+    expect(payload.fieldFixtureVerification.verifiedFields.map((field: { key: string }) => field.key)).toEqual(
+      payload.defaultPlan.plannedFields.map((field: { key: string }) => field.key)
+    );
+    expect(payload.fieldFixtureVerification.verifiedFields.find((field: { key: string }) => field.key === "requester").controlType).toBe("reference");
+    expect(payload.fieldFixtureVerification.verifiedFields.find((field: { key: string }) => field.key === "category").controlType).toBe("select");
+    expect(payload.fieldFixtureVerification.verifiedFields.every((field: { autofillAllowed: boolean; value?: string }) => field.autofillAllowed === false && field.value === undefined)).toBe(true);
+    expect(payload.fieldFixtureVerification.writeActionsAttempted).toBe(false);
+    expect(payload.fieldFixtureVerification.realServiceNowPageTouched).toBe(false);
+    expect(payload.fieldFixtureVerification.serviceNowApiCalled).toBe(false);
+    expect(payload.fieldFixtureVerification.saveSubmitUpdateCloseAttempted).toBe(false);
+    expect(payload.safety.browserAutomationCalled).toBe(false);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+    expect(serialized).not.toContain("querySelector");
+    expect(serialized).not.toContain("dispatchEvent");
+    expect(serialized).not.toContain("sysverb");
+  });
+
+  it("blocks the local default field fixture harness on selector/control drift", async () => {
+    const result = await runCli([
+      "qa",
+      "default-plan",
+      "--template",
+      "password_reset",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake local QA password reset intake",
+      "--field-fixture",
+      "initial-create",
+      "--control-fixture",
+      "ambiguous-category",
+      "--json"
+    ], { cwd });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.fieldFixtureVerification.status).toBe("blocked");
+    expect(payload.fieldFixtureVerification.blockedReason).toBe("ambiguous-control");
+    expect(payload.fieldFixtureVerification.verifiedFields).toEqual([]);
+    expect(payload.fieldFixtureVerification.writeActionsAttempted).toBe(false);
+    expect(payload.safety.browserAutomationCalled).toBe(false);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+    expect(serialized).not.toContain("querySelector");
+    expect(serialized).not.toContain("dispatchEvent");
+  });
+
+  it("can build a default field plan from a read-only current-page inspection without leaking page identifiers", async () => {
+    const driver = fakeIncidentFieldDriver(
+      incidentFieldInspection({
+        pageFingerprint: "current-page-field-fingerprint",
+        fields: incidentDefaultFields()
+      })
+    );
+    const result = await runCli([
+      "qa",
+      "default-plan",
+      "--mode",
+      "qa",
+      "--template",
+      "password_reset",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake local QA password reset intake",
+      "--field-source",
+      "current-page-readonly",
+      "--json"
+    ], { cwd, qaIncidentFieldInspectionDriver: driver });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.fieldSource).toBe("current-page-readonly");
+    expect(payload.fieldInspection).toMatchObject({
+      status: "verified",
+      pageFingerprint: "current-page-field-fingerprint",
+      detectedFieldCount: 12
+    });
+    expect(payload.defaultPlan.status).toBe("ready-for-local-review");
+    expect(payload.defaultPlan.plannedFields.map((field: { key: string }) => field.key)).toContain("impact");
+    expect(payload.defaultPlan.plannedFields.map((field: { key: string }) => field.key)).toContain("urgency");
+    expect(payload.fieldRuntimeVerification).toMatchObject({
+      status: "verified",
+      realServiceNowPageTouched: true,
+      writeActionsAttempted: false,
+      serviceNowApiCalled: false,
+      saveSubmitUpdateCloseAttempted: false,
+      operatorStopInstruction: "current-page-readonly-verify-only-before-live-runtime"
+    });
+    expect(payload.fieldRuntimeVerification.verifiedFields).toHaveLength(12);
+    expect(payload.fieldRuntimeVerification.verifiedFields.every((field: { autofillAllowed: boolean; value?: string }) => field.autofillAllowed === false && field.value === undefined)).toBe(true);
+    expect(payload.safety.browserAutomationCalled).toBe(true);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+    expect(driver.inspectCalls).toBe(1);
+    expect(serialized).not.toContain("nav_to");
+    expect(serialized).not.toContain("sys_id");
+    expect(serialized).not.toContain("incident.caller_id");
+    expect(serialized).not.toContain("querySelector");
+    expect(serialized).not.toContain("dispatchEvent");
+  });
+
+  it("blocks current-page default planning when read-only inspection is not verified", async () => {
+    const driver = fakeIncidentFieldDriver(
+      incidentFieldInspection({
+        currentUrl: "https://other.service-now.example.invalid/nav_to.do",
+        fields: []
+      })
+    );
+    const result = await runCli([
+      "qa",
+      "default-plan",
+      "--mode",
+      "qa",
+      "--template",
+      "password_reset",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake local QA password reset intake",
+      "--field-source",
+      "current-page-readonly",
+      "--json"
+    ], { cwd, qaIncidentFieldInspectionDriver: driver });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.fieldInspection.status).toBe("blocked");
+    expect(payload.fieldInspection.blockedReason).toBe("current-page-target-denied");
+    expect(payload.defaultPlan.status).toBe("blocked");
+    expect(payload.defaultPlan.blockedReason).toBe("no-recognized-incident-fields");
+    expect(payload.defaultPlan.plannedFields).toEqual([]);
+    expect(payload.fieldRuntimeVerification).toBeUndefined();
+    expect(payload.safety.browserAutomationCalled).toBe(true);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+    expect(serialized).not.toContain("other.service-now.example.invalid");
+    expect(serialized).not.toContain("nav_to.do");
+    expect(serialized).not.toContain("querySelector");
+    expect(serialized).not.toContain("dispatchEvent");
   });
 
   it("evaluates qa smoke JSON without performing an external action", async () => {
@@ -1366,6 +1585,109 @@ describe("sda CLI", () => {
     });
     expect(dailyProfilePayload.smoke.commandPreview).toBeUndefined();
   });
+
+  it("prints a QA dedicated CDP browser dry-run without leaking the ServiceNow target", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-browser-cdp-start-"));
+
+    const result = await runCli([
+      "browser",
+      "cdp-start",
+      "--mode",
+      "qa",
+      "--json"
+    ], { cwd: projectRoot });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.command).toBe("browser cdp-start");
+    expect(payload.cdpBrowser.status).toBe("dry-run");
+    expect(payload.cdpBrowser.commandPreview.args).toContain("-TargetUrl");
+    expect(payload.cdpBrowser.commandPreview.args).not.toContain(getServiceNowEnvironmentConfig("qa").url);
+    expect(payload.cdpBrowser.target).toMatchObject({ hostRedacted: true, rawUrlRedacted: true });
+    expect(payload.cdpBrowser.safety.browserProcessLaunched).toBe(false);
+    expect(payload.cdpBrowser.safety.cdpEndpointReady).toBe(false);
+    expect(payload.cdpBrowser.safety.fieldFillAllowed).toBe(false);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(serialized).not.toContain("qa.service-now.example.invalid");
+    expect(serialized).not.toContain("nav_to.do");
+    expect(serialized).not.toContain("sys_id");
+  });
+
+  it("accepts a custom safe QA landing URL for cdp-start dry-run without leaking the raw host", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-browser-cdp-custom-target-"));
+    const customQaHost = `custom-qa.${["service", "now"].join("-")}.com`;
+    const customQaLandingUrl = `https://${customQaHost}/now/nav/ui/classic/params/target/home_splash.do`;
+
+    const result = await runCli([
+      "browser",
+      "cdp-start",
+      "--mode",
+      "qa",
+      "--target-url",
+      customQaLandingUrl,
+      "--json"
+    ], { cwd: projectRoot });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.cdpBrowser.status).toBe("dry-run");
+    expect(payload.cdpBrowser.commandPreview.args).toContain("[REDACTED_SERVICE_NOW_TARGET]");
+    expect(payload.cdpBrowser.commandPreview.args).not.toContain(customQaLandingUrl);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(serialized).not.toContain(customQaHost);
+    expect(serialized).not.toContain("home_splash.do");
+  });
+
+  it("explains cdp-start angle-bracket URL mistakes without leaking the raw target", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-browser-cdp-angle-bracket-"));
+    const wrappedTarget = "<https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do>";
+
+    const result = await runCli([
+      "browser",
+      "cdp-start",
+      "--mode",
+      "qa",
+      "--target-url",
+      wrappedTarget,
+      "--execute",
+      "--confirm-no-write-launch",
+      "--json"
+    ], { cwd: projectRoot });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.cdpBrowser.status).toBe("blocked");
+    expect(payload.cdpBrowser.blockedReason).toBe("Target URL is invalid. Paste only the HTTPS ServiceNow landing URL value; do not include angle brackets or shell placeholders.");
+    expect(payload.cdpBrowser.commandPreview).toBeUndefined();
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(serialized).not.toContain(wrappedTarget);
+    expect(serialized).not.toContain("qa.service-now.example.invalid");
+  });
+
+  it("blocks QA dedicated CDP browser execution unless no-write launch is confirmed", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-browser-cdp-confirm-"));
+
+    const result = await runCli([
+      "browser",
+      "cdp-start",
+      "--mode",
+      "qa",
+      "--execute",
+      "--json"
+    ], { cwd: projectRoot });
+    const payload = JSON.parse(result.stdout);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.cdpBrowser.status).toBe("blocked");
+    expect(payload.cdpBrowser.blockedReason).toBe("Explicit --confirm-no-write-launch is required before starting a QA/dev dedicated CDP browser.");
+    expect(payload.cdpBrowser.safety.browserProcessLaunched).toBe(false);
+    expect(payload.cdpBrowser.safety.writeOperationsAllowed).toBe(false);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+  });
 });
 
 const qaRuntimeFields: QaAutofillFixtureField[] = [
@@ -1412,5 +1734,60 @@ function fakeQaAutofillRuntimeDriver(
         stoppedBeforeSaveSubmitUpdateClose: true
       };
     }
+  };
+}
+
+function incidentFieldInspection(overrides: Partial<QaIncidentFieldRuntimeInspection> = {}): QaIncidentFieldRuntimeInspection {
+  const sensitiveQueryName = "sys" + "_id";
+  return {
+    currentUrl: `https://qa.service-now.example.invalid/nav_to.do?uri=incident.do%3F${sensitiveQueryName}%3Dredacted`,
+    pageFingerprint: "current-page-field-fingerprint",
+    fields: incidentDefaultFields(),
+    ...overrides
+  };
+}
+
+function fakeIncidentFieldDriver(
+  inspectionResult: QaIncidentFieldRuntimeInspection
+): QaIncidentFieldRuntimePageDriver & { inspectCalls: number } {
+  let inspectCalls = 0;
+  return {
+    get inspectCalls() {
+      return inspectCalls;
+    },
+    async inspectIncidentFormFields() {
+      inspectCalls += 1;
+      return inspectionResult;
+    }
+  };
+}
+
+function incidentDefaultFields(): QaIncidentFormFieldEvidence[] {
+  return [
+    incidentField({ name: "incident.caller_id", label: "Requester", required: true, starred: true, type: "reference" }),
+    incidentField({ name: "incident.category", label: "Category", required: true, starred: true, type: "select" }),
+    incidentField({ name: "incident.subcategory", label: "Subcategory", type: "select" }),
+    incidentField({ name: "incident.location", label: "Location", required: true, starred: true, type: "reference" }),
+    incidentField({ name: "incident.contact_type", label: "Channel", required: true, starred: true, type: "select" }),
+    incidentField({ name: "incident.impact", label: "Impact", required: true, starred: true, type: "select" }),
+    incidentField({ name: "incident.urgency", label: "Urgency", required: true, starred: true, type: "select" }),
+    incidentField({ name: "incident.assignment_group", label: "Assignment group", required: true, starred: true, type: "reference" }),
+    incidentField({ name: "incident.assigned_to", label: "Assigned to", type: "reference" }),
+    incidentField({ name: "incident.short_description", label: "Short description", required: true, starred: true, type: "text" }),
+    incidentField({ name: "incident.description", label: "Description", required: true, starred: true, type: "textarea" }),
+    incidentField({ name: "incident.work_notes", label: "Work notes", type: "textarea" })
+  ];
+}
+
+function incidentField(overrides: Partial<QaIncidentFormFieldEvidence>): QaIncidentFormFieldEvidence {
+  return {
+    name: "incident.unknown",
+    label: "Unknown",
+    type: "text",
+    required: false,
+    starred: false,
+    writable: true,
+    valuePresent: false,
+    ...overrides
   };
 }

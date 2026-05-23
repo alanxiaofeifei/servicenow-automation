@@ -4,12 +4,19 @@ import { resolve } from "node:path";
 import {
   createBrowserSessionService,
   createCdpQaAutofillRuntimePageDriver,
+  createCdpQaIncidentDefaultFieldAutofillRuntimePageDriver,
+  createCdpQaIncidentFieldInspectionRuntimePageDriver,
+  inspectQaIncidentDefaultFieldsRuntime,
   ManualPasteAdapter,
+  runQaIncidentDefaultFieldAutofillRuntime,
   runQaTextFieldAutofillRuntime,
   type BrowserNoWriteLaunchResult,
   type BrowserNoWriteLaunchSafety,
   type QaAutofillRuntimePageDriver,
-  type QaAutofillRuntimeResult
+  type QaAutofillRuntimeResult,
+  type QaIncidentDefaultFieldAutofillRuntimePageDriver,
+  type QaIncidentFieldRuntimePageDriver,
+  type QaIncidentFieldRuntimeResult
 } from "@servicenow-automation/adapters";
 import { generateMockTicketDraft } from "@servicenow-automation/ai";
 import { demoKnowledgeArticles, searchKnowledgeArticles } from "@servicenow-automation/kb/browser";
@@ -21,9 +28,12 @@ import {
   type ServiceNowEnvironmentUrlOverrides
 } from "@servicenow-automation/profiles";
 import {
+  buildQaIncidentDefaultValuePlan,
   buildQaTextFieldAutofillPlan,
   buildServiceDeskWorkflowPreview,
   evaluateQaSingleTicketSmokePlan,
+  executeQaIncidentDefaultFieldEvidenceVerification,
+  executeQaIncidentDefaultFieldFixture,
   executeQaTextFieldAutofillFixture,
   type CapturedContext,
   type FieldDraft,
@@ -31,6 +41,12 @@ import {
   type QaAutofillFixturePage,
   type QaAutofillPlan,
   type QaAutofillSelectorVerification,
+  type QaIncidentDefaultFieldKey,
+  type QaIncidentDefaultFixtureControl,
+  type QaIncidentDefaultFixturePage,
+  type QaIncidentDefaultScenario,
+  type QaIncidentFormFieldEvidence,
+  type QaIncidentFormFieldType,
   type QaManualFillWriteAction,
   type QaSingleTicketSmokePlan,
   type RawIntakeSource,
@@ -46,6 +62,7 @@ export type CliResult = {
 export type RunCliOptions = {
   cwd?: string;
   qaAutofillRuntimeDriver?: QaAutofillRuntimePageDriver;
+  qaIncidentFieldInspectionDriver?: QaIncidentFieldRuntimePageDriver;
 };
 
 type ParsedFlags = {
@@ -56,6 +73,8 @@ type ParsedFlags = {
   flags: Record<string, string>;
   positionals: string[];
 };
+
+type QaDefaultPlanFieldSource = "fixture" | "current-page-readonly";
 
 type CaseInput = {
   user?: string;
@@ -263,6 +282,31 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
       }, formatBrowserSmoke(smoke.status, smoke.blockedReason));
     }
 
+    if (namespace === "browser" && action === "cdp-start") {
+      const mode = parseEnvironmentMode(requiredFlag(parsed, "mode", "browser cdp-start"));
+      const environment = getServiceNowEnvironmentConfig(mode, runtimeTargetUrlOverride(mode, parsed.flags["target-url"]));
+      const service = createBrowserSessionService({ projectRoot: cwd });
+      const cdpBrowser = await service.startQaDedicatedCdpBrowser(environment, {
+        targetUrlOverride: parsed.flags["target-url"],
+        execute: parsed.execute,
+        confirmNoWriteLaunch: parsed.confirmNoWriteLaunch,
+        helperScriptPath: parsed.flags["helper-script"],
+        powershellExecutable: parsed.flags["powershell-executable"]
+      });
+
+      return output(parsed, {
+        command: "browser cdp-start",
+        mode,
+        cdpBrowser,
+        safety: safetyEnvelope({
+          noExternalActionPerformed: cdpBrowser.status !== "ready",
+          browserProcessLaunched: cdpBrowser.safety.browserProcessLaunched,
+          browserAutomationCalled: false,
+          noServiceNowWrite: true
+        })
+      }, formatBrowserCdpStart(cdpBrowser.status, cdpBrowser.blockedReason, cdpBrowser.cdpEndpoint));
+    }
+
     if (namespace === "browser" && action === "reset") {
       const mode = parseEnvironmentMode(requiredFlag(parsed, "mode", "browser reset"));
       const environment = getServiceNowEnvironmentConfig(mode);
@@ -275,6 +319,71 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
         reset,
         safety: safetyEnvelope()
       }, `Reset ignored browser profile directory: ${reset.recreatedDirectory}`);
+    }
+
+    if (namespace === "qa" && action === "default-plan") {
+      const template = requiredFlag(parsed, "template", "qa default-plan");
+      const user = requiredFlag(parsed, "user", "qa default-plan");
+      const summary = requiredFlag(parsed, "summary", "qa default-plan");
+      const scenario = parseQaIncidentDefaultScenario(parsed.flags.scenario ?? "initial-create");
+      const fieldSource = parseQaDefaultPlanFieldSource(parsed.flags["field-source"] ?? (parsed.flags["cdp-endpoint"] ? "current-page-readonly" : "fixture"));
+      const ticketDraft = buildTicketDraft({ template, user, summary });
+      let fieldInspection: QaIncidentFieldRuntimeResult | undefined;
+      let fieldEvidence: QaIncidentFormFieldEvidence[];
+
+      if (fieldSource === "current-page-readonly") {
+        const mode = parseEnvironmentMode(parsed.flags.mode ?? "qa");
+        const environment = getServiceNowEnvironmentConfig(mode, runtimeTargetUrlOverride(mode, parsed.flags["target-url"]));
+        let driver = options.qaIncidentFieldInspectionDriver;
+        if (!driver && parsed.flags["cdp-endpoint"]) {
+          try {
+            driver = createCdpQaIncidentFieldInspectionRuntimePageDriver({
+              endpoint: parsed.flags["cdp-endpoint"]
+            });
+          } catch {
+            driver = undefined;
+          }
+        }
+        fieldInspection = await inspectQaIncidentDefaultFieldsRuntime({
+          environment,
+          driver
+        });
+        fieldEvidence = fieldInspection.fields;
+      } else {
+        fieldEvidence = qaIncidentDefaultFieldFixture(parsed.flags["field-fixture"] ?? scenario);
+      }
+
+      const defaultPlan = buildQaIncidentDefaultValuePlan({
+        draft: ticketDraft,
+        fields: fieldEvidence,
+        scenario,
+        routeOutAssignmentGroup: parsed.flags["route-out-assignment-group"]
+      });
+      const fieldFixtureVerification = parsed.flags["control-fixture"]
+        ? executeQaIncidentDefaultFieldFixture(defaultPlan, qaIncidentDefaultControlFixture(parsed.flags["control-fixture"]))
+        : undefined;
+      const fieldRuntimeVerification = fieldSource === "current-page-readonly" && fieldInspection?.status === "verified"
+        ? executeQaIncidentDefaultFieldEvidenceVerification(defaultPlan, fieldEvidence)
+        : undefined;
+
+      return output(parsed, {
+        command: "qa default-plan",
+        template,
+        scenario,
+        fieldSource,
+        ...(fieldInspection ? { fieldInspection: summarizeQaIncidentFieldInspection(fieldInspection) } : {}),
+        defaultPlan,
+        ...(fieldFixtureVerification ? { fieldFixtureVerification } : {}),
+        ...(fieldRuntimeVerification ? { fieldRuntimeVerification } : {}),
+        safety: safetyEnvelope({
+          browserAutomationCalled: fieldInspection?.safety.browserAutomationCalled ?? false,
+          browserProcessLaunched: false,
+          noServiceNowWrite: true,
+          noExcelWrite: true,
+          noGraphWrite: true,
+          productionWriteAllowed: false
+        })
+      }, formatQaDefaultPlan(defaultPlan.status, defaultPlan.blockedReason));
     }
 
     if (namespace === "qa" && action === "smoke") {
@@ -673,6 +782,40 @@ function parseEnvironmentMode(value: string): ServiceNowEnvironmentMode {
   throw new Error(`Unknown ServiceNow environment mode: ${value}`);
 }
 
+function parseQaIncidentDefaultScenario(value: string): QaIncidentDefaultScenario {
+  const allowedScenarios: QaIncidentDefaultScenario[] = ["initial-create", "route-out"];
+  if (allowedScenarios.includes(value as QaIncidentDefaultScenario)) {
+    return value as QaIncidentDefaultScenario;
+  }
+  throw new Error("Unsupported QA default-plan scenario. Allowed values: initial-create, route-out.");
+}
+
+function parseQaDefaultPlanFieldSource(value: string): QaDefaultPlanFieldSource {
+  if (value === "fixture" || value === "current-page-readonly") {
+    return value;
+  }
+  if (value === "current-page") {
+    return "current-page-readonly";
+  }
+  throw new Error("Unsupported QA default-plan field source. Allowed values: fixture, current-page-readonly.");
+}
+
+function summarizeQaIncidentFieldInspection(inspection: QaIncidentFieldRuntimeResult): {
+  status: QaIncidentFieldRuntimeResult["status"];
+  blockedReason?: QaIncidentFieldRuntimeResult["blockedReason"];
+  pageFingerprint?: string;
+  detectedFieldCount: number;
+  safety: QaIncidentFieldRuntimeResult["safety"];
+} {
+  return {
+    status: inspection.status,
+    blockedReason: inspection.blockedReason,
+    pageFingerprint: inspection.pageFingerprint,
+    detectedFieldCount: inspection.fields.length,
+    safety: inspection.safety
+  };
+}
+
 function parseQaManualFillWriteAction(value: string): QaManualFillWriteAction {
   const allowedActions: QaManualFillWriteAction[] = ["save_incident", "submit_incident", "update_incident", "close_incident"];
   if (allowedActions.includes(value as QaManualFillWriteAction)) {
@@ -783,6 +926,14 @@ function formatBrowserSmoke(status: string, blockedReason?: string): string {
   ].join("\n");
 }
 
+function formatBrowserCdpStart(status: string, blockedReason?: string, cdpEndpoint?: string): string {
+  return [
+    `Dedicated CDP browser: ${status}`,
+    blockedReason ? `Blocked reason: ${blockedReason}` : `CDP endpoint: ${cdpEndpoint ?? "not started"}`,
+    "Safety: manual login and verify-only inspection only; no field fill, Save, Submit, Update, Close, screenshot, HAR, trace, cookie/session export, or ServiceNow API call."
+  ].join("\n");
+}
+
 function formatQaSmokePlan(plan: QaSingleTicketSmokePlan): string {
   const lines = [
     `Controlled QA single-ticket smoke: ${plan.status}`,
@@ -803,6 +954,14 @@ function formatQaSmokePlan(plan: QaSingleTicketSmokePlan): string {
   );
 
   return lines.join("\n");
+}
+
+function formatQaDefaultPlan(status: string, blockedReason?: string): string {
+  return [
+    `QA incident default field plan: ${status}`,
+    blockedReason ? `Blocked reason: ${blockedReason}` : "Ready for local review only; no browser fill or ServiceNow write is permitted.",
+    "Safety: local fixture planning only; no Save, Submit, Update, Close, ServiceNow API, browser automation, artifact capture, or production write."
+  ].join("\n");
 }
 
 function sanitizeQaAutofillPlan(plan: QaAutofillPlan): QaAutofillPlan {
@@ -851,6 +1010,140 @@ function runtimeTargetUrlOverride(
 ): ServiceNowEnvironmentUrlOverrides {
   if (!targetUrl || mode === "mock") return {};
   return { [mode]: targetUrl } as ServiceNowEnvironmentUrlOverrides;
+}
+
+function qaIncidentDefaultFieldFixture(name: string): QaIncidentFormFieldEvidence[] {
+  const initialCreate: QaIncidentFormFieldEvidence[] = [
+    qaIncidentFieldEvidence({ name: "incident.caller_id", label: "Requester", required: true, starred: true, type: "reference" }),
+    qaIncidentFieldEvidence({ name: "incident.category", label: "Category", required: true, starred: true, type: "select" }),
+    qaIncidentFieldEvidence({ name: "incident.subcategory", label: "Subcategory", type: "select" }),
+    qaIncidentFieldEvidence({ name: "incident.location", label: "Location", required: true, starred: true, type: "reference" }),
+    qaIncidentFieldEvidence({ name: "incident.contact_type", label: "Channel", required: true, starred: true, type: "select" }),
+    qaIncidentFieldEvidence({ name: "incident.impact", label: "Impact", required: true, starred: true, type: "select" }),
+    qaIncidentFieldEvidence({ name: "incident.urgency", label: "Urgency", required: true, starred: true, type: "select" }),
+    qaIncidentFieldEvidence({ name: "incident.assignment_group", label: "Assignment group", required: true, starred: true, type: "reference" }),
+    qaIncidentFieldEvidence({ name: "incident.assigned_to", label: "Assigned to", type: "reference" }),
+    qaIncidentFieldEvidence({ name: "incident.short_description", label: "Short description", required: true, starred: true, type: "text" }),
+    qaIncidentFieldEvidence({ name: "incident.description", label: "Description", required: true, starred: true, type: "textarea" }),
+    qaIncidentFieldEvidence({ name: "incident.work_notes", label: "Work notes", type: "textarea" })
+  ];
+  const routeOut: QaIncidentFormFieldEvidence[] = [
+    qaIncidentFieldEvidence({ name: "incident.state", label: "State", type: "select" }),
+    qaIncidentFieldEvidence({ name: "incident.assignment_group", label: "Assignment group", required: true, starred: true, type: "reference" }),
+    qaIncidentFieldEvidence({ name: "incident.assigned_to", label: "Assigned to", type: "reference" }),
+    qaIncidentFieldEvidence({ name: "incident.work_notes", label: "Work notes", type: "textarea" })
+  ];
+
+  if (name === "initial-create") return initialCreate;
+  if (name === "route-out") return routeOut;
+  if (name === "unexpected-required-field") {
+    return [
+      ...initialCreate,
+      qaIncidentFieldEvidence({
+        name: "incident.u_redacted_required_local_fixture",
+        label: "Redacted custom required field",
+        required: true,
+        starred: true,
+        type: "text"
+      })
+    ];
+  }
+  throw new Error("Unsupported QA default-plan field fixture. Allowed values: initial-create, route-out, unexpected-required-field.");
+}
+
+function qaIncidentFieldEvidence(
+  overrides: Partial<QaIncidentFormFieldEvidence> & Pick<QaIncidentFormFieldEvidence, "name" | "label" | "type">
+): QaIncidentFormFieldEvidence {
+  return {
+    required: false,
+    starred: false,
+    writable: true,
+    valuePresent: false,
+    ...overrides
+  };
+}
+
+function qaIncidentDefaultControlFixture(name: string): QaIncidentDefaultFixturePage {
+  const initialCreate: QaIncidentDefaultFixturePage = {
+    controls: [
+      qaIncidentDefaultControl("requester", "reference"),
+      qaIncidentDefaultControl("category", "select"),
+      qaIncidentDefaultControl("subcategory", "select"),
+      qaIncidentDefaultControl("location", "reference"),
+      qaIncidentDefaultControl("channel", "select"),
+      qaIncidentDefaultControl("impact", "select"),
+      qaIncidentDefaultControl("urgency", "select"),
+      qaIncidentDefaultControl("assignmentGroup", "reference"),
+      qaIncidentDefaultControl("assignedTo", "reference"),
+      qaIncidentDefaultControl("shortDescription", "text"),
+      qaIncidentDefaultControl("description", "textarea"),
+      qaIncidentDefaultControl("workNotes", "textarea")
+    ]
+  };
+  const routeOut: QaIncidentDefaultFixturePage = {
+    controls: [
+      qaIncidentDefaultControl("state", "select"),
+      qaIncidentDefaultControl("assignmentGroup", "reference"),
+      qaIncidentDefaultControl("assignedTo", "reference"),
+      qaIncidentDefaultControl("workNotes", "textarea")
+    ]
+  };
+
+  if (name === "initial-create") return initialCreate;
+  if (name === "route-out") return routeOut;
+  if (name === "missing-requester") {
+    return {
+      controls: replaceQaIncidentDefaultControl(initialCreate.controls, qaIncidentDefaultControl("requester", "reference", 0))
+    };
+  }
+  if (name === "ambiguous-category") {
+    return {
+      controls: replaceQaIncidentDefaultControl(initialCreate.controls, qaIncidentDefaultControl("category", "select", 2))
+    };
+  }
+  if (name === "wrong-short-description-type") {
+    return {
+      controls: replaceQaIncidentDefaultControl(initialCreate.controls, qaIncidentDefaultControl("shortDescription", "select"))
+    };
+  }
+  if (name === "non-writable-location") {
+    return {
+      controls: replaceQaIncidentDefaultControl(initialCreate.controls, {
+        ...qaIncidentDefaultControl("location", "reference"),
+        writable: false
+      })
+    };
+  }
+  if (name === "unexpected-required-field") {
+    return {
+      controls: initialCreate.controls,
+      unexpectedRequiredFieldCount: 1
+    };
+  }
+
+  throw new Error(
+    "Unsupported QA default field control fixture. Allowed values: initial-create, route-out, missing-requester, ambiguous-category, wrong-short-description-type, non-writable-location, unexpected-required-field."
+  );
+}
+
+function qaIncidentDefaultControl(
+  key: QaIncidentDefaultFieldKey,
+  type: QaIncidentFormFieldType,
+  matchedControlCount = 1
+): QaIncidentDefaultFixtureControl {
+  return {
+    key,
+    matchedControlCount,
+    type,
+    writable: true
+  };
+}
+
+function replaceQaIncidentDefaultControl(
+  controls: QaIncidentDefaultFixtureControl[],
+  replacement: QaIncidentDefaultFixtureControl
+): QaIncidentDefaultFixtureControl[] {
+  return controls.map((control) => (control.key === replacement.key ? replacement : control));
 }
 
 function qaAutofillSelectorFixture(name: string): QaAutofillFixturePage {
@@ -1109,8 +1402,10 @@ Commands:
   sda browser plan --mode <mock|qa|dev|production-shadow> [--target-url <url>] [--json]
   sda browser launch --mode <qa|dev> [--target-url <url>] [--browser-executable <path>] [--execute --confirm-no-write-launch] [--json]
   sda browser smoke [--target about:blank] [--browser-executable <path>] [--profile-root <path>] [--execute --confirm-no-write-launch] [--json]
+  sda browser cdp-start --mode <qa|dev> [--target-url <safe_landing_url>] [--helper-script <path>] [--powershell-executable <path>] [--execute --confirm-no-write-launch] [--json]
   sda browser reset --mode <mock|qa|dev|production-shadow> [--json]
   sda workflow preview --template <template> --user <sanitized_user> --summary <sanitized_summary> --source <source> --dry-run [--json]
+  sda qa default-plan --template <template> --user <sanitized_user> --summary <sanitized_summary> [--scenario <initial-create|route-out>] [--field-fixture <initial-create|route-out|unexpected-required-field>] [--control-fixture <initial-create|route-out|missing-requester|ambiguous-category|wrong-short-description-type|non-writable-location|unexpected-required-field>] [--route-out-assignment-group <group>] [--json]
   sda qa smoke --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> [--target-url <url>] [--approval-phrase <phrase>] [--language <lang>] [--template-preset <preset>] [--json]
   sda qa autofill --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> --dedicated-profile-confirmation <sentence> --approval-phrase <phrase> [--target-url <url>] [--json]
   sda qa autofill-fixture --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> --dedicated-profile-confirmation <sentence> --approval-phrase <phrase> [--selector-fixture <all-found|missing-work-notes|wrong-description-type|ambiguous-description|non-writable-work-notes|unexpected-required-field>] [--target-url <url>] [--json]
