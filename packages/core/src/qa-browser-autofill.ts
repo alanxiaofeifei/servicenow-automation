@@ -25,12 +25,15 @@ export type QaAutofillBlockedReason =
   | "bulk-mode-denied"
   | "write-operation-denied";
 
-export type QaAutofillField = {
+export type QaAutofillFieldDescriptor = {
   key: QaAutofillFieldKey;
   label: "Short description" | "Description" | "Work notes";
   type: "text" | "textarea";
-  value: string;
   selectors: string[];
+};
+
+export type QaAutofillField = QaAutofillFieldDescriptor & {
+  value: string;
   source: "ticket-draft";
 };
 
@@ -123,7 +126,7 @@ export type QaAutofillFixtureExecutionResult = {
 const stopMessage =
   "Autofill completed. The tool will not Save, Submit, Update, or Close. Review the QA page manually.";
 
-const fieldDefinitions: Array<Omit<QaAutofillField, "value" | "source"> & { draftField: QaAutofillFieldKey }> = [
+const fieldDefinitions: Array<QaAutofillFieldDescriptor & { draftField: QaAutofillFieldKey }> = [
   {
     key: "shortDescription",
     draftField: "shortDescription",
@@ -161,6 +164,40 @@ const fieldDefinitions: Array<Omit<QaAutofillField, "value" | "source"> & { draf
 
 export function getRequiredQaAutofillApprovalPhrase(mode: Extract<RealActionMode, "qa" | "dev">): string {
   return `I APPROVE ${mode.toUpperCase()} SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED`;
+}
+
+export function getQaAutofillFieldDescriptors(): QaAutofillFieldDescriptor[] {
+  return fieldDefinitions.map(({ draftField: _draftField, ...descriptor }) => ({
+    ...descriptor,
+    selectors: [...descriptor.selectors]
+  }));
+}
+
+export function buildQaAutofillSelectorVerificationFromEvidence(
+  page: QaAutofillFixturePage
+): QaAutofillSelectorVerification {
+  const expectedElementTypes: Record<QaAutofillFieldKey, "text" | "textarea"> = {
+    shortDescription: "text",
+    description: "textarea",
+    workNotes: "textarea"
+  };
+
+  const statusFor = (key: QaAutofillFieldKey): QaAutofillSelectorStatus => {
+    const matches = page.fields.filter((candidate) => candidate.key === key);
+    if (matches.length > 1) return "ambiguous";
+    const field = matches[0];
+    if (!field) return "missing";
+    if (field.matchedSelectorCount > 1) return "ambiguous";
+    return field.matchedSelectorCount === 1 && field.writable && field.elementType === expectedElementTypes[key]
+      ? "found"
+      : "missing";
+  };
+
+  return {
+    shortDescription: statusFor("shortDescription"),
+    description: statusFor("description"),
+    workNotes: statusFor("workNotes")
+  };
 }
 
 export function buildQaTextFieldAutofillPlan(request: QaAutofillPlanRequest): QaAutofillPlan {

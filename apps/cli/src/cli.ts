@@ -3,9 +3,13 @@ import { resolve } from "node:path";
 
 import {
   createBrowserSessionService,
+  createCdpQaAutofillRuntimePageDriver,
   ManualPasteAdapter,
+  runQaTextFieldAutofillRuntime,
   type BrowserNoWriteLaunchResult,
-  type BrowserNoWriteLaunchSafety
+  type BrowserNoWriteLaunchSafety,
+  type QaAutofillRuntimePageDriver,
+  type QaAutofillRuntimeResult
 } from "@servicenow-automation/adapters";
 import { generateMockTicketDraft } from "@servicenow-automation/ai";
 import { demoKnowledgeArticles, searchKnowledgeArticles } from "@servicenow-automation/kb/browser";
@@ -13,7 +17,8 @@ import {
   getServiceNowEnvironmentConfig,
   loadDemoYageoProfile,
   validateServiceNowTargetUrl,
-  type ServiceNowEnvironmentMode
+  type ServiceNowEnvironmentMode,
+  type ServiceNowEnvironmentUrlOverrides
 } from "@servicenow-automation/profiles";
 import {
   buildQaTextFieldAutofillPlan,
@@ -40,6 +45,7 @@ export type CliResult = {
 
 export type RunCliOptions = {
   cwd?: string;
+  qaAutofillRuntimeDriver?: QaAutofillRuntimePageDriver;
 };
 
 type ParsedFlags = {
@@ -411,6 +417,79 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
       }, formatQaAutofillFixtureResult(plan, execution.status));
     }
 
+    if (namespace === "qa" && action === "autofill-runtime") {
+      const mode = parseEnvironmentMode(requiredFlag(parsed, "mode", "qa autofill-runtime"));
+      const template = requiredFlag(parsed, "template", "qa autofill-runtime");
+      const user = requiredFlag(parsed, "user", "qa autofill-runtime");
+      const summary = requiredFlag(parsed, "summary", "qa autofill-runtime");
+      const environment = getServiceNowEnvironmentConfig(mode, runtimeTargetUrlOverride(mode, parsed.flags["target-url"]));
+      const ticketDraft = buildTicketDraft({ template, user, summary });
+      const qaIsolationConfirmed = parsed.flags["qa-isolation-confirmation"] === autofillQaIsolationConfirmationPhrase;
+      const dedicatedProfileConfirmed = parsed.flags["dedicated-profile-confirmation"] === dedicatedProfileConfirmationPhrase;
+      let driver = options.qaAutofillRuntimeDriver;
+      let runtime: QaAutofillRuntimeResult | undefined;
+      if (!driver && parsed.flags["cdp-endpoint"]) {
+        try {
+          driver = createCdpQaAutofillRuntimePageDriver({
+            endpoint: parsed.flags["cdp-endpoint"]
+          });
+        } catch {
+          runtime = blockedQaAutofillRuntimeResult("cdp-endpoint-denied", false);
+        }
+      }
+      if (!runtime) {
+        try {
+          runtime = await runQaTextFieldAutofillRuntime({
+            draft: ticketDraft,
+            environment,
+            driver,
+            execute: parsed.execute,
+            approvalPhrase: parsed.flags["approval-phrase"],
+            approvalPageFingerprint: parsed.flags["approval-page-fingerprint"],
+            qaIsolationConfirmed,
+            dedicatedProfileConfirmed
+          });
+        } catch {
+          runtime = blockedQaAutofillRuntimeResult("browser-runtime-error", Boolean(driver));
+        }
+      }
+
+      return output(parsed, {
+        command: "qa autofill-runtime",
+        mode,
+        template,
+        autofillRuntime: {
+          status: runtime.status,
+          blockedReason: runtime.blockedReason,
+          executionMode: parsed.execute ? "execute-autofill" : "verify-only",
+          qaIsolationConfirmed,
+          dedicatedProfileConfirmed,
+          requiredQaIsolationConfirmation: autofillQaIsolationConfirmationPhrase,
+          requiredDedicatedProfileConfirmation: dedicatedProfileConfirmationPhrase,
+          selectorVerification: runtime.selectorVerification,
+          pageFingerprint: runtime.pageFingerprint,
+          pageFingerprintMatched: runtime.pageFingerprintMatched,
+          filledFields: runtime.execution?.filledFields ?? [],
+          stopMessage:
+            runtime.status === "completed"
+              ? "Autofill completed. Review manually. Tool will not Save, Submit, Update, or Close."
+              : undefined
+        },
+        plan: runtime.plan ? sanitizeQaAutofillPlan(runtime.plan) : undefined,
+        execution: runtime.execution,
+        safety: safetyEnvelope({
+          noExternalActionPerformed: !runtime.safety.browserAutomationCalled,
+          browserAutomationCalled: runtime.safety.browserAutomationCalled,
+          browserProcessLaunched: false,
+          realServiceNowApiCalled: false,
+          noServiceNowWrite: true,
+          noExcelWrite: true,
+          noGraphWrite: true,
+          productionWriteAllowed: false
+        })
+      }, formatQaAutofillRuntimeResult(runtime.status, runtime.blockedReason, runtime.pageFingerprint));
+    }
+
     if (namespace === "qa" && action === "manual-fill") {
       const mode = parseEnvironmentMode(requiredFlag(parsed, "mode", "qa manual-fill"));
       const writeAction = parseQaManualFillWriteAction(parsed.flags["write-action"] ?? "submit_incident");
@@ -746,6 +825,34 @@ function sanitizeQaAutofillPlan(plan: QaAutofillPlan): QaAutofillPlan {
   };
 }
 
+function blockedQaAutofillRuntimeResult(
+  blockedReason: NonNullable<QaAutofillRuntimeResult["blockedReason"]>,
+  browserAutomationCalled: boolean
+): QaAutofillRuntimeResult {
+  return {
+    status: "blocked",
+    blockedReason,
+    pageFingerprintMatched: false,
+    safety: {
+      browserProcessLaunched: false,
+      browserAutomationCalled,
+      realServiceNowApiCalled: false,
+      noServiceNowWrite: true,
+      noSaveSubmitUpdateClose: true,
+      artifactsCaptured: false,
+      productionWriteAllowed: false
+    }
+  };
+}
+
+function runtimeTargetUrlOverride(
+  mode: ServiceNowEnvironmentMode,
+  targetUrl: string | undefined
+): ServiceNowEnvironmentUrlOverrides {
+  if (!targetUrl || mode === "mock") return {};
+  return { [mode]: targetUrl } as ServiceNowEnvironmentUrlOverrides;
+}
+
 function qaAutofillSelectorFixture(name: string): QaAutofillFixturePage {
   const allFound: QaAutofillFixturePage = {
     fields: [
@@ -832,6 +939,22 @@ function formatQaAutofillFixtureResult(plan: QaAutofillPlan, executionStatus: "c
     plan.blockedReason ? `Blocked reason: ${plan.blockedReason}` : "Fixture harness filled sanitized local fields only.",
     "Safety: no browser launch, no real QA page, no Save, Submit, Update, Close, ServiceNow API, artifact capture, or bulk action."
   ].join("\n");
+}
+
+function formatQaAutofillRuntimeResult(status: string, blockedReason?: string, pageFingerprint?: string): string {
+  const lines = [`QA runtime text-field autofill: ${status}`];
+  if (blockedReason) {
+    lines.push(`Blocked reason: ${blockedReason}`);
+  }
+  if (status === "verified" && pageFingerprint) {
+    lines.push(`Reviewed page fingerprint: ${pageFingerprint}`);
+    lines.push("Re-run with --execute and --approval-page-fingerprint after manual review and exact approval phrase.");
+  }
+  if (status === "completed") {
+    lines.push("Autofill completed. Review manually. Tool will not Save, Submit, Update, or Close.");
+  }
+  lines.push("Safety: runtime selector verification/autofill only; no Save, Submit, Update, Close, ServiceNow API, browser artifact capture, or bulk action.");
+  return lines.join("\n");
 }
 
 function formatQaAutofillPlan(plan: QaAutofillPlan): string {
@@ -991,6 +1114,7 @@ Commands:
   sda qa smoke --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> [--target-url <url>] [--approval-phrase <phrase>] [--language <lang>] [--template-preset <preset>] [--json]
   sda qa autofill --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> --dedicated-profile-confirmation <sentence> --approval-phrase <phrase> [--target-url <url>] [--json]
   sda qa autofill-fixture --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> --dedicated-profile-confirmation <sentence> --approval-phrase <phrase> [--selector-fixture <all-found|missing-work-notes|wrong-description-type|ambiguous-description|non-writable-work-notes|unexpected-required-field>] [--target-url <url>] [--json]
+  sda qa autofill-runtime --mode <qa|dev> --template <template> --user <sanitized_user> --summary <sanitized_summary> --cdp-endpoint <local_http_or_ws> --qa-isolation-confirmation <sentence> --dedicated-profile-confirmation <sentence> [--target-url <safe_landing_url>] [--approval-phrase <phrase> --approval-page-fingerprint <hash> --execute] [--json]
   sda qa manual-fill --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> [--write-action <save_incident|submit_incident|update_incident|close_incident>] [--target-url <url>] [--approval-phrase <phrase>] [--browser-executable <path>] [--execute --confirm-no-write-launch] [--json]
   sda run --workflow <workflow_name> --input <json_file> --dry-run [--json]
 
