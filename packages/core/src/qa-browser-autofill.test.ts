@@ -54,6 +54,10 @@ const qaApprovalPhrase =
   "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED";
 const devApprovalPhrase =
   "I APPROVE DEV SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED";
+const freshPageApproval = {
+  approvalPageFingerprint: "qa-incident-form-reviewed",
+  currentPageFingerprint: "qa-incident-form-reviewed"
+};
 
 describe("QA browser-assisted text-field autofill gate", () => {
   it("builds the exact QA and dev approval phrases", () => {
@@ -70,6 +74,7 @@ describe("QA browser-assisted text-field autofill gate", () => {
       qaIsolationConfirmed: true,
       dedicatedProfileConfirmed: true,
       selectorVerification,
+      ...freshPageApproval,
       unexpectedRequiredFields: []
     });
 
@@ -99,7 +104,8 @@ describe("QA browser-assisted text-field autofill gate", () => {
         approvalPhrase: getRequiredQaAutofillApprovalPhrase("qa"),
         qaIsolationConfirmed: true,
         dedicatedProfileConfirmed: true,
-        selectorVerification
+        selectorVerification,
+        ...freshPageApproval
       });
 
       expect(plan.status).toBe("blocked");
@@ -115,7 +121,8 @@ describe("QA browser-assisted text-field autofill gate", () => {
       targetValidation: qaTargetValidation,
       qaIsolationConfirmed: true,
       dedicatedProfileConfirmed: true,
-      selectorVerification
+      selectorVerification,
+      ...freshPageApproval
     });
     const savePhrase = buildQaTextFieldAutofillPlan({
       draft: completeDraft(),
@@ -124,7 +131,8 @@ describe("QA browser-assisted text-field autofill gate", () => {
       approvalPhrase: "I APPROVE QA SAVE ONLY",
       qaIsolationConfirmed: true,
       dedicatedProfileConfirmed: true,
-      selectorVerification
+      selectorVerification,
+      ...freshPageApproval
     });
     const missingIsolation = buildQaTextFieldAutofillPlan({
       draft: completeDraft(),
@@ -133,7 +141,8 @@ describe("QA browser-assisted text-field autofill gate", () => {
       approvalPhrase: qaApprovalPhrase,
       qaIsolationConfirmed: false,
       dedicatedProfileConfirmed: true,
-      selectorVerification
+      selectorVerification,
+      ...freshPageApproval
     });
     const missingDedicatedProfile = buildQaTextFieldAutofillPlan({
       draft: completeDraft(),
@@ -142,13 +151,81 @@ describe("QA browser-assisted text-field autofill gate", () => {
       approvalPhrase: qaApprovalPhrase,
       qaIsolationConfirmed: true,
       dedicatedProfileConfirmed: false,
-      selectorVerification
+      selectorVerification,
+      ...freshPageApproval
     });
 
     expect(missingPhrase.blockedReason).toBe("approval-phrase-required");
     expect(savePhrase.blockedReason).toBe("approval-phrase-mismatch");
     expect(missingIsolation.blockedReason).toBe("qa-isolation-confirmation-required");
     expect(missingDedicatedProfile.blockedReason).toBe("dedicated-profile-confirmation-required");
+  });
+
+  it("invalidates approval when the reviewed field screen changes before autofill", () => {
+    const staleApproval = buildQaTextFieldAutofillPlan({
+      draft: completeDraft(),
+      environment: qaEnvironment,
+      targetValidation: qaTargetValidation,
+      approvalPhrase: qaApprovalPhrase,
+      qaIsolationConfirmed: true,
+      dedicatedProfileConfirmed: true,
+      selectorVerification,
+      approvalPageFingerprint: "qa-incident-form-before-review",
+      currentPageFingerprint: "qa-incident-form-after-reload"
+    });
+    const freshApproval = buildQaTextFieldAutofillPlan({
+      draft: completeDraft(),
+      environment: qaEnvironment,
+      targetValidation: qaTargetValidation,
+      approvalPhrase: qaApprovalPhrase,
+      qaIsolationConfirmed: true,
+      dedicatedProfileConfirmed: true,
+      selectorVerification,
+      approvalPageFingerprint: "qa-incident-form-reviewed",
+      currentPageFingerprint: "qa-incident-form-reviewed"
+    });
+
+    expect(staleApproval.status).toBe("blocked");
+    expect(staleApproval.blockedReason).toBe("approval-stale-after-page-change");
+    expect(staleApproval.operations).toEqual([]);
+    expect(freshApproval.status).toBe("ready-for-autofill");
+  });
+
+  it("requires fresh page fingerprint evidence before a plan can be ready for autofill", () => {
+    const missingBoth = buildQaTextFieldAutofillPlan({
+      draft: completeDraft(),
+      environment: qaEnvironment,
+      targetValidation: qaTargetValidation,
+      approvalPhrase: qaApprovalPhrase,
+      qaIsolationConfirmed: true,
+      dedicatedProfileConfirmed: true,
+      selectorVerification
+    });
+    const missingCurrent = buildQaTextFieldAutofillPlan({
+      draft: completeDraft(),
+      environment: qaEnvironment,
+      targetValidation: qaTargetValidation,
+      approvalPhrase: qaApprovalPhrase,
+      qaIsolationConfirmed: true,
+      dedicatedProfileConfirmed: true,
+      selectorVerification,
+      approvalPageFingerprint: "qa-incident-form-reviewed"
+    });
+    const missingApproved = buildQaTextFieldAutofillPlan({
+      draft: completeDraft(),
+      environment: qaEnvironment,
+      targetValidation: qaTargetValidation,
+      approvalPhrase: qaApprovalPhrase,
+      qaIsolationConfirmed: true,
+      dedicatedProfileConfirmed: true,
+      selectorVerification,
+      currentPageFingerprint: "qa-incident-form-reviewed"
+    });
+
+    expect(missingBoth.status).toBe("blocked");
+    expect(missingBoth.blockedReason).toBe("approval-stale-after-page-change");
+    expect(missingCurrent.blockedReason).toBe("approval-stale-after-page-change");
+    expect(missingApproved.blockedReason).toBe("approval-stale-after-page-change");
   });
 
   it("allows dev with the dev-specific phrase and blocks the QA phrase in dev", () => {
@@ -159,7 +236,8 @@ describe("QA browser-assisted text-field autofill gate", () => {
       approvalPhrase: devApprovalPhrase,
       qaIsolationConfirmed: true,
       dedicatedProfileConfirmed: true,
-      selectorVerification
+      selectorVerification,
+      ...freshPageApproval
     });
     const devWithQaPhrase = buildQaTextFieldAutofillPlan({
       draft: completeDraft(),
@@ -168,7 +246,8 @@ describe("QA browser-assisted text-field autofill gate", () => {
       approvalPhrase: qaApprovalPhrase,
       qaIsolationConfirmed: true,
       dedicatedProfileConfirmed: true,
-      selectorVerification
+      selectorVerification,
+      ...freshPageApproval
     });
 
     expect(devReady.status).toBe("ready-for-autofill");
@@ -185,6 +264,7 @@ describe("QA browser-assisted text-field autofill gate", () => {
       qaIsolationConfirmed: true,
       dedicatedProfileConfirmed: true,
       selectorVerification,
+      ...freshPageApproval,
       requestedOperations: ["fill-text", "click-save"]
     });
 
@@ -220,6 +300,7 @@ describe("QA browser-assisted text-field autofill gate", () => {
       qaIsolationConfirmed: true,
       dedicatedProfileConfirmed: true,
       selectorVerification,
+      ...freshPageApproval,
       unexpectedRequiredFields: ["assignment_group"]
     });
 
@@ -241,7 +322,8 @@ describe("QA browser-assisted text-field autofill gate", () => {
       approvalPhrase: qaApprovalPhrase,
       qaIsolationConfirmed: true,
       dedicatedProfileConfirmed: true,
-      selectorVerification
+      selectorVerification,
+      ...freshPageApproval
     });
     const bulk = buildQaTextFieldAutofillPlan({
       draft: completeDraft(),
@@ -251,6 +333,7 @@ describe("QA browser-assisted text-field autofill gate", () => {
       qaIsolationConfirmed: true,
       dedicatedProfileConfirmed: true,
       selectorVerification,
+      ...freshPageApproval,
       ticketCount: 2
     });
 
@@ -278,7 +361,8 @@ describe("QA browser-assisted text-field autofill gate", () => {
       approvalPhrase: qaApprovalPhrase,
       qaIsolationConfirmed: true,
       dedicatedProfileConfirmed: true,
-      selectorVerification
+      selectorVerification,
+      ...freshPageApproval
     });
     const serialized = JSON.stringify(plan);
 
@@ -383,6 +467,7 @@ function readyPlan() {
     qaIsolationConfirmed: true,
     dedicatedProfileConfirmed: true,
     selectorVerification,
+    ...freshPageApproval,
     unexpectedRequiredFields: []
   });
 }

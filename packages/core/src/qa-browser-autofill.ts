@@ -17,6 +17,7 @@ export type QaAutofillBlockedReason =
   | "dedicated-profile-confirmation-required"
   | "approval-phrase-required"
   | "approval-phrase-mismatch"
+  | "approval-stale-after-page-change"
   | "missing-text-field-value"
   | "selector-verification-required"
   | "selector-mismatch"
@@ -77,6 +78,8 @@ export type QaAutofillPlanRequest = {
   targetUrl?: string;
   targetValidation?: RealActionTargetValidation;
   approvalPhrase?: string;
+  approvalPageFingerprint?: string;
+  currentPageFingerprint?: string;
   qaIsolationConfirmed: boolean;
   dedicatedProfileConfirmed: boolean;
   selectorVerification?: Partial<QaAutofillSelectorVerification>;
@@ -206,6 +209,10 @@ export function buildQaTextFieldAutofillPlan(request: QaAutofillPlanRequest): Qa
     return blockedPlan(request, "selector-mismatch");
   }
 
+  if (approvalPageChangedAfterReview(request)) {
+    return blockedPlan(request, "approval-stale-after-page-change");
+  }
+
   const allowedFields = buildAllowedFields(request.draft);
   if (allowedFields.length !== fieldDefinitions.length) {
     return blockedPlan(request, "missing-text-field-value");
@@ -330,6 +337,14 @@ function blockedExecution(blockedReason: QaAutofillExecutionBlockedReason): QaAu
     realServiceNowPageTouched: false,
     operatorStopInstruction: "review-page-manually-before-any-write-action"
   };
+}
+
+function approvalPageChangedAfterReview(request: QaAutofillPlanRequest): boolean {
+  return (
+    !request.approvalPageFingerprint ||
+    !request.currentPageFingerprint ||
+    request.approvalPageFingerprint !== request.currentPageFingerprint
+  );
 }
 
 function sanitizedTarget(request: QaAutofillPlanRequest): QaAutofillPlan["target"] {

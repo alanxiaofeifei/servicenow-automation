@@ -374,6 +374,8 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
         qaIsolationConfirmed,
         dedicatedProfileConfirmed,
         selectorVerification: qaAutofillSelectorVerification(fixture),
+        approvalPageFingerprint: "local-fixture-reviewed-page",
+        currentPageFingerprint: "local-fixture-reviewed-page",
         unexpectedRequiredFields: fixture.unexpectedRequiredFieldCount ? ["redacted-required-field"] : []
       });
       const execution = executeQaTextFieldAutofillFixture(plan, fixture);
