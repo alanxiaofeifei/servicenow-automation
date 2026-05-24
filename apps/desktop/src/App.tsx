@@ -132,6 +132,7 @@ type OperatorRuntimeResponse = {
     status?: string;
     blockedReason?: string;
     cdpEndpoint?: string;
+    runtimeLogPath?: string;
     safety?: { browserProcessLaunched?: boolean; cdpEndpointReady?: boolean; noWriteMode?: boolean };
   };
   fieldInspection?: {
@@ -2079,6 +2080,18 @@ export function App({
     });
   }
 
+  function resetOperatorBrowserReadiness(details: string) {
+    setOperatorCdpEndpoint("");
+    setOperatorVerifiedPageFingerprint("");
+    setOperatorLastResponse(null);
+    setOperatorStatus({ label: "CDP not ready", tone: "idle", details });
+  }
+
+  function changeEnvironmentMode(nextMode: ServiceNowEnvironmentMode) {
+    setSelectedEnvironmentMode(nextMode);
+    resetOperatorBrowserReadiness("Verify is disabled until Start QA Chromium reports sanitized CDP readiness for the selected environment.");
+  }
+
   function updateEnvironmentUrlSetting(mode: Exclude<ServiceNowEnvironmentMode, "mock">, url: string) {
     setEnvironmentUrlSettings((current) => {
       if (!url.trim()) {
@@ -2089,6 +2102,7 @@ export function App({
 
       return { ...current, [mode]: url };
     });
+    resetOperatorBrowserReadiness("Verify is disabled until Start QA Chromium reports sanitized CDP readiness for the updated target setting.");
   }
 
   async function runOperatorAction(
@@ -2119,10 +2133,15 @@ export function App({
     try {
       const response = await invoke(api, request);
       setOperatorLastResponse(response);
-      if (response.launch?.cdpEndpoint) {
-        setOperatorCdpEndpoint(response.launch.cdpEndpoint);
-      }
       if (action === "launch") {
+        const readyCdpEndpoint =
+          response.ok &&
+          response.launch?.safety?.cdpEndpointReady === true &&
+          typeof response.launch.cdpEndpoint === "string" &&
+          response.launch.cdpEndpoint.length > 0
+            ? response.launch.cdpEndpoint
+            : "";
+        setOperatorCdpEndpoint(readyCdpEndpoint);
         setOperatorVerifiedPageFingerprint("");
       }
       if (action === "verify") {
@@ -2140,7 +2159,7 @@ export function App({
       setOperatorStatus({
         label: `${operatorActionLabel(action)} failed`,
         tone: "blocked",
-        details: error instanceof Error ? error.message : String(error)
+        details: sanitizeOperatorRuntimeError(error)
       });
     } finally {
       setOperatorBusyAction(null);
@@ -2235,7 +2254,7 @@ export function App({
 
             <EnvironmentModePanel
               selectedMode={selectedEnvironmentMode}
-              onSelectedModeChange={setSelectedEnvironmentMode}
+              onSelectedModeChange={changeEnvironmentMode}
               chrome={chrome}
               t={t}
             />
@@ -4164,6 +4183,17 @@ function operatorActionLabel(action: "launch" | "verify" | "autofill"): string {
   }
 }
 
+function sanitizeOperatorRuntimeError(_error: unknown): string {
+  return "Desktop backend failed before returning a sanitized operator result. Verify remains disabled; retry Start QA Chromium and use the startup/runtime log path shown by the last sanitized result if one is available.";
+}
+
+function operatorLaunchDetails(response: OperatorRuntimeResponse, fallbackStatus: string): string {
+  const reason = response.ok
+    ? "A dedicated Chromium window is open. Log in and open an Incident form, then click Verify current Incident."
+    : response.launch?.blockedReason ?? fallbackStatus;
+  return response.launch?.runtimeLogPath ? `${reason} Startup/runtime log: ${response.launch.runtimeLogPath}` : reason;
+}
+
 function operatorStatusFromResponse(
   action: "launch" | "verify" | "autofill",
   response: OperatorRuntimeResponse
@@ -4171,8 +4201,8 @@ function operatorStatusFromResponse(
   if (action === "launch") {
     const status = response.launch?.status ?? "unknown";
     return response.ok
-      ? { label: "QA Chromium ready", tone: "success", details: "A dedicated Chromium window is open. Log in and open an Incident form, then click Verify current Incident." }
-      : { label: "QA Chromium blocked", tone: "blocked", details: response.launch?.blockedReason ?? status };
+      ? { label: "QA Chromium ready", tone: "success", details: operatorLaunchDetails(response, status) }
+      : { label: "QA Chromium blocked", tone: "blocked", details: operatorLaunchDetails(response, status) };
   }
   if (action === "verify") {
     const plannedCount = response.defaultPlan?.plannedFields?.length ?? 0;
@@ -4216,6 +4246,18 @@ function QaOperatorRuntimePanel({
   const canUseRuntime = mode === "qa" || mode === "dev";
   const verifyDisabled = !canUseRuntime || !cdpEndpointReady || busyAction !== null;
   const autofillDisabled = !canUseRuntime || !cdpEndpointReady || busyAction !== null || !verifiedPageFingerprintReady;
+  const startupRuntimeLogPath = lastResponse?.launch?.runtimeLogPath;
+  const lastLaunchBlockedReason = lastResponse?.launch?.blockedReason;
+  const verifyDisabledReason = !canUseRuntime
+    ? "Disabled: Select QA or dev mode to use the Windows operator runtime."
+    : !cdpEndpointReady
+      ? "Disabled: Start QA Chromium and wait for sanitized CDP ready first."
+      : busyAction !== null
+        ? "Disabled: Another operator action is running."
+        : "Enabled: CDP ready; manually open the current Incident form, then verify read-only.";
+  const autofillDisabledReason = !verifiedPageFingerprintReady
+    ? "Disabled: requires a prior Verify fingerprint."
+    : "Enabled only for approved text fields after Verify.";
 
   return (
     <section className="qa-autofill-panel qa-smoke-panel operator-runtime-panel" aria-labelledby="operator-runtime-title">
@@ -4240,7 +4282,7 @@ function QaOperatorRuntimePanel({
         </div>
         <div>
           <span>CDP browser</span>
-          <strong>{cdpEndpointReady ? "Ready" : "Not started"}</strong>
+          <strong>{cdpEndpointReady ? "Ready — Verify enabled" : "Not ready — Verify disabled"}</strong>
         </div>
         <div>
           <span>Mode</span>
@@ -4307,6 +4349,7 @@ function QaOperatorRuntimePanel({
           <button disabled={verifyDisabled} type="button" onClick={onVerify}>
             {busyAction === "verify" ? "Verifying..." : "2. Verify current Incident"}
           </button>
+          <p className="qa-smoke-safety-copy">{verifyDisabledReason}</p>
         </article>
         <article className="operator-action-card">
           <span>Step 3</span>
@@ -4315,10 +4358,17 @@ function QaOperatorRuntimePanel({
           <button disabled={autofillDisabled} type="button" onClick={onAutofill}>
             {busyAction === "autofill" ? "Autofilling..." : "3. Autofill text fields only"}
           </button>
+          <p className="qa-smoke-safety-copy">{autofillDisabledReason}</p>
         </article>
       </div>
 
       <p className="qa-smoke-safety-copy">{status.details}</p>
+      {lastLaunchBlockedReason ? <p className="qa-smoke-safety-copy">Last launch failure: {lastLaunchBlockedReason}</p> : null}
+      {startupRuntimeLogPath ? (
+        <p className="qa-smoke-safety-copy">
+          Startup/runtime log: <code>{startupRuntimeLogPath}</code>
+        </p>
+      ) : null}
 
       {plannedFields.length > 0 ? (
         <section className="qa-smoke-stop-rules" aria-labelledby="operator-planned-fields-title">

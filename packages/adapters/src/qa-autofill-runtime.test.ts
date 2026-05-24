@@ -231,6 +231,119 @@ describe("QA text-field autofill runtime", () => {
 });
 
 describe("QA incident default field read-only runtime", () => {
+  it("selects the configured-host Incident page when CDP exposes multiple page targets", async () => {
+    const sensitiveQueryKey = "sys" + "_id";
+    const restoreFetch = installFakeCdpTargetList([
+      {
+        type: "page",
+        url: "about:blank",
+        webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/blank"
+      },
+      {
+        type: "page",
+        url: `https://qa.service-now.example.invalid/nav_to.do?uri=incident.do%3F${sensitiveQueryKey}%3Dredacted`,
+        webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/incident"
+      },
+      {
+        type: "page",
+        url: "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do",
+        webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/landing"
+      }
+    ]);
+
+    try {
+      const webSocketUrl = await qaAutofillRuntimeTestHooks.resolveCdpPageWebSocketUrl(
+        "http://127.0.0.1:9222",
+        "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
+      );
+
+      expect(webSocketUrl).toBe("ws://127.0.0.1:9222/devtools/page/incident");
+    } finally {
+      restoreFetch();
+    }
+  });
+
+  it("fails closed with a sanitized page-selection error when multiple configured-host Incident pages are open", async () => {
+    const sensitiveQueryKey = "sys" + "_id";
+    const restoreFetch = installFakeCdpTargetList([
+      {
+        type: "page",
+        url: `https://qa.service-now.example.invalid/nav_to.do?uri=incident.do%3F${sensitiveQueryKey}%3Done`,
+        webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/incident-one"
+      },
+      {
+        type: "page",
+        url: `https://qa.service-now.example.invalid/nav_to.do?uri=incident.do%3F${sensitiveQueryKey}%3Dtwo`,
+        webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/incident-two"
+      }
+    ]);
+
+    try {
+      await expect(
+        qaAutofillRuntimeTestHooks.resolveCdpPageWebSocketUrl(
+          "http://127.0.0.1:9222",
+          "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
+        )
+      ).rejects.toThrow("Unable to select a single current browser page target for QA verify-only inspection.");
+    } finally {
+      restoreFetch();
+    }
+  });
+
+  it("fails closed instead of inspecting another host when no configured-host target is open", async () => {
+    const restoreFetch = installFakeCdpTargetList([
+      {
+        type: "page",
+        url: "https://other.example.invalid/nav_to.do?uri=incident.do",
+        webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/other-incident"
+      },
+      {
+        type: "page",
+        url: "about:blank",
+        webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/blank"
+      }
+    ]);
+
+    try {
+      await expect(
+        qaAutofillRuntimeTestHooks.resolveCdpPageWebSocketUrl(
+          "http://127.0.0.1:9222",
+          "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
+        )
+      ).rejects.toThrow("Unable to select a single current browser page target for QA verify-only inspection.");
+    } finally {
+      restoreFetch();
+    }
+  });
+
+  it("inspects Incident controls from same-origin frames without relying on top-window element constructors", async () => {
+    const frameDocument = fakeIncidentDocument([
+      fakeIncidentDomControl("input", { name: "incident.short_description", "aria-label": "Short description", required: "true" }),
+      fakeIncidentDomControl("textarea", { name: "incident.description", "aria-label": "Description" }),
+      fakeIncidentDomControl("textarea", { name: "incident.work_notes", "aria-label": "Work notes" })
+    ]);
+    const restoreGlobals = installFakeBrowserGlobals({
+      controls: [],
+      href: "https://qa.service-now.example.invalid/nav_to.do",
+      frameDocuments: [frameDocument]
+    });
+
+    try {
+      const result = await qaAutofillRuntimeTestHooks.incidentFieldInspectionScript();
+
+      expect(result.currentUrl).toBe("https://qa.service-now.example.invalid/nav_to.do");
+      expect(result.fields.map((field) => field.name)).toEqual([
+        "incident.short_description",
+        "incident.description",
+        "incident.work_notes"
+      ]);
+      expect(result.fields.map((field) => field.type)).toEqual(["text", "textarea", "textarea"]);
+      expect(result.fields[0]).toMatchObject({ required: true, starred: false, writable: true, valuePresent: false });
+    } finally {
+      restoreGlobals();
+    }
+  });
+
   it("inspects current incident fields without exposing page content or enabling writes", async () => {
     const driver = fakeIncidentFieldDriver(
       incidentFieldInspection({
@@ -412,6 +525,12 @@ describe("QA incident default field autofill runtime", () => {
   });
 });
 
+type FakeCdpPageTarget = {
+  type?: string;
+  url?: string;
+  webSocketDebuggerUrl?: string;
+};
+
 type FakeIncidentDomControl = {
   tagName: string;
   value: string;
@@ -419,19 +538,24 @@ type FakeIncidentDomControl = {
   disabled: boolean;
   readOnly: boolean;
   ownerDocument?: FakeIncidentDocument;
+  textContent?: string;
   getAttribute(name: string): string | null;
+  hasAttribute(name: string): boolean;
   getBoundingClientRect(): { width: number; height: number };
   closest(): null;
   dispatchEvent(): boolean;
 };
 
+type FakeIncidentWindow = {
+  document?: FakeIncidentDocument;
+  frames: FakeIncidentWindow[];
+  getComputedStyle(): { display: string; visibility: string };
+};
+
 type FakeIncidentDocument = {
   title: string;
   readyState: string;
-  defaultView: {
-    frames: unknown[];
-    getComputedStyle(): { display: string; visibility: string };
-  };
+  defaultView: FakeIncidentWindow;
   querySelectorAll(selector: string): FakeIncidentDomControl[];
   querySelector(): null;
 };
@@ -446,8 +570,12 @@ function fakeIncidentDomControl(
     type: attributes.type ?? (tagName === "input" ? "text" : tagName),
     disabled: false,
     readOnly: false,
+    textContent: "",
     getAttribute(name: string) {
       return attributes[name] ?? null;
+    },
+    hasAttribute(name: string) {
+      return Object.prototype.hasOwnProperty.call(attributes, name);
     },
     getBoundingClientRect() {
       return { width: 160, height: 24 };
@@ -461,8 +589,8 @@ function fakeIncidentDomControl(
   };
 }
 
-function installFakeBrowserGlobals(options: { controls: FakeIncidentDomControl[]; href: string }): () => void {
-  const fakeWindow = {
+function fakeIncidentDocument(controls: FakeIncidentDomControl[]): FakeIncidentDocument {
+  const fakeWindow: FakeIncidentWindow = {
     frames: [],
     getComputedStyle: () => ({ display: "block", visibility: "visible" })
   };
@@ -471,28 +599,53 @@ function installFakeBrowserGlobals(options: { controls: FakeIncidentDomControl[]
     readyState: "complete",
     defaultView: fakeWindow,
     querySelectorAll(selector: string) {
-      return selector === "input, textarea, select" ? options.controls : [];
+      return selector === "input, textarea, select" ? controls : [];
     },
     querySelector() {
       return null;
     }
   };
-  for (const control of options.controls) {
+  fakeWindow.document = fakeDocument;
+  for (const control of controls) {
     control.ownerDocument = fakeDocument;
   }
+  return fakeDocument;
+}
+
+function installFakeBrowserGlobals(options: {
+  controls: FakeIncidentDomControl[];
+  href: string;
+  frameDocuments?: FakeIncidentDocument[];
+}): () => void {
+  const fakeDocument = fakeIncidentDocument(options.controls);
+  const frameWindows = (options.frameDocuments ?? []).map((document) => document.defaultView);
+  fakeDocument.defaultView.frames = frameWindows;
 
   const globals = globalThis as unknown as Record<string, unknown>;
   const previousDocument = globals.document;
   const previousWindow = globals.window;
   const previousLocation = globals.location;
   globals.document = fakeDocument;
-  globals.window = fakeWindow;
+  globals.window = fakeDocument.defaultView;
   globals.location = { href: options.href };
 
   return () => {
     globals.document = previousDocument;
     globals.window = previousWindow;
     globals.location = previousLocation;
+  };
+}
+
+function installFakeCdpTargetList(targets: FakeCdpPageTarget[]): () => void {
+  const globals = globalThis as unknown as { fetch?: unknown };
+  const previousFetch = globals.fetch;
+  globals.fetch = async () => ({
+    ok: true,
+    json: async () => targets
+  });
+
+  return () => {
+    globals.fetch = previousFetch;
   };
 }
 

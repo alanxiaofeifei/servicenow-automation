@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
-import { mkdir, rm } from "node:fs/promises";
-import { isAbsolute, normalize, relative, resolve, win32 } from "node:path";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, normalize, relative, resolve, win32 } from "node:path";
 
 import {
   validateServiceNowTargetUrl,
@@ -211,6 +211,7 @@ export type QaDedicatedCdpBrowserStartResult = {
   mode: ServiceNowEnvironmentMode;
   processId?: number;
   cdpEndpoint?: string;
+  runtimeLogPath?: string;
   target: QaDedicatedCdpBrowserRedactedTarget;
   profile?: QaDedicatedCdpBrowserProfile;
   commandPreview?: QaDedicatedCdpBrowserCommandPreview;
@@ -643,38 +644,39 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
   ): Promise<QaDedicatedCdpBrowserStartResult> {
     const plan = createLaunchPlan(environment, startOptions);
     const baseResult = createBaseQaDedicatedCdpBrowserStartResult(environment.mode);
+    const runtimeLogPath = createQaDedicatedCdpRuntimeLogPath(projectRoot);
 
     if (environment.mode === "mock") {
-      return {
+      return finalizeQaDedicatedCdpBrowserStartResult({
         ...baseResult,
         blockedReason: "Mock mode uses offline demo data and does not start a dedicated CDP browser."
-      };
+      }, runtimeLogPath, "mock-mode-blocked");
     }
 
     if (environment.mode === "production-shadow") {
-      return {
+      return finalizeQaDedicatedCdpBrowserStartResult({
         ...baseResult,
         blockedReason: "Production shadow dedicated CDP browser remains blocked; use QA/dev only."
-      };
+      }, runtimeLogPath, "production-shadow-blocked");
     }
 
     if (plan.status !== "ready" || !plan.targetUrl) {
-      return {
+      return finalizeQaDedicatedCdpBrowserStartResult({
         ...baseResult,
         blockedReason: plan.blockedReason ?? "Dedicated CDP browser launch plan is blocked."
-      };
+      }, runtimeLogPath, "target-plan-blocked");
     }
 
     const exposeToWsl = startOptions.exposeToWsl ?? false;
     if (exposeToWsl && (environment.mode !== "dev" || !startOptions.confirmDevOnlyWslExposure)) {
-      return {
+      return finalizeQaDedicatedCdpBrowserStartResult({
         ...baseResult,
         blockedReason: "WSL CDP exposure is dev-only and requires explicit --confirm-dev-only-wsl-exposure.",
         auditNotes: [
           ...baseResult.auditNotes,
           "WSL CDP exposure was blocked before helper command construction; default QA operator launch remains loopback-only."
         ]
-      };
+      }, runtimeLogPath, "wsl-exposure-blocked");
     }
 
     const command = buildDedicatedCdpHelperCommand({
@@ -688,7 +690,7 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
     const commandPreview = sanitizeDedicatedCdpHelperCommandPreview(command);
 
     if (!startOptions.execute) {
-      return {
+      return finalizeQaDedicatedCdpBrowserStartResult({
         ...baseResult,
         status: "dry-run",
         commandPreview,
@@ -696,15 +698,15 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
           ...baseResult.auditNotes,
           "Dry-run only: dedicated CDP browser helper command preview generated; browser process was not started."
         ]
-      };
+      }, runtimeLogPath, "dry-run");
     }
 
     if (!startOptions.confirmNoWriteLaunch) {
-      return {
+      return finalizeQaDedicatedCdpBrowserStartResult({
         ...baseResult,
         commandPreview,
         blockedReason: QA_DEDICATED_CDP_CONFIRMATION_BLOCKED_REASON
-      };
+      }, runtimeLogPath, "launch-confirmation-blocked");
     }
 
     const helperLauncher = startOptions.helperLauncher ?? defaultDedicatedCdpBrowserHelperLauncher;
@@ -719,18 +721,18 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
         !isSafeLoopbackCdpEndpoint(helperPayload.cdpEndpoint) ||
         (!exposeToWsl && !helperReportedLoopbackOnly)
       ) {
-        return {
+        return finalizeQaDedicatedCdpBrowserStartResult({
           ...baseResult,
           commandPreview,
-          blockedReason: helperPayload.blockedReason ?? "Dedicated CDP browser helper did not report a ready loopback-only endpoint.",
+          blockedReason: dedicatedCdpHelperBlockedReason(helperPayload),
           auditNotes: [
             ...baseResult.auditNotes,
             "Dedicated CDP browser helper returned a blocked or non-loopback result; raw helper output was not exposed."
           ]
-        };
+        }, runtimeLogPath, "helper-blocked");
       }
 
-      return {
+      return finalizeQaDedicatedCdpBrowserStartResult({
         ...baseResult,
         status: "ready",
         processId: typeof helperPayload.processId === "number" ? helperPayload.processId : DEFAULT_DEDICATED_CDP_PROCESS_ID,
@@ -748,9 +750,9 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
           ...baseResult.auditNotes,
           "Dedicated CDP browser is ready for manual login and verify-only field inspection; no page write action was performed."
         ]
-      };
+      }, runtimeLogPath, "ready");
     } catch {
-      return {
+      return finalizeQaDedicatedCdpBrowserStartResult({
         ...baseResult,
         commandPreview,
         blockedReason: "Dedicated CDP browser helper could not be started or returned invalid JSON.",
@@ -758,7 +760,7 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
           ...baseResult.auditNotes,
           "Dedicated CDP browser helper failed before a controlled session could be verified; raw errors were not exposed."
         ]
-      };
+      }, runtimeLogPath, "helper-error");
     }
   }
 
@@ -878,6 +880,10 @@ type DedicatedCdpBrowserHelperPayload = {
   processId?: unknown;
   cdpEndpoint?: unknown;
   blockedReason?: string;
+  targetValidation?: {
+    reason?: unknown;
+    rawUrlRedacted?: unknown;
+  };
   profile?: {
     toolOwned?: unknown;
     disposable?: unknown;
@@ -928,6 +934,100 @@ function createBaseQaDedicatedCdpBrowserStartResult(mode: ServiceNowEnvironmentM
       "Use the returned loopback CDP endpoint only for verify-only field inspection until a separate autofill approval is granted."
     ]
   };
+}
+
+function createQaDedicatedCdpRuntimeLogPath(projectRoot: string): string {
+  const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+  const suffix = Math.random().toString(16).slice(2, 8);
+  return resolve(projectRoot, ".local", "startup-logs", `qa-dedicated-cdp-${timestamp}-${process.pid}-${suffix}.jsonl`);
+}
+
+async function finalizeQaDedicatedCdpBrowserStartResult(
+  result: QaDedicatedCdpBrowserStartResult,
+  runtimeLogPath: string,
+  phase: string
+): Promise<QaDedicatedCdpBrowserStartResult> {
+  const resultWithPath: QaDedicatedCdpBrowserStartResult = {
+    ...result,
+    runtimeLogPath
+  };
+
+  try {
+    await mkdir(dirname(runtimeLogPath), { recursive: true });
+    await writeFile(
+      runtimeLogPath,
+      `${JSON.stringify({
+        event: "qa-dedicated-cdp-browser-start",
+        phase,
+        status: result.status,
+        mode: result.mode,
+        blockedReason: result.blockedReason,
+        cdpEndpointReady: result.safety.cdpEndpointReady,
+        browserProcessLaunched: result.safety.browserProcessLaunched,
+        cdpBoundToLoopbackOnly: result.safety.cdpBoundToLoopbackOnly,
+        noWriteMode: result.safety.noWriteMode,
+        targetRedacted: result.target.rawUrlRedacted === true,
+        serviceNowWritePerformed: result.safety.serviceNowWritePerformed,
+        saveSubmitUpdateClosePerformed: result.safety.saveSubmitUpdateClosePerformed
+      })}\n`,
+      "utf8"
+    );
+  } catch {
+    return {
+      ...resultWithPath,
+      auditNotes: [
+        ...result.auditNotes,
+        "Sanitized startup/runtime log could not be written; raw helper output remains hidden."
+      ]
+    };
+  }
+
+  return resultWithPath;
+}
+
+function dedicatedCdpHelperBlockedReason(payload: DedicatedCdpBrowserHelperPayload): string {
+  if (payload.blockedReason === "target-url-denied") {
+    switch (payload.targetValidation?.reason) {
+      case "invalid-url":
+        return "Target URL was denied: enter a valid HTTPS ServiceNow landing URL.";
+      case "https-required":
+        return "Target URL was denied: HTTPS is required.";
+      case "credentials-in-url-denied":
+        return "Target URL was denied: credentials in URLs are not allowed.";
+      case "query-or-fragment-denied":
+      case "sensitive-url-component-denied":
+        return "Target URL was denied: use a plain ServiceNow landing URL with no query, hash, record id, token, or session payload.";
+      case "landing-path-required":
+        return "Target URL was denied: use a plain ServiceNow landing page, not a deep record or encoded navigation URL.";
+      case "host-not-allowlisted":
+      case "service-now-host-required":
+        return "Target URL was denied: host is not allowlisted for this environment.";
+      default:
+        return "Target URL was denied by the dedicated browser helper. Use a plain HTTPS ServiceNow landing URL with no query, hash, record id, token, or session payload.";
+    }
+  }
+
+  if (payload.blockedReason === "dedicated-chromium-runtime-not-found") {
+    return "Dedicated Chromium runtime was not found. Install or repair the tool-owned QA Chromium runtime; daily Chrome/Edge is not used.";
+  }
+
+  if (payload.blockedReason === "dedicated-chromium-exited-before-cdp-ready") {
+    return "Dedicated Chromium started but exited before CDP became ready. See the startup/runtime log path for sanitized details.";
+  }
+
+  if (payload.blockedReason === "cdp-not-ready-timeout") {
+    return "Dedicated Chromium started but CDP did not become ready before timeout. See the startup/runtime log path for sanitized details.";
+  }
+
+  if (payload.blockedReason === "wsl-cdp-exposure-dev-only") {
+    return "WSL CDP exposure is dev-only and requires explicit confirmation; QA remains loopback-only by default.";
+  }
+
+  if (payload.blockedReason === "windows-localappdata-unavailable") {
+    return "Windows LOCALAPPDATA was unavailable, so a disposable tool-owned browser profile could not be created.";
+  }
+
+  return payload.blockedReason ?? "Dedicated CDP browser helper did not report a ready loopback-only endpoint.";
 }
 
 function buildDedicatedCdpHelperCommand(input: {

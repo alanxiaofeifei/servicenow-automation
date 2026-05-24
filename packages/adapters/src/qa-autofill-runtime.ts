@@ -201,6 +201,7 @@ export type RunQaTextFieldAutofillRuntimeRequest = {
 
 export type CdpQaAutofillRuntimePageDriverOptions = {
   endpoint: string;
+  targetUrl?: string;
 };
 
 const QA_INCIDENT_DEFAULT_RUNTIME_TEXT_FIELD_KEYS = new Set<QaIncidentDefaultFieldKey>([
@@ -348,7 +349,7 @@ export function createCdpQaAutofillRuntimePageDriver(
   validateLocalCdpEndpoint(options.endpoint);
   return {
     async inspectAllowedTextFields(descriptors) {
-      return withCdpClient(options.endpoint, (client) =>
+      return withCdpClient(options.endpoint, options.targetUrl, (client) =>
         client.evaluate<QaAutofillRuntimeInspection>(buildInspectionExpression(descriptors))
       );
     },
@@ -356,7 +357,7 @@ export function createCdpQaAutofillRuntimePageDriver(
       if (request.operations.some((operation) => operation.kind !== "fill-text")) {
         return blockedFillResult("plan-not-ready");
       }
-      return withCdpClient(options.endpoint, (client) =>
+      return withCdpClient(options.endpoint, options.targetUrl, (client) =>
         client.evaluate<QaAutofillRuntimeFillResult>(buildFillExpression(request))
       );
     }
@@ -369,7 +370,7 @@ export function createCdpQaIncidentFieldInspectionRuntimePageDriver(
   validateLocalCdpEndpoint(options.endpoint);
   return {
     async inspectIncidentFormFields() {
-      return withCdpClient(options.endpoint, (client) =>
+      return withCdpClient(options.endpoint, options.targetUrl, (client) =>
         client.evaluate<QaIncidentFieldRuntimeInspection>(buildIncidentFieldInspectionExpression())
       );
     }
@@ -382,12 +383,12 @@ export function createCdpQaIncidentDefaultFieldAutofillRuntimePageDriver(
   validateLocalCdpEndpoint(options.endpoint);
   return {
     async inspectIncidentFormFields() {
-      return withCdpClient(options.endpoint, (client) =>
+      return withCdpClient(options.endpoint, options.targetUrl, (client) =>
         client.evaluate<QaIncidentFieldRuntimeInspection>(buildIncidentFieldInspectionExpression())
       );
     },
     async fillIncidentDefaultFields(request) {
-      return withCdpClient(options.endpoint, (client) =>
+      return withCdpClient(options.endpoint, options.targetUrl, (client) =>
         client.evaluate<QaIncidentDefaultFieldRuntimeFillResult>(buildIncidentDefaultFieldFillExpression(request))
       );
     }
@@ -695,8 +696,8 @@ function blockedFillResult(blockedReason: QaAutofillRuntimeBlockedReason): QaAut
   };
 }
 
-async function withCdpClient<T>(endpoint: string, callback: (client: CdpClient) => Promise<T>): Promise<T> {
-  const webSocketUrl = await resolveCdpPageWebSocketUrl(endpoint);
+async function withCdpClient<T>(endpoint: string, targetUrl: string | undefined, callback: (client: CdpClient) => Promise<T>): Promise<T> {
+  const webSocketUrl = await resolveCdpPageWebSocketUrl(endpoint, targetUrl);
   const client = await CdpClient.connect(webSocketUrl);
   try {
     return await callback(client);
@@ -705,7 +706,9 @@ async function withCdpClient<T>(endpoint: string, callback: (client: CdpClient) 
   }
 }
 
-async function resolveCdpPageWebSocketUrl(endpoint: string): Promise<string> {
+type CdpPageTarget = { type?: string; url?: string; webSocketDebuggerUrl?: string };
+
+async function resolveCdpPageWebSocketUrl(endpoint: string, targetUrl?: string): Promise<string> {
   const url = new URL(endpoint);
   if (url.protocol === "ws:" || url.protocol === "wss:") {
     validateLocalCdpEndpoint(endpoint);
@@ -717,14 +720,91 @@ async function resolveCdpPageWebSocketUrl(endpoint: string): Promise<string> {
   if (!response.ok) {
     throw new Error("Unable to inspect the local browser debugging endpoint.");
   }
-  const pages = (await response.json()) as Array<{ type?: string; url?: string; webSocketDebuggerUrl?: string }>;
+  const pages = (await response.json()) as CdpPageTarget[];
   const pageTargets = pages.filter((page) => page.type === "page" && page.webSocketDebuggerUrl);
-  if (pageTargets.length !== 1) {
-    throw new Error("Expected exactly one local browser page target for QA autofill runtime.");
+  const selectedTarget = selectCdpPageTarget(pageTargets, targetUrl);
+  if (!selectedTarget?.webSocketDebuggerUrl) {
+    throw new Error("Unable to select a single current browser page target for QA verify-only inspection.");
   }
-  const webSocketUrl = pageTargets[0].webSocketDebuggerUrl as string;
+  const webSocketUrl = selectedTarget.webSocketDebuggerUrl;
   validateLocalCdpEndpoint(webSocketUrl);
   return webSocketUrl;
+}
+
+function selectCdpPageTarget(pageTargets: CdpPageTarget[], targetUrl?: string): CdpPageTarget | undefined {
+  if (pageTargets.length === 1) return pageTargets[0];
+
+  const configuredHost = hostFromTargetUrl(targetUrl);
+  if (configuredHost) {
+    const configuredHostTargets = pageTargets.filter((target) => pageTargetMatchesHost(target, configuredHost));
+    const configuredIncidentTargets = configuredHostTargets.filter(isLikelyIncidentPageTarget);
+    const configuredIncidentTarget = single(configuredIncidentTargets);
+    if (configuredIncidentTarget) return configuredIncidentTarget;
+    const configuredHostTarget = single(configuredHostTargets);
+    if (configuredHostTarget) return configuredHostTarget;
+    return undefined;
+  }
+
+  const inspectableTargets = pageTargets.filter(isInspectablePageTarget);
+  return single(inspectableTargets);
+}
+
+function hostFromTargetUrl(targetUrl?: string): string | undefined {
+  if (!targetUrl?.trim()) return undefined;
+  try {
+    const url = new URL(targetUrl);
+    if (url.protocol !== "https:" || url.username || url.password) return undefined;
+    return url.host.toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
+function pageTargetMatchesHost(target: CdpPageTarget, host: string): boolean {
+  const url = parsePageTargetUrl(target.url);
+  return Boolean(url && url.protocol === "https:" && !url.username && !url.password && url.host.toLowerCase() === host);
+}
+
+function isInspectablePageTarget(target: CdpPageTarget): boolean {
+  const url = parsePageTargetUrl(target.url);
+  if (!url) return false;
+  if (["about:", "chrome:", "devtools:", "edge:"].includes(url.protocol)) return false;
+  return url.protocol === "https:" || url.protocol === "http:";
+}
+
+function isLikelyIncidentPageTarget(target: CdpPageTarget): boolean {
+  const url = parsePageTargetUrl(target.url);
+  if (!url) return false;
+  const decodedLocation = decodeForTargetSelection(`${url.pathname}${url.search}`);
+  return decodedLocation.toLowerCase().includes("incident.do");
+}
+
+function parsePageTargetUrl(value?: string): URL | undefined {
+  if (!value?.trim()) return undefined;
+  try {
+    return new URL(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function decodeForTargetSelection(value: string): string {
+  let current = value;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    if (!current.includes("%")) break;
+    try {
+      const decoded = decodeURIComponent(current);
+      if (decoded === current) break;
+      current = decoded;
+    } catch {
+      break;
+    }
+  }
+  return current;
+}
+
+function single<T>(items: T[]): T | undefined {
+  return items.length === 1 ? items[0] : undefined;
 }
 
 function validateLocalCdpEndpoint(endpoint: string): void {
@@ -1138,10 +1218,6 @@ const incidentDefaultFieldFillScript = async (
   }
 };
 
-export const qaAutofillRuntimeTestHooks = {
-  incidentDefaultFieldFillScript
-};
-
 const incidentFieldInspectionScript = async (): Promise<QaIncidentFieldRuntimeInspection> => {
   const documents = collectSameOriginDocuments();
   const fieldsByIdentity = new Map<string, QaIncidentFormFieldEvidence>();
@@ -1149,9 +1225,7 @@ const incidentFieldInspectionScript = async (): Promise<QaIncidentFieldRuntimeIn
 
   for (const doc of documents) {
     for (const element of Array.from(doc.querySelectorAll("input, textarea, select"))) {
-      if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement)) {
-        continue;
-      }
+      if (!isIncidentInspectableControl(element)) continue;
       if (!isVisibleElement(element)) continue;
       const label = associatedLabelText(element);
       if (!looksLikeIncidentControl(element, label)) continue;
@@ -1252,7 +1326,7 @@ const incidentFieldInspectionScript = async (): Promise<QaIncidentFieldRuntimeIn
     identity: string,
     label: string
   ): QaIncidentFormFieldType {
-    if (element instanceof HTMLTextAreaElement) return "textarea";
+    if (isTextAreaControl(element)) return "textarea";
     const haystack = `${identity} ${label}`.toLowerCase();
     if (
       ["caller_id", "opened_for", "requested_for", "location", "assignment_group", "assigned_to"].some((token) =>
@@ -1261,12 +1335,13 @@ const incidentFieldInspectionScript = async (): Promise<QaIncidentFieldRuntimeIn
     ) {
       return "reference";
     }
-    if (element instanceof HTMLSelectElement) return "select";
+    if (isSelectControl(element)) return "select";
     if (["category", "subcategory", "contact_type", "channel", "impact", "urgency", "state"].some((token) => haystack.includes(token))) {
       return "select";
     }
-    if (element instanceof HTMLInputElement) {
-      return ["", "text", "search", "email", "url", "tel"].includes(element.type) ? "text" : "other";
+    if (isInputControl(element)) {
+      const type = (element.getAttribute("type") || element.type || "text").toLowerCase();
+      return ["", "text", "search", "email", "url", "tel"].includes(type) ? "text" : "other";
     }
     return "other";
   }
@@ -1321,7 +1396,7 @@ const incidentFieldInspectionScript = async (): Promise<QaIncidentFieldRuntimeIn
   }
 
   function isWritableForIncidentInspection(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): boolean {
-    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+    if (isInputControl(element) || isTextAreaControl(element)) {
       return !element.disabled && !element.readOnly && element.getAttribute("aria-disabled") !== "true";
     }
     return !element.disabled && element.getAttribute("aria-disabled") !== "true";
@@ -1329,6 +1404,22 @@ const incidentFieldInspectionScript = async (): Promise<QaIncidentFieldRuntimeIn
 
   function currentValuePresent(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): boolean {
     return element.value.trim().length > 0;
+  }
+
+  function isIncidentInspectableControl(element: Element): element is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
+    return isInputControl(element) || isTextAreaControl(element) || isSelectControl(element);
+  }
+
+  function isInputControl(element: Element): element is HTMLInputElement {
+    return element.tagName.toLowerCase() === "input";
+  }
+
+  function isTextAreaControl(element: Element): element is HTMLTextAreaElement {
+    return element.tagName.toLowerCase() === "textarea";
+  }
+
+  function isSelectControl(element: Element): element is HTMLSelectElement {
+    return element.tagName.toLowerCase() === "select";
   }
 
   function collectSameOriginDocuments(): Document[] {
@@ -1766,4 +1857,10 @@ const fillScript = async (request: {
       element.value = value;
     }
   }
+};
+
+export const qaAutofillRuntimeTestHooks = {
+  incidentDefaultFieldFillScript,
+  incidentFieldInspectionScript,
+  resolveCdpPageWebSocketUrl
 };

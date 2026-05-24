@@ -36,6 +36,7 @@ sda_load_node_runtime
 sda_require_node
 sda_ensure_desktop_dependencies
 sda_ensure_desktop_build
+sda_require_desktop_build_outputs
 sda_print_runtime_summary
 
 if [ "${SDA_LAUNCH_DRY_RUN:-0}" = "1" ]; then
@@ -43,6 +44,8 @@ if [ "${SDA_LAUNCH_DRY_RUN:-0}" = "1" ]; then
   echo "Dry run complete: Electron launch skipped because SDA_LAUNCH_DRY_RUN=1."
   exit 0
 fi
+
+sda_require_gui_display
 
 echo
 echo "Launching Electron desktop app..."

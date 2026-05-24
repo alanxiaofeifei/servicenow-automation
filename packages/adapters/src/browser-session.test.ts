@@ -552,6 +552,12 @@ describe("BrowserSessionService", () => {
       saveSubmitUpdateClosePerformed: false,
       artifactsCaptured: false
     });
+    expect(result.runtimeLogPath).toContain(join(projectRoot, ".local", "startup-logs"));
+    const runtimeLog = await readFile(result.runtimeLogPath ?? "", "utf8");
+    expect(runtimeLog).toContain("qa-dedicated-cdp-browser-start");
+    expect(runtimeLog).toContain("dry-run");
+    expect(runtimeLog).not.toContain("qa.service-now.example.invalid");
+    expect(runtimeLog).not.toContain("nav_to.do");
     expect(serialized).not.toContain("qa.service-now.example.invalid");
     expect(serialized).not.toContain("nav_to.do");
     expect(serialized).not.toContain("sys_id");
@@ -704,6 +710,51 @@ describe("BrowserSessionService", () => {
     expect(helperScript).toContain('[string]$EnvironmentMode = "qa"');
     expect(helperScript).toContain('$EnvironmentMode -ne "dev"');
     expect(helperScript).toContain("wsl-cdp-exposure-dev-only");
+    expect(helperScript).toContain(".service-now.example.invalid");
+    expect(helperScript).toContain("landing-path-required");
+    expect(helperScript).toContain("query-or-fragment-denied");
+  });
+
+  it("maps helper target-url-denied payloads to actionable sanitized launch failures", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-qa-cdp-browser-helper-target-denied-"));
+    const service = createBrowserSessionService({ projectRoot });
+
+    const result = await service.startQaDedicatedCdpBrowser(getServiceNowEnvironmentConfig("qa"), {
+      execute: true,
+      confirmNoWriteLaunch: true,
+      helperLauncher: async () => ({
+        exitCode: 1,
+        stdout: JSON.stringify({
+          status: "blocked",
+          blockedReason: "target-url-denied",
+          targetValidation: {
+            reason: "landing-path-required",
+            rawUrlRedacted: true
+          },
+          safety: {
+            browserProcessLaunched: false,
+            cdpBoundToLoopbackOnly: false,
+            serviceNowWritePerformed: false,
+            saveSubmitUpdateClosePerformed: false,
+            artifactsCaptured: false
+          }
+        }),
+        stderr: "raw helper stderr stays hidden"
+      })
+    });
+    const serialized = JSON.stringify(result);
+    const runtimeLog = await readFile(result.runtimeLogPath ?? "", "utf8");
+
+    expect(result.status).toBe("blocked");
+    expect(result.cdpEndpoint).toBeUndefined();
+    expect(result.blockedReason).toBe("Target URL was denied: use a plain ServiceNow landing page, not a deep record or encoded navigation URL.");
+    expect(result.runtimeLogPath).toContain(join(projectRoot, ".local", "startup-logs"));
+    expect(result.safety.browserProcessLaunched).toBe(false);
+    expect(result.safety.cdpEndpointReady).toBe(false);
+    expect(runtimeLog).toContain("helper-blocked");
+    expect(runtimeLog).not.toContain("raw helper stderr");
+    expect(serialized).not.toContain("qa.service-now.example.invalid");
+    expect(serialized).not.toContain("sys_id");
   });
 
   it("blocks helper payloads that report non-loopback CDP binding even when their endpoint is local", async () => {
@@ -792,6 +843,11 @@ describe("BrowserSessionService", () => {
     expect(ready.profile).toMatchObject({ toolOwned: true, disposable: true, sessionId: "session-123" });
     expect(ready.safety.browserProcessLaunched).toBe(true);
     expect(ready.safety.cdpEndpointReady).toBe(true);
+    expect(ready.runtimeLogPath).toContain(join(projectRoot, ".local", "startup-logs"));
+    const readyRuntimeLog = await readFile(ready.runtimeLogPath ?? "", "utf8");
+    expect(readyRuntimeLog).toContain("ready");
+    expect(readyRuntimeLog).not.toContain("http://127.0.0.1:54656");
+    expect(readyRuntimeLog).not.toContain("qa.service-now.example.invalid");
     expect(launchedCommands).toHaveLength(1);
     expect(launchedCommands[0]).toMatchObject({ executable: expect.stringContaining("powershell") });
     expect(JSON.stringify(launchedCommands[0])).toContain(getServiceNowEnvironmentConfig("qa").url);

@@ -723,7 +723,47 @@ describe("App", () => {
     expect(output).toContain("Requires a prior Verify fingerprint");
     expect(output).toContain("Reference/select/status/routing defaults stay verify-only in the review plan until a separate control-type slice is approved.");
     expect(output).toContain("Raw CDP endpoint stays local-only and is not displayed as a clickable URL.");
+    expect(output).toContain("Not ready — Verify disabled");
+    expect(output).toContain("Disabled: Start QA Chromium and wait for sanitized CDP ready first.");
     expect(output).not.toContain("Autofill Requester, Category, Subcategory, Location, Channel, Impact, Urgency, Assignment group, Assigned to");
+  });
+
+  it("enables Verify only after a sanitized local CDP endpoint is ready and never renders the endpoint", () => {
+    const pendingOutput = renderAppMarkup(undefined, { initialEnvironmentMode: "qa" });
+    const pendingVerifyButton = pendingOutput.match(/<button[^>]*>2\. Verify current Incident<\/button>/)?.[0] ?? "";
+
+    expect(pendingVerifyButton).toContain("disabled");
+
+    const readyOutput = renderAppMarkup(undefined, {
+      initialEnvironmentMode: "qa",
+      initialOperatorCdpEndpoint: "http://127.0.0.1:54656"
+    });
+    const readyVerifyButton = readyOutput.match(/<button[^>]*>2\. Verify current Incident<\/button>/)?.[0] ?? "";
+
+    expect(readyVerifyButton).not.toContain("disabled");
+    expect(readyOutput).toContain("Ready — Verify enabled");
+    expect(readyOutput).toContain("Enabled: CDP ready; manually open the current Incident form, then verify read-only.");
+    expect(readyOutput).not.toContain("http://127.0.0.1:54656");
+  });
+
+  it("renders a sanitized startup/runtime log path from launch failures", () => {
+    const output = renderAppMarkup(undefined, {
+      initialEnvironmentMode: "qa",
+      initialOperatorLastResponse: {
+        ok: false,
+        launch: {
+          status: "blocked",
+          blockedReason: "Dedicated Chromium runtime was not found. Install or repair the tool-owned QA Chromium runtime; daily Chrome/Edge is not used.",
+          runtimeLogPath: ".local/startup-logs/qa-dedicated-cdp-sanitized.jsonl",
+          safety: { browserProcessLaunched: false, cdpEndpointReady: false, noWriteMode: true }
+        }
+      }
+    });
+
+    expect(output).toContain("Dedicated Chromium runtime was not found.");
+    expect(output).toContain("Startup/runtime log:");
+    expect(output).toContain(".local/startup-logs/qa-dedicated-cdp-sanitized.jsonl");
+    expect(output).not.toContain("href=\"http://127.0.0.1");
   });
 
   it("keeps operator autofill disabled until a prior verify fingerprint is available without rendering the raw fingerprint", () => {

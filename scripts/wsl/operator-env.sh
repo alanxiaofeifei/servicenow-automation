@@ -108,8 +108,47 @@ sda_desktop_electron_bin() {
   printf '%s/node_modules/.bin/electron' "$SDA_DESKTOP_DIR"
 }
 
+sda_desktop_preload_file() {
+  printf '%s/out/preload/preload.cjs' "$SDA_DESKTOP_DIR"
+}
+
 sda_desktop_build_outputs_exist() {
-  [ -f "$SDA_DESKTOP_DIR/out/main/main.js" ] && [ -f "$SDA_DESKTOP_DIR/out/renderer/index.html" ]
+  [ -f "$SDA_DESKTOP_DIR/out/main/main.js" ] && \
+    [ -f "$(sda_desktop_preload_file)" ] && \
+    [ -f "$SDA_DESKTOP_DIR/out/renderer/index.html" ]
+}
+
+sda_require_desktop_build_outputs() {
+  local missing=0
+  local expected_outputs=(
+    "$SDA_DESKTOP_DIR/out/main/main.js"
+    "$(sda_desktop_preload_file)"
+    "$SDA_DESKTOP_DIR/out/renderer/index.html"
+  )
+
+  for output_path in "${expected_outputs[@]}"; do
+    if [ ! -f "$output_path" ]; then
+      echo "ERROR: Desktop build output is missing: $output_path" >&2
+      missing=1
+    fi
+  done
+
+  if [ "$missing" -ne 0 ]; then
+    echo "Run the repair script from a WSL terminal: scripts/wsl/repair-env.sh" >&2
+    return 1
+  fi
+}
+
+sda_require_gui_display() {
+  if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
+    return 0
+  fi
+
+  echo "ERROR: No WSL GUI display is available for Electron." >&2
+  echo "Expected DISPLAY or WAYLAND_DISPLAY from WSLg when launching the desktop app." >&2
+  echo "Open the Windows launcher from an interactive Windows session, or repair WSLg/WSL GUI support." >&2
+  echo "For a non-GUI dependency check, run: SDA_LAUNCH_DRY_RUN=1 ./scripts/wsl/start-desktop.sh" >&2
+  return 1
 }
 
 sda_desktop_sources_newer_than_build() {

@@ -40,7 +40,7 @@ function createMainWindow(): void {
     minHeight: 680,
     title: "ServiceNow Automation",
     webPreferences: {
-      preload: join(__dirname, "../preload/preload.js"),
+      preload: join(__dirname, "../preload/preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -73,7 +73,7 @@ function registerOperatorIpc(): void {
     const mode = safeOperatorMode(request.mode);
     const environment = getServiceNowEnvironmentConfig(mode, targetUrlOverrides(mode, request.targetUrl));
     const endpoint = requireCdpEndpoint(request.cdpEndpoint);
-    const driver = createCdpQaIncidentDefaultFieldAutofillRuntimePageDriver({ endpoint });
+    const driver = createCdpQaIncidentDefaultFieldAutofillRuntimePageDriver({ endpoint, targetUrl: environment.url });
     const fieldInspection = await inspectQaIncidentDefaultFieldsRuntime({ environment, driver });
     const defaultPlan = request.draft
       ? buildQaIncidentDefaultValuePlan({
@@ -103,7 +103,7 @@ function registerOperatorIpc(): void {
       return blockedAutofillResponse("approval-page-fingerprint-required");
     }
 
-    const driver = createCdpQaIncidentDefaultFieldAutofillRuntimePageDriver({ endpoint });
+    const driver = createCdpQaIncidentDefaultFieldAutofillRuntimePageDriver({ endpoint, targetUrl: environment.url });
     const fieldInspection = await inspectQaIncidentDefaultFieldsRuntime({ environment, driver });
     const defaultPlan = buildQaIncidentDefaultValuePlan({
       draft: request.draft,

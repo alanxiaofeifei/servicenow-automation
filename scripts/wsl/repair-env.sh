@@ -38,6 +38,7 @@ sda_ensure_desktop_dependencies
 
 echo "Building desktop artifacts..."
 pnpm --filter @servicenow-automation/desktop build
+sda_require_desktop_build_outputs
 
 echo
 sda_print_runtime_summary

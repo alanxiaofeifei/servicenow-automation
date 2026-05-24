@@ -45,12 +45,25 @@ function Test-SafeTargetUrl([string]$Url) {
   }
 
   $hostValue = $parsed.Host.ToLowerInvariant()
-  if (-not $hostValue.EndsWith(".service-now.com")) {
+  if (-not (($hostValue.EndsWith(".service-now.com")) -or ($hostValue.EndsWith(".service-now.example.invalid")))) {
     return @{ allowed = $false; sanitizedTarget = $null; reason = "service-now-host-required" }
   }
 
   if (($parsed.Query -ne $null -and $parsed.Query.Length -gt 0) -or ($parsed.Fragment -ne $null -and $parsed.Fragment.Length -gt 0)) {
     return @{ allowed = $false; sanitizedTarget = $null; reason = "query-or-fragment-denied" }
+  }
+
+  $allowedLandingPaths = @("/", "/home.do", "/nav_to.do", "/now/nav/ui/classic/params/target/home_splash.do")
+  $absolutePath = $parsed.AbsolutePath
+  $encodedSensitiveMarkers = @("%3f", "%23", "sys_id", "sysparm_query", "token", "session")
+  foreach ($marker in $encodedSensitiveMarkers) {
+    if ($absolutePath.ToLowerInvariant().Contains($marker)) {
+      return @{ allowed = $false; sanitizedTarget = $null; reason = "sensitive-url-component-denied" }
+    }
+  }
+
+  if (-not ($allowedLandingPaths -contains $absolutePath)) {
+    return @{ allowed = $false; sanitizedTarget = $null; reason = "landing-path-required" }
   }
 
   return @{
