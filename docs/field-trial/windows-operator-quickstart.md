@@ -2,6 +2,8 @@
 
 Use this for the field-trial build of ServiceNow Automation.
 
+Status note for PR #97: this quickstart currently describes the intended operator flow, but manual acceptance on 2026-05-24 found that `Start QA Chromium` produced no visible browser launch and `Verify current Incident` stayed disabled. Treat that as the active P0 blocker until fixed and re-tested from the Windows double-click app.
+
 ## Open the app
 
 Double-click this file on the Windows desktop:
