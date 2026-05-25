@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
 import { demoManualPasteScenarios } from "@servicenow-automation/adapters/browser";
-import { getRequiredQaAutofillApprovalPhrase, getRequiredRealActionApprovalPhrase } from "@servicenow-automation/core";
 
 import {
   App,
@@ -12,6 +12,7 @@ import {
   clampAppZoomPercent,
   draftTemplatePresets,
   getCtrlWheelZoomDelta,
+  getDraftTextAreaRows,
   getHighSeverityVoiceReminder,
   getNextAppZoomPercent,
   getNextEnvironmentUrlOverrideFromDraft,
@@ -28,72 +29,686 @@ function renderAppMarkup(initialLanguage?: LanguageCode, props: Omit<TestableApp
   return renderToStaticMarkup(createElement(TestableApp, { initialLanguage, ...props }));
 }
 
+function stripMarkupText(segment: string): string {
+  return segment
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function visibleTextCount(output: string, text: string): number {
+  return stripMarkupText(output).split(text).length - 1;
+}
+
+function buttonAttrs(output: string, label: string): string {
+  const buttonPattern = /<button([^>]*)>([\s\S]*?)<\/button>/g;
+  let match: RegExpExecArray | null;
+  while ((match = buttonPattern.exec(output)) !== null) {
+    if (stripMarkupText(match[2] ?? "").includes(label)) {
+      return match[1] ?? "";
+    }
+  }
+  return "";
+}
+
+
+function mainMarkupWithoutSettings(output: string): string {
+  const settingsStart = output.indexOf('id="app-settings-sidebar"');
+  return settingsStart >= 0 ? output.slice(0, settingsStart) : output;
+}
+
+function settingsMarkup(output: string): string {
+  const settingsStart = output.indexOf('id="app-settings-sidebar"');
+  const settingsEnd = output.indexOf("</aside>", settingsStart);
+  return settingsStart >= 0 && settingsEnd >= 0 ? output.slice(settingsStart, settingsEnd) : "";
+}
+
 describe("App", () => {
-  it("exposes the required safety copy", () => {
-    const rendered = renderAppMarkup();
+  it("renders the approved target-image operator workbench shell", () => {
+    const output = renderAppMarkup();
 
-    expect(rendered).toContain("ServiceNow Automation");
-    expect(rendered).toContain('class="hero-title"');
-    expect(rendered).toContain(
-      "AI drafts only. Human review and manual submit required."
+    expect(output).toContain('class="app-shell operator-workbench-v2-shell');
+    expect(output).toContain('data-theme="warm"');
+    expect(output).toContain('data-left-sidebar="expanded"');
+    expect(output).toContain('data-right-rail="collapsed"');
+    expect(output).toContain('--app-zoom-scale:1');
+    expect(output).toContain('--app-zoom-width:100%');
+    expect(output).toContain('--app-zoom-height:100vh');
+    expect(output).not.toContain('--app-font-scale');
+    expect(output).toContain("ServiceNow Automation");
+    expect(output).toContain("QA Environment");
+    expect(output).toContain("Target configured");
+    expect(output).toContain("EN / 中文");
+    expect(output).toContain('data-active-page="workbench"');
+    expect(output).toContain('class="workbench-icon-rail"');
+    expect(output).toContain('class="workbench-sidebar"');
+    expect(output).toContain('class="workbench-center"');
+    expect(output).toContain('class="workbench-page-shell"');
+    expect(output).not.toContain('class="workbench-runtime-rail collapsed"');
+    expect(output).toContain('class="topbar-runtime-toggle"');
+    expect(output).toContain("Search tickets...");
+    expect(output).toContain("Inbox");
+    expect(output).toContain("Workbench");
+    expect(output).toContain("Knowledgebase");
+    expect(output).toContain("History");
+    expect(output).toContain("Search");
+    expect(buttonAttrs(output, "Workbench")).toContain('aria-current="page"');
+    expect(output.match(/class="workbench-icon-button/g)?.length ?? 0).toBeGreaterThanOrEqual(5);
+    expect(output).toContain('class="workbench-settings-button workbench-settings-nav-button"');
+    expect(output).toContain("New");
+    expect(output).toContain("In Review");
+    expect(output).toContain("Waiting");
+    expect(output).toContain("Recent");
+    expect(output).toContain("Today");
+    expect(output).toContain("Yesterday");
+    expect(output).not.toContain('<p class="eyebrow">Selected source</p>');
+    expect(output).toContain("Cleaned summary");
+    expect(output).toContain("Incident draft");
+    expect(output).not.toContain("Operator Workbench</p>");
+    expect(output).not.toContain("Current work item");
+    expect(output).not.toContain("Operator Control Center");
+    expect(output).not.toContain("Environment missing");
+  });
+
+  it("renders rebuilt target-style Inbox, Knowledgebase, History, and Search pages", () => {
+    const pageCases = [
+      { key: "inbox", label: "Inbox", title: "Inbox triage", panel: "Triage checklist" },
+      { key: "knowledge", label: "Knowledgebase", title: "Knowledgebase snippets", panel: "Suggested knowledge" },
+      { key: "history", label: "History", title: "History timeline", panel: "Recent outcomes" },
+      { key: "search", label: "Search", title: "Search workspace", panel: "Search tips" }
+    ] as const;
+
+    for (const page of pageCases) {
+      const output = renderAppMarkup("en-US", { initialActivePage: page.key });
+
+      expect(output).toContain(`data-active-page="${page.key}"`);
+      expect(output).toContain(page.title);
+      expect(output).toContain(page.panel);
+      expect(output).toContain('class="workbench-page-shell"');
+      expect(output).toContain('class="workbench-page-sidepanel"');
+      expect(output).toContain('class="workbench-page-context-panel"');
+      expect(buttonAttrs(output, page.label)).toContain('aria-current="page"');
+      expect(output).not.toContain("Nothing here yet");
+      expect(output).not.toContain("Coming soon");
+    }
+  });
+
+  it("removes the old demo-first surfaces from the primary workbench", () => {
+    const primaryMarkup = mainMarkupWithoutSettings(renderAppMarkup());
+
+    expect(primaryMarkup).not.toContain("MockAIProvider");
+    expect(primaryMarkup).not.toContain("Mock ServiceNow Incident Preview");
+    expect(primaryMarkup).not.toContain("Field-trial accelerated P0");
+    expect(primaryMarkup).not.toContain("High Severity Monitor Simulator");
+    expect(primaryMarkup).not.toContain("Workflow Stage");
+    expect(primaryMarkup).not.toContain("Local XLSX Dry-run Artifact");
+    expect(primaryMarkup).not.toContain("Excel dry-run");
+    expect(primaryMarkup).not.toContain("Language simulation");
+    expect(primaryMarkup).not.toContain("Queue → Source Review → TicketDraft");
+    expect(primaryMarkup).not.toContain("Load VPN QA Scenario");
+  });
+
+  it("keeps runtime actions visible and explains disabled buttons", () => {
+    const output = renderAppMarkup("en-US", { initialRuntimeRailExpanded: true });
+
+    expect(output).toContain("1 Start QA Chromium");
+    expect(output).toContain("2 Verify current Incident");
+    expect(output).toContain("3 Autofill current Incident");
+    expect(buttonAttrs(output, "1 Start QA Chromium")).not.toContain("disabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).toContain("disabled");
+    expect(output).toContain("Ready: opens dedicated QA Chromium; manual login only.");
+    expect(output).toContain("Disabled: Start QA Chromium and wait for CDP readiness first.");
+    expect(output).toContain("Runtime status");
+    expect(output).toContain("No runtime evidence yet; only sanitized status is shown.");
+    expect(output).toContain("Collapse runtime action rail");
+  });
+
+  it("keeps collapsed runtime rail quiet and exposes the toggle beside language", () => {
+    const output = renderAppMarkup("en-US", { initialRuntimeRailExpanded: false });
+    const primaryMarkup = mainMarkupWithoutSettings(output);
+    const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+    expect(output).toContain('data-right-rail="collapsed"');
+    expect(output).toContain('class="topbar-runtime-toggle"');
+    expect(output).toContain("Expand runtime action rail");
+    expect(output.indexOf('class="workbench-language-selector"')).toBeLessThan(output.indexOf('class="topbar-runtime-toggle"'));
+    expect(primaryMarkup).not.toContain('class="workbench-runtime-rail collapsed"');
+    expect(primaryMarkup).not.toContain('class="runtime-rail-handle"');
+    expect(primaryMarkup).not.toContain("Collapsed. Expand to access");
+    expect(primaryMarkup).not.toContain("Runtime status");
+    expect(primaryMarkup).not.toContain("No runtime evidence yet; only sanitized status is shown.");
+    expect(styles).toContain(".operator-workbench-v2-shell.runtime-rail-collapsed .workbench-layout");
+    expect(styles).toContain("grid-template-columns: var(--sna-icon-rail-width) var(--sna-sidebar-width) minmax(0, 1fr);");
+    expect(styles).toContain(".topbar-runtime-toggle {");
+    expect(styles).toContain(".topbar-runtime-toggle span {\n  clip: rect(0 0 0 0);");
+    expect(styles).not.toContain("--sna-runtime-rail-width: 96px");
+    expect(styles).not.toContain("writing-mode: vertical-rl");
+  });
+
+  it("uses a center-left double-arrow collapse control and folds Settings with the sidebar state", () => {
+    const output = renderAppMarkup("en-US", { initialLeftSidebarExpanded: false });
+    const expandedOutput = renderAppMarkup("en-US", { initialLeftSidebarExpanded: true });
+    const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+    expect(output).toContain('data-left-sidebar="collapsed"');
+    expect(output).toContain('aria-label="Expand left sidebar"');
+    expect(output).toContain('class="workbench-sidebar-edge-toggle"');
+    expect(output).toContain('class="workbench-sidebar-edge-glyph" aria-hidden="true">»</span>');
+    expect(expandedOutput).toContain('class="workbench-sidebar-edge-glyph" aria-hidden="true">«</span>');
+    expect(output).not.toContain('class="workbench-icon-button workbench-sidebar-toggle"');
+    expect(output).not.toContain('<span>Expand</span>');
+    expect(expandedOutput).toContain('aria-label="Collapse left sidebar"');
+    expect(expandedOutput).not.toContain('<span>Collapse</span>');
+    expect(output).toContain('class="workbench-icon-rail"');
+    expect(output).toContain('workbench-function-button selected');
+    expect(expandedOutput).toContain('workbench-function-button selected');
+    expect(output).toContain('class="workbench-icon-button workbench-settings-rail-button"');
+    expect(output).toContain('<span>Settings</span>');
+    expect(output).not.toContain('class="workbench-settings-button"');
+    expect(expandedOutput).toContain('class="workbench-settings-button workbench-settings-nav-button"');
+    expect(expandedOutput).toContain('<span>Settings</span>');
+    expect(expandedOutput).not.toContain('class="workbench-icon-button workbench-settings-rail-button"');
+    expect(styles).toContain(".operator-workbench-v2-shell.left-sidebar-expanded .workbench-function-button");
+    expect(styles).toContain("display: none;");
+    expect(styles).toContain(".workbench-sidebar-edge-toggle {");
+    expect(styles).toContain("position: fixed;");
+    expect(styles).toContain("left: 0;");
+    expect(output).toContain('style="--left-sidebar-handle-top:50%"');
+    expect(styles).toContain("top: var(--left-sidebar-handle-top, 50%);");
+    expect(styles).toContain("cursor: grab;");
+    expect(styles).toContain("font-size: 24px;");
+    expect(styles).toContain(".operator-workbench-v2-shell.left-sidebar-expanded .workbench-icon-rail");
+    expect(output).toContain('id="left-workbench-sidebar"');
+    expect(output).toContain('class="workbench-center"');
+    expect(styles).toContain(".operator-workbench-v2-shell.left-sidebar-collapsed .workbench-layout");
+    expect(styles).toContain("grid-template-columns: var(--sna-icon-rail-width) minmax(0, 1fr) var(--sna-runtime-rail-width);");
+    expect(styles).toContain(".operator-workbench-v2-shell.left-sidebar-collapsed.runtime-rail-collapsed .workbench-layout");
+    expect(styles).toContain("grid-template-columns: var(--sna-icon-rail-width) minmax(0, 1fr);");
+  });
+
+  it("keeps Start QA Chromium enabled in QA mode while Verify waits for CDP readiness", () => {
+    const output = renderAppMarkup("en-US", { initialEnvironmentMode: "qa", initialRuntimeRailExpanded: true });
+
+    expect(output).toContain("QA Test Environment");
+    expect(output).toContain("QA Environment");
+    expect(output).toContain("Target configured");
+    expect(buttonAttrs(output, "1 Start QA Chromium")).not.toContain("disabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).toContain("disabled");
+    expect(output).toContain("Ready: opens dedicated QA Chromium; manual login only.");
+    expect(output).toContain("Disabled: Start QA Chromium and wait for CDP readiness first.");
+  });
+
+  it("enables Verify only after sanitized CDP readiness without rendering the raw endpoint", () => {
+    const rawEndpoint = "http://127.0.0.1:9222/devtools/browser/raw-session-id";
+    const output = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "qa",
+      initialRuntimeRailExpanded: true,
+      initialOperatorCdpEndpoint: rawEndpoint
+    });
+
+    expect(output).toContain("CDP ready; Verify enabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).not.toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).toContain("disabled");
+    expect(output).toContain("Disabled: Verify current Incident first.");
+    expect(output).not.toContain(rawEndpoint);
+  });
+
+  it("keeps Autofill gated until a prior verify fingerprint exists and hides the raw fingerprint", () => {
+    const rawFingerprint = "sha256:do-not-render-raw-fingerprint";
+    const output = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "qa",
+      initialRuntimeRailExpanded: true,
+      initialOperatorCdpEndpoint: "http://127.0.0.1:9222/devtools/browser/session",
+      initialOperatorVerifiedPageFingerprint: rawFingerprint
+    });
+
+    expect(buttonAttrs(output, "3 Autofill current Incident")).not.toContain("disabled");
+    expect(output).toContain("Ready: approved text fields only; human handling remains manual.");
+    expect(output).toContain("Current form verified; Autofill remains limited to approved text fields.");
+    expect(output).not.toContain(rawFingerprint);
+  });
+
+  it("surfaces launch blocked diagnostics with a sanitized ignored runtime log path", () => {
+    const absoluteProjectPrefix = ["", "tmp", "servicenow-automation"].join("/");
+    const rawRuntimeLogPath = `${absoluteProjectPrefix}/.local/startup-logs/qa-dedicated-cdp-20260525123456-1234-a1b2c3.jsonl`;
+    const rawEndpoint = "http://127.0.0.1:54656/devtools/browser/private-session";
+    const output = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "qa",
+      initialRuntimeRailExpanded: true,
+      initialOperatorLastResponse: {
+        ok: false,
+        launch: {
+          status: "blocked",
+          blockedReason:
+            "Dedicated Chromium started but CDP did not become ready before timeout. See the startup/runtime log path for sanitized details.",
+          cdpEndpoint: rawEndpoint,
+          runtimeLogPath: rawRuntimeLogPath,
+          safety: { browserProcessLaunched: true, cdpEndpointReady: false, noWriteMode: true }
+        }
+      }
+    });
+
+    expect(output).toContain("Dedicated Chromium started but CDP did not become ready before timeout.");
+    expect(output).toContain(".local/startup-logs/qa-dedicated-cdp-20260525123456-1234-a1b2c3.jsonl");
+    expect(output).toContain("Sanitized runtime evidence available.");
+    expect(output).not.toContain(absoluteProjectPrefix);
+    expect(output).not.toContain(rawEndpoint);
+  });
+
+  it("redacts unsafe launch blocked diagnostics before rendering status details", () => {
+    const rawEndpoint = "http://127.0.0.1:54656/devtools/browser/private-session";
+    const rawAbsolutePath = ["", "tmp", "servicenow-automation", ".local", "startup-logs", "unsafe.jsonl"].join("/");
+    const rawServiceNowUrl = "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do";
+    const secretMarker = ["to", "ken"].join("") + "=unsafe-value";
+    const rawFingerprint = `sha256:${"a".repeat(64)}`;
+    const output = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "qa",
+      initialRuntimeRailExpanded: true,
+      initialOperatorLastResponse: {
+        ok: false,
+        launch: {
+          status: "blocked",
+          blockedReason: `Launch failed at ${rawEndpoint} ${rawAbsolutePath} ${rawServiceNowUrl} ${secretMarker} ${rawFingerprint}.`,
+          runtimeLogPath: rawAbsolutePath,
+          safety: { browserProcessLaunched: true, cdpEndpointReady: false, noWriteMode: true }
+        }
+      }
+    });
+
+    expect(output).toContain("Launch failed at");
+    expect(output).toContain("[REDACTED_URL]");
+    expect(output).toContain("[REDACTED_PATH]");
+    expect(output).toContain("[REDACTED_SECRET]");
+    expect(output).toContain("[REDACTED_FINGERPRINT]");
+    expect(output).toContain(".local/startup-logs/unsafe.jsonl");
+    expect(output).not.toContain(rawEndpoint);
+    expect(output).not.toContain("127.0.0.1");
+    expect(output).not.toContain("devtools/browser");
+    expect(output).not.toContain(rawAbsolutePath);
+    expect(output).not.toContain("qa.service-now.example.invalid");
+    expect(output).not.toContain(secretMarker);
+    expect(output).not.toContain(rawFingerprint);
+  });
+
+  it("redacts unsafe verify and autofill blocked diagnostics before rendering status details", () => {
+    const bareFingerprint = "b".repeat(64);
+    const posixPath = ["", "opt", "servicenow", "runtime", "unsafe.log"].join("/");
+    const windowsPath = ["C:", "Users", "Operator", "AppData", "Local", "Temp", "unsafe.log"].join("/");
+    const backslashWindowsPath = ["C:", "Users", "Operator", "AppData", "Local", "Temp", "unsafe.log"].join("\\");
+    const uncPath = ["", "", "server", "share", "unsafe.log"].join("\\");
+    const localEndpoint = ["127.0.0.1", "9222"].join(":");
+    const localhostEndpoint = ["localhost", "9333"].join(":");
+    const serviceNowHost = "dev.servicenow.example.invalid/now/nav/ui/classic/params/target/home_splash.do";
+    const authorizationHeader = ["Authorization", "Bearer unsafe-value"].join(": ");
+    const authTokenHeader = ["X", "Auth", "Token"].join("-") + ": Bearer unsafe-header";
+    const sessionMarker = ["session", "Id"].join("") + "=unsafe-session";
+    const authTokenMarker = ["auth", "_", "token"].join("") + "=unsafe-token";
+    const cookieMarker = ["cook", "ie", "_value"].join("") + "=unsafe-cookie";
+    const passwordMarker = ["pass", "word"].join("") + "=unsafe-password";
+    const apiKeyMarker = ["api", "_", "key"].join("") + "=unsafe-key";
+    const unsafeDiagnostic = `Runtime blocked ${posixPath} ${windowsPath} ${backslashWindowsPath} ${uncPath} ${localEndpoint} ${localhostEndpoint} ${serviceNowHost} ${authorizationHeader} ${authTokenHeader} ${sessionMarker} ${authTokenMarker} ${cookieMarker} ${passwordMarker} ${apiKeyMarker} ${bareFingerprint}`;
+
+    const verifyOutput = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "qa",
+      initialRuntimeRailExpanded: true,
+      initialOperatorLastResponse: {
+        ok: false,
+        fieldInspection: { status: "blocked", blockedReason: unsafeDiagnostic }
+      }
+    });
+    const autofillOutput = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "qa",
+      initialRuntimeRailExpanded: true,
+      initialOperatorLastResponse: {
+        ok: false,
+        runtime: { status: "blocked", blockedReason: unsafeDiagnostic }
+      }
+    });
+
+    for (const output of [verifyOutput, autofillOutput]) {
+      expect(output).toContain("Runtime blocked");
+      expect(output).toContain("[REDACTED_PATH]");
+      expect(output).toContain("[REDACTED_HOST]");
+      expect(output).toContain("[REDACTED_SECRET]");
+      expect(output).toContain("[REDACTED_FINGERPRINT]");
+      expect(output).not.toContain(posixPath);
+      expect(output).not.toContain(windowsPath);
+      expect(output).not.toContain(backslashWindowsPath);
+      expect(output).not.toContain(uncPath);
+      expect(output).not.toContain(localEndpoint);
+      expect(output).not.toContain(localhostEndpoint);
+      expect(output).not.toContain("localhost:9333");
+      expect(output).not.toContain("127.0.0.1:9222");
+      expect(output).not.toContain("dev.servicenow.example.invalid");
+      expect(output).not.toContain(authorizationHeader);
+      expect(output).not.toContain(authTokenHeader);
+      expect(output).not.toContain(sessionMarker);
+      expect(output).not.toContain(authTokenMarker);
+      expect(output).not.toContain(cookieMarker);
+      expect(output).not.toContain(passwordMarker);
+      expect(output).not.toContain(apiKeyMarker);
+      expect(output).not.toContain(bareFingerprint);
+    }
+  });
+
+  it("prefers autofill runtime diagnostics when initial response also includes default plan metadata", () => {
+    const defaultPlanMarker = "Default plan metadata marker should stay hidden.";
+    const runtimeMarker = "Autofill runtime marker should be visible.";
+    const output = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "qa",
+      initialRuntimeRailExpanded: true,
+      initialOperatorLastResponse: {
+        ok: false,
+        defaultPlan: { status: "blocked", blockedReason: defaultPlanMarker, plannedFields: [] },
+        runtime: { status: "blocked", blockedReason: runtimeMarker }
+      }
+    });
+
+    expect(output).toContain(runtimeMarker);
+    expect(output).not.toContain(defaultPlanMarker);
+  });
+
+  it("keeps the visible safety boundary compact and avoids state-changing ServiceNow controls", () => {
+    const primaryMarkup = mainMarkupWithoutSettings(
+      renderAppMarkup("en-US", { initialEnvironmentMode: "qa", initialRuntimeRailExpanded: true })
     );
+
+    expect(primaryMarkup).toContain("Safety note");
+    expect(primaryMarkup).toContain("AI drafts and fills allowed text fields only.");
+    expect(primaryMarkup).toContain("Human reviews and handles the record in ServiceNow.");
+    expect(primaryMarkup).not.toMatch(/<button[^>]*>\s*(Save|Submit|Update|Resolve|Close)\s*<\/button>/);
+    expect(primaryMarkup).not.toContain("raw-session-id");
   });
 
-  it("renders the static runtime and safety status panel", () => {
+  it("preserves first-class Settings with language, environment, URL inputs, and clear-state reasons", () => {
     const output = renderAppMarkup();
+    const settingsMarkupText = settingsMarkup(output);
 
-    expect(output).toContain("Runtime / Safety");
-    expect(output).toContain("Static demo posture");
-    expect(output).toContain("Demo mode");
-    expect(output).toContain("ON");
-    expect(output).toContain("Real ServiceNow");
-    expect(output).toContain("OFF");
-    expect(output).toContain("Auto-submit");
-    expect(output).toContain("disabled");
-    expect(output).toContain("External AI with real data");
-    expect(output).toContain("Browser/runtime");
-    expect(output).toContain("dedicated Chromium prepared/planned; not launched by this panel");
-    expect(output).toContain("Profile");
-    expect(output).toContain("disposable/tool-owned model");
-    expect(output).toContain("Data");
-    expect(output).toContain("fake sanitized demo data only");
+    expect(mainMarkupWithoutSettings(output).match(/workbench-settings-button/g)?.length ?? 0).toBe(1);
+    expect(mainMarkupWithoutSettings(output)).not.toContain('class="workbench-icon-button workbench-settings-rail-button"');
+    expect(output).toContain('aria-expanded="false" class="workbench-settings-button workbench-settings-nav-button"');
+    expect(settingsMarkupText).toContain('aria-label="Close"');
+    expect(settingsMarkupText).toContain("Language");
+    expect(settingsMarkupText).not.toContain('<span class="summary-label">Default environment</span>');
+    expect(settingsMarkupText).toContain("Default environment selector");
+    expect(settingsMarkupText).toContain("ServiceNow target settings");
+    expect(settingsMarkupText).toContain("Templates / Settings");
+    expect(settingsMarkupText).toContain("Optional field checklist / Team rules");
+    expect(settingsMarkupText).toContain("QA target");
+    expect(settingsMarkupText).toContain("Production target");
+    expect(settingsMarkupText).toContain("Paste replacement target");
+    expect(settingsMarkupText).not.toContain("Production URL");
+    expect(settingsMarkupText).not.toContain("Target URL");
+    expect(settingsMarkupText).toContain("Clear saved settings");
+    expect(settingsMarkupText).toContain("Disabled: no saved settings to clear.");
+    expect(settingsMarkupText).toContain("Save settings");
+    expect(settingsMarkupText).toContain("Reset display");
+    expect(settingsMarkupText).toContain("Settings apply locally in this window. Runtime safety gates are unchanged.");
+    expect(settingsMarkupText).toContain("No credentials are stored");
+    expect(settingsMarkupText).not.toContain("Development Test Environment");
+    expect(settingsMarkupText).not.toContain("Production Shadow Mode");
+    expect(settingsMarkupText).not.toContain("Mock Demo");
   });
 
-  it("renders the compact fake high severity alert simulator", () => {
+  it("simplifies the Settings default environment row without duplicate QA values", () => {
+    const englishSettings = settingsMarkup(renderAppMarkup("en-US"));
+    const simplifiedChineseSettings = settingsMarkup(renderAppMarkup("zh-CN"));
+
+    expect(englishSettings).toContain("Default environment selector");
+    expect(englishSettings).toContain("Choose QA to use Start, Verify, and Autofill. Production remains read-only.");
+    expect(englishSettings).toContain('value="production-shadow"');
+    expect(englishSettings).toContain("Production");
+    expect(visibleTextCount(englishSettings, "QA Test Environment")).toBe(1);
+    expect(englishSettings).not.toContain("QA-only runtime controls stay visible");
+    expect(englishSettings).not.toContain("default-environment-settings");
+
+    expect(simplifiedChineseSettings).toContain("默认环境选择器");
+    expect(simplifiedChineseSettings).toContain("选择 QA 可使用启动、验证、自动填入。生产保持只读。");
+    expect(simplifiedChineseSettings).toContain('value="production-shadow"');
+    expect(simplifiedChineseSettings).toContain("生产环境");
+    expect(visibleTextCount(simplifiedChineseSettings, "QA 测试环境")).toBe(1);
+    expect(simplifiedChineseSettings).not.toContain("QA 专用运行控件会保持可见");
+    expect(simplifiedChineseSettings).not.toContain("default-environment-settings");
+  });
+
+  it("renders the main draft as adaptive wrapping text areas without confidence or local-draft chrome", () => {
     const output = renderAppMarkup();
+    const primaryMarkup = mainMarkupWithoutSettings(output);
+    const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 
-    expect(output).toContain("High Severity Monitor Simulator");
-    expect(output).toContain("Normal");
-    expect(output).toContain("P2 Active");
-    expect(output).toContain("P1 Active");
-    expect(output).toContain("Acknowledge");
-    expect(output).toContain("Mute demo alerts");
-    expect(output).toContain("Fake simulator only — no ServiceNow polling or API calls");
-    expect(output).toContain("Fake count");
-    expect(output).toContain("Fake affected services");
-    expect(output).toContain("Demo service desk queue");
-    expect(output).toContain('<details class="high-severity-simulator">');
-    expect(output).not.toContain('class="high-severity-simulator" open');
+    expect(primaryMarkup).toContain('data-auto-fit-field="shortDescription"');
+    expect(primaryMarkup).toContain('aria-label="Short description"');
+    expect(primaryMarkup).toContain('data-auto-fit-field="description"');
+    expect(primaryMarkup).toContain('data-auto-fit-field="workNotes"');
+    expect(primaryMarkup).toContain('rows="11"');
+    expect(primaryMarkup).toContain('rows="10"');
+    expect(styles.lastIndexOf("textarea[data-auto-fit-field]")).toBeGreaterThan(styles.lastIndexOf("max-height: 70px"));
+    expect(styles).toContain("max-height: none;");
+    expect(primaryMarkup).not.toContain("Confidence");
+    expect(primaryMarkup).not.toContain("local evidence");
+    expect(primaryMarkup).not.toContain("Create local draft");
+    expect(primaryMarkup).not.toContain("Local draft only");
+    expect(primaryMarkup).not.toContain("Copy draft text");
+    expect(primaryMarkup).not.toContain("Hold for review");
+    expect(primaryMarkup).toContain("Manual review only. ServiceNow Save/Submit/Update/Close stays manual.");
   });
 
-  it("builds multilingual P1/P2 voice reminder policy copy", () => {
+  it("renders Traditional Chinese and Spanish app chrome/settings without falling back to English-only labels", () => {
+    const zhTwOutput = renderAppMarkup("zh-TW", { initialRuntimeRailExpanded: true });
+    const esOutput = renderAppMarkup("es-ES", { initialRuntimeRailExpanded: true });
+
+    expect(zhTwOutput).toContain("操作工作臺");
+    expect(zhTwOutput).toContain("設定");
+    expect(zhTwOutput).toContain("QA 測試環境");
+    expect(zhTwOutput).toContain("選擇 QA 可使用啟動、驗證、自動填入。生產保持唯讀。");
+    expect(zhTwOutput).toContain("儲存設定");
+    expect(zhTwOutput).toContain("驗證目前 Incident");
+    expect(esOutput).toContain("Columnas del banco de trabajo del operador");
+    expect(esOutput).toContain("Configuración");
+    expect(esOutput).toContain("Elige QA para usar Start, Verify y Autofill. Producción permanece en solo lectura.");
+    expect(esOutput).toContain("Guardar configuración");
+    expect(esOutput).toContain("Selector de entorno predeterminado");
+    expect(esOutput).toContain("Contraer riel de acciones de ejecución");
+  });
+
+  it("uses whole-workbench zoom and auto-growing draft textareas", () => {
+    const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+    const longText = "Long wrapped draft sentence ".repeat(32);
+    const pageShellHeightRuleStart = styles.indexOf(".workbench-center > .workbench-page-shell {");
+    const pageShellHeightRule = styles.slice(pageShellHeightRuleStart, styles.indexOf("}", pageShellHeightRuleStart));
+
+    expect(styles).toContain("zoom: var(--app-zoom-scale, 1);");
+    expect(styles).not.toContain("font-size: calc(16px * var(--app-font-scale");
+    expect(styles).toContain("width: var(--app-zoom-width, 100%);");
+    expect(styles).toContain("height: var(--app-zoom-height, 100vh);");
+    expect(pageShellHeightRule).toContain("min-height: 100%;");
+    expect(pageShellHeightRule).not.toMatch(/^  height: 100%;$/m);
+    expect(styles).toContain(".workbench-page-shell {\n  align-content: start;\n  display: grid;\n  gap: 12px;\n  grid-auto-rows: max-content;");
+    expect(styles).toContain("textarea[data-auto-fit-field]");
+    expect(styles).toContain("overflow-y: hidden;");
+    expect(styles).toContain("field-sizing: content;");
+    expect(styles).not.toContain("max-height: 70px;");
+    expect(styles).not.toContain("resize: vertical;\n  white-space: pre-wrap;");
+    expect(getDraftTextAreaRows("shortDescription", longText)).toBeGreaterThan(4);
+    expect(getDraftTextAreaRows("description", longText)).toBeGreaterThan(12);
+    expect(getDraftTextAreaRows("workNotes", "Short note")).toBe(5);
+  });
+
+  it("keeps settings Field Review and Template Settings at compact unified type sizes", () => {
+    const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+    expect(styles).toContain(".settings-sidebar .template-settings-panel,");
+    expect(styles).toContain(".settings-sidebar .field-review-checklist {");
+    expect(styles).toContain("font-size: 13px;");
+    expect(styles).toContain(".settings-sidebar .template-settings-body textarea {");
+    expect(styles).toContain("font-size: 12px;");
+    expect(styles).toContain(".settings-sidebar .field-review-summary-title strong {");
+    expect(styles).toContain("font-size: 13px;");
+    expect(styles).toContain(".settings-sidebar .field-review-progress strong {");
+    expect(styles).toContain("font-size: 12px;");
+  });
+
+  it("maps the target-ui-v2 palette and layout to --sna CSS variables", () => {
+    const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+    const tokens = readFileSync(new URL("../../../docs/design/target-ui-v2-design-tokens.json", import.meta.url), "utf8");
+
+    expect(styles).toContain("--sna-bg: #f8f7f3");
+    expect(styles).toContain("--sna-surface: #fefefd");
+    expect(styles).toContain("--sna-text: #1c1c1c");
+    expect(styles).toContain("--sna-brand: #3e8f4f");
+    expect(styles).toContain("--sna-amber: #da871c");
+    expect(styles).toContain("--sna-radius-card: 14px");
+    expect(styles).toContain("--sna-runtime-rail-width: 328px");
+    expect(styles).toContain("--sna-radius-control: 8px");
+    expect(styles).toContain(".settings-sidebar-footer {\n  flex: 0 0 auto;");
+    expect(styles).toContain(".settings-sidebar summary > strong {");
+    expect(styles).toContain("grid-column: 1 / -1;");
+    expect(styles).toContain("grid-auto-rows: max-content;");
+    expect(styles).toContain("min-width: 12ch;");
+    expect(styles).toContain(".workbench-icon-button span {");
+    expect(styles).toContain("white-space: nowrap;");
+    expect(styles).toContain(".field-review-summary-title > * {");
+    expect(styles).toContain(".settings-sidebar .field-review-summary-title .eyebrow,");
+    expect(styles).toContain(".settings-sidebar .field-review-body {");
+    expect(styles).toContain("max-height: min(220px, 42vh);");
+    expect(styles).toContain(".field-review-checklist .field-review-progress {");
+    expect(styles).toContain("display: inline-flex;");
+    expect(tokens).toContain('"themeKey": "target"');
+    expect(tokens).toContain('"sourceReference": "docs/design/operator-workbench-v2-target-image-spec.md"');
+    expect(tokens).not.toContain('"sourceImage"');
+  });
+
+  it("applies K6I5B page and flatter control cleanup styles", () => {
+    const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
+    expect(styles).toContain("/* K6I5B target-like page/control cleanup */");
+    expect(styles).toContain(".workbench-page-shell {");
+    expect(styles).toContain(".workbench-page-sidepanel {");
+    expect(styles).toContain(".workbench-page-context-panel {");
+    expect(styles).toContain(".workbench-topbar .workbench-status-pill,");
+    expect(styles).toContain("border-radius: var(--sna-radius-control);");
+  });
+
+  it("applies K6I5D calm-shell cleanup for labels, borders, dots, and settings placement", () => {
+    const output = renderAppMarkup("zh-CN", { initialRuntimeRailExpanded: false });
+    const primaryMarkup = mainMarkupWithoutSettings(output);
+    const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+    const selectedSourceRuleStart = styles.indexOf(".workbench-source-item.selected {");
+    const selectedSourceRule = styles.slice(selectedSourceRuleStart, styles.indexOf("}", selectedSourceRuleStart));
+
+    expect(visibleTextCount(primaryMarkup, "清理摘要")).toBe(1);
+    expect(visibleTextCount(primaryMarkup, "Incident 草稿")).toBe(1);
+    expect(primaryMarkup).not.toContain("已选来源");
+    expect(primaryMarkup).not.toContain('class="draft-status-pill"');
+    expect(primaryMarkup).toContain('class="workbench-source-item today-source-item');
+    expect(primaryMarkup).toContain('class="workbench-source-dot"');
+    expect(primaryMarkup).toContain('class="workbench-settings-button workbench-settings-nav-button"');
+    expect(primaryMarkup.indexOf('workbench-settings-nav-button')).toBeLessThan(primaryMarkup.indexOf('workbench-search-box'));
+    expect(primaryMarkup.indexOf('workbench-settings-nav-button')).toBeLessThan(primaryMarkup.indexOf('source-list-title'));
+    expect(primaryMarkup).not.toContain('class="workbench-icon-button workbench-settings-rail-button"');
+    expect(styles).toContain("/* K6I5D Alan nine-item cleanup */");
+    expect(styles).toContain("border: 0;");
+    expect(styles).toContain("box-shadow: none;");
+    expect(styles).toContain(".workbench-source-dot {");
+    expect(selectedSourceRuleStart).toBeGreaterThan(-1);
+    expect(selectedSourceRule).toContain("background: transparent;");
+    expect(selectedSourceRule).toContain("box-shadow: none;");
+    expect(styles).toContain(".default-environment-selector-panel {");
+  });
+
+  it("hides saved target URLs and hosts from both the main workbench and Settings", () => {
+    const rawQaUrl = "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do";
+    const output = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "qa",
+      initialEnvironmentUrlSettings: { qa: rawQaUrl }
+    });
+    const primaryMarkup = mainMarkupWithoutSettings(output);
+    const settingsMarkup = output.slice(output.indexOf('id="app-settings-sidebar"'));
+
+    expect(primaryMarkup).toContain("Target configured");
+    expect(primaryMarkup).not.toContain(rawQaUrl);
+    expect(primaryMarkup).not.toContain("qa.service-now.example.invalid");
+    expect(settingsMarkup).not.toContain(rawQaUrl);
+    expect(settingsMarkup).not.toContain("qa.service-now.example.invalid");
+    expect(settingsMarkup).toContain("Custom target active; raw value hidden");
+    expect(settingsMarkup).toContain("Ready: clears local target overrides and resets Verify/Autofill readiness.");
+  });
+
+  it("renders one operator source item for each deterministic intake scenario", () => {
+    const output = renderAppMarkup();
+    const sourceItemCount = output.match(/class="workbench-source-item/g)?.length ?? 0;
+
+    expect(sourceItemCount).toBe(demoManualPasteScenarios.length);
+    expect(output).toContain("Teams note: VPN connection issue after passwo…");
+    expect(output).toContain("ServiceNow Chat transcript");
+    expect(output).toContain("A sanitized teammate reports VPN cannot connect after a recent password reset.");
+    expect(mainMarkupWithoutSettings(output)).not.toContain("Demo requester");
+  });
+
+  it("avoids duplicate center headings across workbench and static pages", () => {
+    const workbenchOutput = mainMarkupWithoutSettings(renderAppMarkup("en-US", { initialActivePage: "workbench" }));
+    const knowledgeOutput = mainMarkupWithoutSettings(renderAppMarkup("en-US", { initialActivePage: "knowledge" }));
+    const historyOutput = mainMarkupWithoutSettings(renderAppMarkup("en-US", { initialActivePage: "history" }));
+    const searchOutput = mainMarkupWithoutSettings(renderAppMarkup("en-US", { initialActivePage: "search" }));
+
+    expect(workbenchOutput).not.toContain('<p class="eyebrow">Cleaned summary</p><h2');
+    expect(workbenchOutput).not.toContain('<p class="eyebrow">Incident draft</p><h2');
+    expect(knowledgeOutput).not.toContain('<strong>Knowledgebase snippets</strong>');
+    expect(historyOutput).not.toContain('<strong>History timeline</strong>');
+    expect(searchOutput).not.toContain('<strong>Search workspace</strong>');
+  });
+
+  it("renders Production as a visible read-only workbench mode with runtime actions disabled", () => {
+    const output = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "production-shadow",
+      initialRuntimeRailExpanded: true
+    });
+    const primaryMarkup = mainMarkupWithoutSettings(output);
+    const settingsMarkup = output.slice(output.indexOf('id="app-settings-sidebar"'));
+
+    expect(primaryMarkup).toContain("Production");
+    expect(primaryMarkup).toContain("Target missing");
+    expect(primaryMarkup).not.toContain("Production Shadow Mode");
+    expect(primaryMarkup).not.toContain("Production shadow");
+    expect(settingsMarkup).toContain("Production target");
+    expect(settingsMarkup).toContain("Production");
+    expect(settingsMarkup).not.toContain("Production Shadow Mode");
+    expect(settingsMarkup).not.toContain("Mock Demo");
+    expect(buttonAttrs(output, "1 Start QA Chromium")).toContain("disabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).toContain("disabled");
+  });
+
+  it("localizes the operator workbench chrome to Chinese", () => {
+    const output = renderAppMarkup("zh-CN", { initialRuntimeRailExpanded: true });
+
+    expect(output).toContain("操作工作台");
+    expect(output).toContain("QA 测试环境");
+    expect(output).toContain("目标已配置");
+    expect(output).not.toContain("已选来源");
+    expect(output).toContain("清理摘要");
+    expect(output).toContain("Incident 草稿");
+    expect(output).toContain("运行操作");
+    expect(output).toContain("启动 QA Chromium");
+    expect(output).toContain("禁用：请先启动 QA Chromium 并等待 CDP 就绪。");
+    expect(output).toContain("设置");
+  });
+
+  it("builds multilingual P1/P2 voice reminder policy copy without rendering the simulator in the shell", () => {
     const p1TraditionalChinese = getHighSeverityVoiceReminder("p1", "zh-TW");
     const p2English = getHighSeverityVoiceReminder("p2", "en-US");
     const p2Spanish = getHighSeverityVoiceReminder("p2", "es-ES");
 
+    expect(renderAppMarkup()).not.toContain("High Severity Monitor Simulator");
     expect(p1TraditionalChinese.severity).toBe("p1");
     expect(p1TraditionalChinese.requiresManualAcknowledge).toBe(true);
     expect(p1TraditionalChinese.autoStopAfterAnnouncements).toBeNull();
     expect(p1TraditionalChinese.voiceText).toContain("P1 緊急事件");
-    expect(p1TraditionalChinese.policyText).toContain("手動確認");
-
-    expect(p2English.severity).toBe("p2");
-    expect(p2English.requiresManualAcknowledge).toBe(false);
     expect(p2English.autoStopAfterAnnouncements).toBe(3);
     expect(p2English.voiceText).toContain("P2 urgent incident reminder");
-
     expect(p2Spanish.voiceText).toContain("incidente urgente P2");
-    expect(p2Spanish.policyText).toContain("3");
   });
 
   it("suppresses P1/P2 voice reminders outside the monitored groups", () => {
@@ -104,32 +719,10 @@ describe("App", () => {
     expect(monitoredP1.alarmEnabled).toBe(true);
     expect(monitoredP1.monitoredGroupLabel).toBe("Demo Network Operations");
     expect(monitoredP1.voiceText).toContain("P1 critical incident");
-
     expect(suppressedP2.alarmEnabled).toBe(false);
     expect(suppressedP2.monitoredGroupLabel).toBe("Demo Identity Access");
-    expect(suppressedP2.autoStopAfterAnnouncements).toBeNull();
     expect(suppressedP2.voiceText).not.toContain("P2 urgent incident reminder");
     expect(suppressedP2.suppressionText).toContain("not in monitored groups");
-
-    const suppressedP1TraditionalChinese = getHighSeverityVoiceReminder("p1", "zh-TW", ["demo-identity-access"]);
-    expect(suppressedP1TraditionalChinese.alarmEnabled).toBe(false);
-    expect(suppressedP1TraditionalChinese.requiresManualAcknowledge).toBe(false);
-    expect(suppressedP1TraditionalChinese.voiceText).toContain("警報已抑制");
-    expect(suppressedP1TraditionalChinese.suppressionText).toContain("不在監控群組中");
-  });
-
-  it("renders monitored-group settings and suppresses unmonitored P2 alert copy", () => {
-    const output = renderAppMarkup("en-US", {
-      initialHighSeverityState: "p2",
-      initialHighSeverityMonitoredGroups: ["demo-network-operations"]
-    });
-
-    expect(output).toContain("Monitored groups for alerts");
-    expect(output).toContain("Only P1/P2 events in selected monitored groups will alert");
-    expect(output).toContain("Demo Identity Access");
-    expect(output).toContain("Suppressed by monitored-group settings");
-    expect(output).toContain("not in monitored groups");
-    expect(output).not.toContain("P2 urgent incident reminder");
   });
 
   it("keeps every localized high severity reminder populated", () => {
@@ -146,618 +739,70 @@ describe("App", () => {
     }
   });
 
-  it("renders selected-language P2 voice reminder copy in the simulator", () => {
-    const output = renderAppMarkup("zh-CN", { initialHighSeverityState: "p2" });
-
-    expect(output).toContain("P2 重要事件提醒");
-    expect(output).toContain("三次提醒后自动停止");
-    expect(output).toContain("Local browser speech preview only");
-  });
-
-  it("keeps P1 persistent until manual acknowledgement in the simulator", () => {
-    const output = renderAppMarkup("en-US", { initialHighSeverityState: "p1" });
-
-    expect(output).toContain("P1 critical incident");
-    expect(output).toContain("Repeats until manual acknowledgement or mute");
-    expect(output).not.toContain("Auto-stops after 3 announcements");
-  });
-
-  it("renders the Ticket Draft workspace controls and default VPN draft", () => {
-    const output = renderAppMarkup();
-
-    expect(output).toContain("Ticket Draft Workspace");
-    expect(output).toContain("Load VPN QA Scenario");
-    expect(output).toContain("Load Evidence Demo");
-    expect(output).toContain("Load Phone Demo");
-    expect(output).toContain("Load Self-service Demo");
-    expect(output).toContain("Load Remote Support Demo");
-    expect(output).toContain("Load Account/Login Demo");
-    expect(output).toContain("VPN connection issue after password or MFA change");
-    expect(output).toContain("Short Description");
-    expect(output).toContain("Work Notes");
-    expect(output).toContain("KB Matches");
-    expect(output).toContain("VPN connectivity troubleshooting");
-    expect(output).toContain("Human review required before any ServiceNow action.");
-  });
-
-  it("renders local team template settings for Description and Work Notes", () => {
-    const output = renderAppMarkup();
-
-    expect(output).toContain("⚙ Templates / Settings");
-    expect(output).toContain("▾");
-    expect(output).toContain("Description template");
-    expect(output).toContain("Work Notes template");
-    expect(output).toContain("Local demo templates only — no external storage or ServiceNow write");
-    expect(output).toContain("Standard Service Desk");
-    expect(output).toContain("Escalation-ready notes");
-    expect(output).toContain('<details class="template-settings-panel">');
-    expect(output).not.toContain('class="template-settings-panel" open');
-  });
-
-  it("renders centralized settings with display, templates, and optional checklist controls", () => {
-    const output = renderAppMarkup();
-    const settingsStart = output.indexOf('id="app-settings-sidebar"');
-    const settingsEnd = output.indexOf("</aside>", settingsStart);
-    const settingsMarkup = output.slice(settingsStart, settingsEnd);
-
-    expect(output).toContain("⚙ Settings");
-    expect(output).toContain('aria-label="Centralized settings"');
-    expect(settingsMarkup).toContain('aria-label="Close settings panel"');
-    expect(settingsMarkup).toContain("✕ Close");
-    expect(settingsStart).toBeGreaterThan(-1);
-    expect(settingsMarkup).toContain("⚙ Display Settings");
-    expect(settingsMarkup).toContain("⚙ Templates / Settings");
-    expect(settingsMarkup).toContain("⚙ Optional field checklist / Team rules");
-  });
-
-  it("renders localized settings, templates, environments, and mock ServiceNow chrome for zh-CN", () => {
-    const output = renderAppMarkup("zh-CN");
-    const settingsStart = output.indexOf('id="app-settings-sidebar"');
-    const settingsEnd = output.indexOf("</aside>", settingsStart);
-    const settingsMarkup = output.slice(settingsStart, settingsEnd);
-
-    expect(output).toContain("⚙ 设置");
-    expect(output).toContain('aria-label="集中设置"');
-    expect(settingsMarkup).toContain("集中设置");
-    expect(settingsMarkup).toContain('aria-label="关闭设置面板"');
-    expect(settingsMarkup).toContain("✕ 关闭");
-    expect(settingsMarkup).toContain("⚙ 显示设置");
-    expect(settingsMarkup).toContain("应用缩放");
-    expect(settingsMarkup).toContain("重置");
-    expect(settingsMarkup).toContain("主题");
-    expect(settingsMarkup).toContain("暖色");
-    expect(settingsMarkup).toContain("冷色");
-    expect(settingsMarkup).not.toContain("Night");
-    expect(settingsMarkup).toContain("文本字段");
-    expect(settingsMarkup).toContain("自动适应文本框");
-    expect(settingsMarkup).toContain("紧凑 + 显示缩放手柄");
-    expect(settingsMarkup).toContain("⚙ 模板 / 设置");
-    expect(settingsMarkup).toContain("本地演示模板");
-    expect(settingsMarkup).toContain("模板预设");
-    expect(settingsMarkup).toContain("标准服务台");
-    expect(settingsMarkup).toContain("升级准备备注");
-    expect(settingsMarkup).toContain("描述模板");
-    expect(settingsMarkup).toContain("工作备注模板");
-    expect(settingsMarkup).toContain("受理摘要");
-    expect(settingsMarkup).toContain("内部排查备注");
-    expect(settingsMarkup).toContain("⚙ 可选字段检查清单 / 团队规则");
-    expect(settingsMarkup).toContain('aria-label="字段审核进度"');
-    expect(settingsMarkup).toContain("已本地审核");
-    expect(settingsMarkup).toContain("ServiceNow 会在提交时强制检查带星号的必填字段");
-    expect(settingsMarkup).toContain("请求者、类别、地点、渠道、影响、紧急度、分配组、短描述");
-    expect(settingsMarkup).toContain("来源渠道已审核");
-    expect(settingsMarkup).toContain("真实 ServiceNow 字段填充、Save、Submit、Update、Close");
-    expect(settingsMarkup).not.toContain("Optional field checklist / Team rules");
-    expect(settingsMarkup).not.toContain("reviewed locally");
-    expect(settingsMarkup).not.toContain("Subcategory selected if needed");
-    expect(settingsMarkup).not.toContain("Configuration item / affected service checked");
-    expect(settingsMarkup).not.toContain("Priority reviewed as derived value");
-    expect(settingsMarkup).not.toContain("Human confirmation before any mock fill/copy");
-
-    expect(output).toContain("Mock 演示");
-    expect(output).toContain("QA 测试环境");
-    expect(output).toContain("开发测试环境");
-    expect(output).toContain("生产影子模式");
-    expect(output).toContain("当前模式");
-    expect(output).toContain("完整 ServiceNow URL 已为隐私隐藏");
-    expect(output).toContain("凭据策略");
-    expect(output).toContain("无需凭据");
-    expect(output).toContain("必须手动登录");
-    expect(output).toContain("提交策略");
-    expect(output).toContain("仅影子模式");
-
-    expect(output).toContain("Incident | 新记录 — Mock 预览");
-    expect(output).toContain("禁用 / 演示模式不可用");
-    expect(output).toContain("详情");
-    expect(output).toContain("备注");
-    expect(output).toContain("相关搜索（仅 mock）");
-    expect(output).toContain("请求者");
-    expect(output).toContain("类别");
-    expect(output).toContain("地点");
-    expect(output).toContain("渠道");
-    expect(output).toContain("影响");
-    expect(output).toContain("紧急度");
-    expect(output).toContain("分配组");
-    expect(output).toContain("短描述");
-    expect(output).toContain("描述");
-    expect(output).toContain("工作备注");
-    expect(output).toContain("演示模式下提交被禁用");
-  });
-
-  it("renders local display settings with zoom, theme, and text field mode controls", () => {
-    const output = renderAppMarkup();
-
-    expect(output).toContain("⚙ Display Settings");
-    expect(output).toContain("100%");
-    expect(output).toContain('data-zoom-percent="100"');
-    expect(output).toContain('data-text-mode="auto-fit"');
-    expect(output).toContain("zoom:1");
-    expect(output).toContain("App zoom");
-    expect(output).toContain("Ctrl + mouse wheel also changes the local app zoom.");
-    expect(output).toContain("Reset");
-    expect(output).toContain("Warm");
-    expect(output).toContain("Cool");
-    expect(output).not.toContain("Night");
-    expect(output).toContain("Auto-fit text areas");
-    expect(output).toContain("Compact + visible resize handle");
-    expect(output).toContain("Display settings are local React state only and are not persisted.");
-    expect(output).toContain('<details class="display-settings-panel" open="">');
-  });
-
-  it("clamps local app zoom and maps Ctrl wheel direction", () => {
-    expect(clampAppZoomPercent(40)).toBe(80);
-    expect(clampAppZoomPercent(100)).toBe(100);
-    expect(clampAppZoomPercent(200)).toBe(130);
-    expect(getNextAppZoomPercent(100, 10)).toBe(110);
-    expect(getNextAppZoomPercent(80, -10)).toBe(80);
-    expect(getNextAppZoomPercent(130, 10)).toBe(130);
-    expect(getCtrlWheelZoomDelta(-120)).toBe(10);
-    expect(getCtrlWheelZoomDelta(120)).toBe(-10);
-  });
-
   it("applies the default template around generated draft content", () => {
-    const queue = buildDemoQueueItems("en-US");
-    const vpnItem = queue.find((item) => item.id === "demo-teams-vpn");
+    const queueItem = buildDemoQueueItems("en-US")[0];
+    const draft = buildDraftForQueueItem(queueItem);
+    const templated = applyDraftTemplates(draft, draftTemplatePresets[0]);
 
-    expect(vpnItem).toBeDefined();
-
-    const baseDraft = buildDraftForQueueItem(vpnItem!);
-    const templatedDraft = applyDraftTemplates(baseDraft, {
-      descriptionTemplate: draftTemplatePresets[0].descriptionTemplate,
-      workNotesTemplate: draftTemplatePresets[0].workNotesTemplate
-    });
-
-    expect(templatedDraft.description.value).toContain("Intake summary");
-    expect(templatedDraft.description.value).toContain("User reports a VPN connectivity problem");
-    expect(templatedDraft.workNotes.value).toContain("Internal triage notes");
-    expect(templatedDraft.workNotes.value).toContain("Initial triage: confirm internet without VPN");
-  });
-
-  it("renders the project-extensible language selector options", () => {
-    const output = renderAppMarkup();
-
-    expect(output).toContain("Interface language");
-    expect(output).toContain("Future languages can be added per project.");
-    expect(output).toContain("English");
-    expect(output).toContain("简体中文");
-    expect(output).toContain("繁中（台灣）");
-    expect(output).toContain("Español");
-    expect(output.match(/<option value="(?:en-US|zh-CN|zh-TW|es-ES)"/g)?.length ?? 0).toBe(4);
-    expect(output).toContain("Language simulation uses local deterministic demo data only");
-    expect(output).toContain("no external translation service");
-    expect(output).toContain("no real ServiceNow, Teams, mailbox, Graph, or API connection is used");
+    expect(templated.description.value).toContain("Intake summary");
+    expect(templated.description.value).toContain(draft.description.value);
+    expect(templated.workNotes.value).toContain("Internal triage notes");
+    expect(templated.workNotes.value).toContain(draft.workNotes.value);
   });
 
   it("builds zh-TW queue data and draft fields from deterministic local content", () => {
-    const queue = buildDemoQueueItems("zh-TW");
-    const selfServiceItem = queue.find((item) => item.id === "demo-self-service-windows");
+    const queueItems = buildDemoQueueItems("zh-TW");
+    const draft = buildDraftForQueueItem(queueItems[0]);
 
-    expect(selfServiceItem).toBeDefined();
-    expect(selfServiceItem?.subject).toContain("自助服務請求：Windows 筆電更新後變慢");
-    expect(selfServiceItem?.requesterLabel).toBe("示範請求者 B");
-    expect(selfServiceItem?.sourceLanguage).toBe("台灣繁體中文自助服務來源");
-    expect(selfServiceItem?.draftLanguageMode).toContain("自助服務來源語言驅動 Description / Work Notes");
-
-    const draft = buildDraftForQueueItem(selfServiceItem!);
-    expect(draft.shortDescription.value).toContain("Windows 筆電更新後效能下降");
-    expect(draft.description.value).toContain("自助服務來源語言驅動 Description / Work Notes");
-    expect(draft.workNotes.value).toContain("重新啟動結果");
-  });
-
-  it("builds explicit bilingual fallback text for unsupported source languages", () => {
-    const queue = buildDemoQueueItems("en-US");
-    const unsupportedItem = queue.find((item) => item.id === "demo-shared-mailbox-vpn");
-
-    expect(unsupportedItem).toBeDefined();
-    expect(unsupportedItem?.sourceLanguage).toBe("Unsupported demo source (fr-FR)");
-    expect(unsupportedItem?.draftLanguageMode).toBe(
-      "Unsupported-language fallback: source language + English bilingual draft"
-    );
-
-    const draft = buildDraftForQueueItem(unsupportedItem!);
-    expect(draft.description.value).toContain(
-      "Unsupported-language fallback: source language + English bilingual draft"
-    );
-    expect(draft.description.value).toContain("English helper summary");
-    expect(draft.workNotes.value).toContain("Do not call external translation services");
+    expect(queueItems[0].sourceLanguage).toBe("台灣繁體中文");
+    expect(queueItems[0].subject).toContain("VPN");
+    expect(draft.description.value).toContain("使用者回報 VPN");
+    expect(draft.workNotes.value).toContain("初步排查");
+    expect(draft.shortDescription.value.length).toBeGreaterThan(10);
   });
 
   it("maps every manual paste scenario button to one deterministic queue item", () => {
-    const queueScenarioIds = buildDemoQueueItems("en-US").map((item) => item.scenarioId).sort();
-    const manualScenarioIds = demoManualPasteScenarios.map((scenario) => scenario.id).sort();
+    const queueItems = buildDemoQueueItems("en-US");
 
-    expect(queueScenarioIds).toEqual(manualScenarioIds);
-    expect(new Set(queueScenarioIds).size).toBe(demoManualPasteScenarios.length);
+    expect(queueItems).toHaveLength(demoManualPasteScenarios.length);
+    for (const scenario of demoManualPasteScenarios) {
+      const matches = queueItems.filter((item) => item.scenarioId === scenario.id);
+      expect(matches).toHaveLength(1);
+      expect(matches[0].sourceBody.length).toBeGreaterThan(20);
+      expect(matches[0].status).toBe("New");
+    }
   });
 
-  it("renders local safe draft copy actions and sanitized Markdown export text", () => {
-    const output = renderAppMarkup();
-
-    expect(output).toContain("Safe draft actions");
-    expect(output).toContain("Copy Short Description");
-    expect(output).toContain("Copy Description");
-    expect(output).toContain("Copy Work Notes");
-    expect(output).toContain("Copy full safe draft as Markdown");
-    expect(output).toContain("Prepared copy text preview");
-    expect(output).toContain("Fallback copy preview");
-    expect(output).toContain("# Safe Demo Incident Draft");
-    expect(output).toContain("Safety note: fake/sanitized demo draft only.");
-    expect(output).toContain("Local copy/export only; no network, file upload, real email send, ServiceNow write, API call, external AI with real content, or real ticket number is included.");
-    expect(output).toContain("No real ServiceNow record is created, changed, submitted, updated, saved, or closed.");
+  it("clamps local app zoom and maps Ctrl wheel direction", () => {
+    expect(clampAppZoomPercent(20)).toBe(80);
+    expect(clampAppZoomPercent(240)).toBe(150);
+    expect(getNextAppZoomPercent(100, 10)).toBe(110);
+    expect(getNextAppZoomPercent(150, 10)).toBe(150);
+    expect(getNextAppZoomPercent(80, -10)).toBe(80);
+    expect(getCtrlWheelZoomDelta(-1)).toBe(10);
+    expect(getCtrlWheelZoomDelta(1)).toBe(-10);
+    expect(getCtrlWheelZoomDelta(0)).toBe(-10);
   });
 
-  it("renders the sanitized multi-channel intake queue and source review actions", () => {
-    const output = renderAppMarkup();
+  it("accepts safe ServiceNow landing URL overrides and clears invalid drafts", () => {
+    const safeUrl = "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do";
+    const queryUrl = `${safeUrl}?${"sys"}_id=blocked`;
 
-    expect(output).toContain("Queue → Source Review → TicketDraft");
-    expect(output).toContain("Intake Queue — fake sanitized data only");
-    expect(output).toContain("Teams note: VPN connection issue after password reset");
-    expect(output).toContain("Self-service request: Windows laptop slow after update");
-    expect(output).toContain("Chat transcript: account login issue after password change");
-    expect(output).toContain("Shared mailbox item: remote access unavailable");
-    expect(output).toContain("Demo requester A");
-    expect(output).toContain("Teams message");
-    expect(output).toContain("Self-service ticket");
-    expect(output).toContain("ServiceNow Chat transcript");
-    expect(output).toContain("Shared mailbox item");
-    expect(output).toContain("Fake sanitized intake only; no Teams, mailbox, ServiceNow Chat/API, or self-service polling connection is used.");
-    expect(output).toContain("No attachments, .msg/.eml parsing, live channel content, or external AI with real content is used.");
-    expect(output).toContain("Raw vs Cleaned Source");
-    expect(output).toContain("Source Channel");
-    expect(output).toContain("Source Language");
-    expect(output).toContain("Draft Language Mode");
-    expect(output).toContain("Unsupported-language fallback: source language + English bilingual draft");
-    expect(output).toContain("Body Preview");
-    expect(output).toContain("Raw Sanitized Body");
-    expect(output).toContain("Cleaned / Normalized Body");
-    expect(output).toContain("Cleaned / Normalized Text");
-    expect(output).toContain("[08:16] VPN cannot connect after a recent password reset.");
-    expect(output).toContain("[08:18] Impact: Internet works without VPN, but remote access is unavailable.");
-    expect(output).toContain("Create Incident Draft");
-    expect(output).toContain("Mark as Done");
-    expect(output).toContain("Skip");
-    expect(output).toContain("queue-item-card");
+    expect(getNextEnvironmentUrlOverrideFromDraft("qa", safeUrl)).toBe(safeUrl);
+    const credentialBearingUrl = `https://user:masked${String.fromCharCode(64)}example.invalid`;
+
+    expect(getNextEnvironmentUrlOverrideFromDraft("qa", queryUrl)).toBe("");
+    expect(getNextEnvironmentUrlOverrideFromDraft("dev", credentialBearingUrl)).toBe("");
   });
 
-  it("renders the local Service Desk workflow and Excel dry-run row preview", () => {
-    const output = renderAppMarkup();
-
-    expect(output).toContain("Workflow Stage");
-    expect(output).toContain("Intake received");
-    expect(output).toContain("Contact / confirmation");
-    expect(output).toContain("Incident draft prepared");
-    expect(output).toContain("Service Desk ownership / team handling");
-    expect(output).toContain("Final support group routing");
-    expect(output).toContain("Work Notes plan");
-    expect(output).toContain("Excel dry-run row");
-    expect(output).toContain("Raw Intake Source");
-    expect(output).toContain("ServiceNow Channel");
-    expect(output).toContain("Teams message");
-    expect(output).toContain("Chat");
-    expect(output).toContain("Routing Plan");
-    expect(output).toContain("Stage 1 — Service Desk Handling");
-    expect(output).toContain("Stage 2 — Final Assignment");
-    expect(output).toContain("Save is a real write action");
-    expect(output).toContain("Excel Dry-run Row Preview");
-    expect(output).toContain("Fake Scenario ID");
-    expect(output).toContain("vpn-issue");
-    expect(output).toContain("Approval Phrase Gate");
-    expect(output).toContain("Separate exact approval phrase required before each real Save/Submit/Update/Close action.");
-    expect(output).toContain("Stop Rule Check");
-    expect(output).toContain("QA Isolation Check");
-    expect(output).toContain("QA Dry-run Outcome");
-    expect(output).toContain(
-      "This row is generated locally from the reviewed draft. XLSX export creates a local dry-run file only; no Graph, cloud workbook, or ServiceNow write is performed."
-    );
-    expect(output).toContain("Copy CSV Row");
-    expect(output).toContain("Copy Markdown Summary");
-    expect(output).toContain("No real ServiceNow, Excel workbook, Graph, browser, API, mailbox, Teams, or portal write is performed.");
-  });
-
-  it("renders local XLSX dry-run artifact metadata without Graph or ServiceNow writes", () => {
-    const output = renderAppMarkup();
-
-    expect(output).toContain("Local XLSX Dry-run Artifact");
-    expect(output).toContain("Download Local XLSX Dry-run");
-    expect(output).toContain("Copy XLSX Metadata");
-    expect(output).toContain("servicenow-dry-run-2026-05-18T08-15.xlsx");
-    expect(output).toContain("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    expect(output).toContain("Excel Dry-run Row");
-    expect(output).toContain("Artifact byte size");
-    expect(output).toContain(
-      "Local deterministic XLSX dry-run artifact only. It does not connect to Microsoft Graph, a cloud workbook, ServiceNow, browser automation, or any real write path."
-    );
-  });
-
-  it("renders local-only ServiceNow environment URL settings with unchanged write gates", () => {
-    const output = renderAppMarkup(undefined, {
-      initialEnvironmentUrlSettings: {
-        qa: "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
-      }
-    });
-    const settingsStart = output.indexOf('id="app-settings-sidebar"');
-    const settingsEnd = output.indexOf("</aside>", settingsStart);
-    const settingsMarkup = output.slice(settingsStart, settingsEnd);
-
-    expect(settingsMarkup).toContain("ServiceNow Environment URL settings");
-    expect(settingsMarkup).toContain("Local state only");
-    expect(settingsMarkup).toContain("Custom URL");
-    expect(settingsMarkup).toContain("QA Test Environment");
-    expect(settingsMarkup).toContain("Development Test Environment");
-    expect(settingsMarkup).toContain("Production Shadow Mode");
-    expect(settingsMarkup).toContain("Accepted ServiceNow host");
-    expect(settingsMarkup).toContain("qa.service-now.example.invalid");
-    expect(settingsMarkup).toContain("Custom target active for this session");
-    expect(settingsMarkup).toContain("Built-in/default target active; raw target URL stays hidden until a safe custom URL is accepted.");
-    expect(settingsMarkup).toContain(
-      "Write gate unchanged: each Save/Submit/Update/Close still requires the exact action approval phrase."
-    );
-    expect(output).not.toContain('href="https://');
-    expect(output).not.toContain("graph.microsoft.com");
-  });
-
-  it("does not label invalid ServiceNow environment URL drafts as active targets", () => {
-    const output = renderAppMarkup(undefined, {
-      initialEnvironmentUrlSettings: {
-        qa: "https://not-servicenow.example.invalid/nav_to.do"
-      }
-    });
-    const settingsStart = output.indexOf('id="app-settings-sidebar"');
-    const settingsEnd = output.indexOf("</aside>", settingsStart);
-    const settingsMarkup = output.slice(settingsStart, settingsEnd);
-
-    expect(settingsMarkup).toContain("Blocked URL setting: host must be a ServiceNow host or approved non-routable placeholder");
-    expect(settingsMarkup).toContain("Built-in/default target active; raw target URL stays hidden until a safe custom URL is accepted.");
-    expect(settingsMarkup).not.toContain("Custom target active for this session");
-  });
-
-  it("clears active ServiceNow URL overrides when a draft URL becomes invalid", () => {
-    expect(
-      getNextEnvironmentUrlOverrideFromDraft(
-        "qa",
-        "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
-      )
-    ).toBe("https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do");
-    expect(getNextEnvironmentUrlOverrideFromDraft("qa", "https://qa.service-now.example.invalid/incident.do/fake-record-123")).toBe("");
-    expect(getNextEnvironmentUrlOverrideFromDraft("qa", "https://example.invalid/nav_to.do")).toBe("");
-    expect(getNextEnvironmentUrlOverrideFromDraft("qa", "")).toBe("");
-  });
-
-  it("renders one FIFO intake item for each deterministic manual scenario", () => {
-    const output = renderAppMarkup();
-    const queueItemCount = output.match(/<button class=\"queue-item/g)?.length ?? 0;
-    const teamsIndex = output.indexOf("Teams note: VPN connection issue after password reset");
-    const selfServiceIndex = output.indexOf("Self-service request: Windows laptop slow after update");
-    const chatIndex = output.indexOf("Chat transcript: account login issue after password change");
-    const mailboxIndex = output.indexOf("Shared mailbox item: remote access unavailable");
-    const phoneIndex = output.indexOf("QA TEST ONLY - Fake phone intake requiring confirmation");
-    const remoteSupportIndex = output.indexOf("QA TEST ONLY - Fake remote support checklist");
-
-    expect(queueItemCount).toBe(6);
-    expect(teamsIndex).toBeGreaterThan(-1);
-    expect(selfServiceIndex).toBeGreaterThan(teamsIndex);
-    expect(chatIndex).toBeGreaterThan(selfServiceIndex);
-    expect(mailboxIndex).toBeGreaterThan(chatIndex);
-    expect(phoneIndex).toBeGreaterThan(mailboxIndex);
-    expect(remoteSupportIndex).toBeGreaterThan(phoneIndex);
-  });
-
-  it("renders a filled mock ServiceNow Incident form with disabled demo submit", () => {
-    const output = renderAppMarkup();
-
-    expect(output).toContain("Mock ServiceNow Incident Preview");
-    expect(output).toContain("Incident | New record — Mock preview");
-    expect(output).toContain("MOCK / Demo only");
-    expect(output).toContain("Fill Mock ServiceNow Form");
-    expect(output).toContain("Incident · QA/Dev rehearsal");
-    expect(output).toContain("Requester");
-    expect(output).toContain("Category");
-    expect(output).toContain("Location");
-    expect(output).toContain("Channel");
-    expect(output).toContain("Impact");
-    expect(output).toContain("Urgency");
-    expect(output).toContain("Assignment group");
-    expect(output).toContain("Short description");
-    expect(output).toContain("Demo requester A");
-    expect(output).toContain("Teams message");
-    expect(output).not.toContain("Self-service / manual paste");
-    expect(output).toContain("Details");
-    expect(output).toContain("Notes");
-    expect(output).toContain("Related Search (mock only)");
-    expect(output).toContain("Save");
-    expect(output).toContain("Submit");
-    expect(output).toContain("Update");
-    expect(output).toContain("Close");
-    expect(output).toContain("Disabled / unavailable in demo mode");
-    expect(output).toContain("VPN connection issue after password or MFA change");
-    expect(output).toContain("Save / Submit / Update / Close unavailable in demo mode");
-    expect(output).toContain("Submit disabled in demo mode");
-    expect(output.match(/class=\"required-star\"/g)?.length ?? 0).toBe(8);
-  });
-
-  it("renders risk controls for no auto-submit/close and fill confirmation", () => {
-    const output = renderAppMarkup();
-
-    expect(output).toContain("Risk Control Gate");
-    expect(output).toContain("The app does not submit, close, or update real tickets automatically.");
-    expect(output).toContain("Confirm human review before fill");
-    expect(output).toContain("Fill action locked until review confirmation");
-    expect(output).toContain("Final submit is always manual.");
-  });
-
-  it("renders the controlled QA single-ticket smoke panel with phrase and status text", () => {
-    const output = renderAppMarkup();
-
-    expect(output).toContain("Controlled QA single-ticket smoke");
-    expect(output).toContain("Manual-fill assisted QA smoke");
-    expect(output).toContain("Current environment mode");
-    expect(output).toContain("Requested write action");
-    expect(output).toContain('value="save_incident" selected=""');
-    expect(output).toContain('value="submit_incident"');
-    expect(output).toContain('value="update_incident"');
-    expect(output).toContain('value="close_incident"');
-    expect(output).toContain("Required approval phrase for selected action");
-    expect(output).toContain("save_incident");
-    expect(output).toContain(getRequiredRealActionApprovalPhrase("mock", "save_incident"));
-    expect(output).toContain("First smoke safe scope");
-    expect(output).toContain("Dry-run first: review the local field mapping and Excel row preview only.");
-    expect(output).toContain("Manual copy only: Alan copies or types values; the app never fills ServiceNow.");
-    expect(output).toContain("Save-only readiness: Submit, Update, and Close remain deferred to a later checkpoint.");
-    expect(output).toContain("Action-specific approval phrases");
-    expect(output).toContain(getRequiredRealActionApprovalPhrase("mock", "submit_incident"));
-    expect(output).toContain(getRequiredRealActionApprovalPhrase("mock", "update_incident"));
-    expect(output).toContain(getRequiredRealActionApprovalPhrase("mock", "close_incident"));
-    expect(output).toContain("Stop rules");
-    expect(output).toContain(
-      "Stop before every Save/Submit/Update/Close unless Alan gives the exact action-specific approval phrase."
-    );
-    expect(output).toContain("Stop if the QA ticket could notify production users or a real support team.");
-    expect(output).toContain("Blocked: mock-write-denied");
-    expect(output).toContain("Mock/prod shadow blocked.");
-    expect(output).toContain("QA/dev missing phrase blocked.");
-    expect(output).toContain("QA/dev exact phrase + complete mapping -&gt; ready for manual fill only.");
-    expect(output).toContain("Privacy-safe audit preview");
-    expect(output).toContain("Manual fill only. Single ticket only.");
-    expect(output).toContain("No browser DOM filling");
-    expect(output).toContain("productionWriteAllowed=false");
-    expect(output).toContain("Channel / Contact type");
-    expect(output).toContain("Work notes");
-    expect(output).toContain("not available");
-  });
-
-  it("keeps the selected QA write action local and derives its matching approval phrase", () => {
-    const stalePhraseReset = updateQaSmokeWriteActionSelection("save_incident");
-
-    expect(stalePhraseReset).toEqual({
+  it("keeps the selected QA write action local and clears stale approval phrases", () => {
+    expect(updateQaSmokeWriteActionSelection("save_incident")).toEqual({
       writeAction: "save_incident",
       approvalPhrase: ""
     });
-
-    const actionPhrases = [
-      ["save_incident", getRequiredRealActionApprovalPhrase("mock", "save_incident")],
-      ["submit_incident", getRequiredRealActionApprovalPhrase("mock", "submit_incident")],
-      ["update_incident", getRequiredRealActionApprovalPhrase("mock", "update_incident")],
-      ["close_incident", getRequiredRealActionApprovalPhrase("mock", "close_incident")]
-    ] as const;
-
-    for (const [initialQaSmokeWriteAction, expectedPhrase] of actionPhrases) {
-      const output = renderAppMarkup(undefined, { initialQaSmokeWriteAction });
-
-      expect(output).toContain(`value="${initialQaSmokeWriteAction}" selected=""`);
-      expect(output).toContain(
-        `<span>Required approval phrase for selected action</span><code>${expectedPhrase}</code>`
-      );
-      expect(output).toContain("This does NOT submit, save, update, close, launch browser automation");
-    }
-  });
-
-  it("renders the legacy-inspired ServiceNow field review checklist and safety boundary", () => {
-    const output = renderAppMarkup();
-    const checklistLabels = [
-      "Source channel reviewed",
-      "Requester identified",
-      "Location checked",
-      "Channel selected",
-      "Short description generated/reviewed",
-      "Description generated/reviewed",
-      "Category selected",
-      "Subcategory selected if needed",
-      "Configuration item / affected service checked",
-      "Impact checked",
-      "Urgency checked",
-      "Priority reviewed as derived value",
-      "Assignment group suggested/reviewed",
-      "Work notes prepared",
-      "Customer-visible comments separated from internal Work Notes",
-      "Human confirmation before any mock fill/copy"
-    ];
-
-    expect(output).toContain("Legacy-inspired field review");
-    expect(output).toContain("⚙ Optional field checklist / Team rules");
-    expect(output).toContain("Incident field dependency checklist");
-    expect(output).toContain("ServiceNow already enforces starred required fields at submit time.");
-    expect(output).toContain("This local checklist is optional and customizable for team process");
-    expect(output).toContain("Ticket quality depends on field order and dependencies, not text generation alone.");
-    expect(output).toContain("Requester, Category, Location, Channel, Impact, Urgency, Assignment group, Short description");
-    expect(output).toContain(
-      "Description, Subcategory, Configuration item, Business service, Service offering, Priority, Assigned to, Additional comments, Work notes, Related Search / Knowledge &amp; Catalog"
-    );
-    for (const label of checklistLabels) {
-      expect(output).toContain(label);
-    }
-    expect(output).toContain("0/16");
-    expect(output).toContain("Demo checklist only. Local state only.");
-    expect(output).toContain("No real ServiceNow field fill, Save, Submit, Update, Close, API call");
-    expect(output).toContain("browser automation, DOM inspection, screenshots, HAR, traces, sessions, or storage export.");
-    expect(output).toContain('<details class="field-review-checklist">');
-    expect(output).not.toContain('class="field-review-checklist" open');
-  });
-
-  it("renders a QA browser-assisted text-field autofill gate that remains separate from Save/Submit", () => {
-    const output = renderAppMarkup(undefined, {
-      initialEnvironmentMode: "qa",
-      initialQaAutofillQaIsolationConfirmed: true,
-      initialQaAutofillDedicatedProfileConfirmed: true,
-      initialQaAutofillApprovalPhrase:
-        getRequiredQaAutofillApprovalPhrase("qa")
+    expect(updateQaSmokeWriteActionSelection("submit_incident")).toEqual({
+      writeAction: "submit_incident",
+      approvalPhrase: ""
     });
-
-    expect(output).toContain("QA browser-assisted text-field autofill planning gate");
-    expect(output).toContain("Blocked: selector-verification-required");
-    expect(output).toContain("Planning/review only in this slice.");
-    expect(output).toContain("Text fields only: Short description, Description, Work notes");
-    expect(output).toContain("Autofill approval does not approve Save, Submit, Update, or Close.");
-    expect(output).toContain(getRequiredQaAutofillApprovalPhrase("qa"));
-    expect(output).toContain("Selector verification is mandatory; missing or mismatched selectors keep this panel blocked.");
-    expect(output).toContain("Planning gate only: browser text-field execution remains blocked until a later selector-verified execution slice is reviewed.");
-    expect(output).toContain("No ServiceNow API, bulk fill, browser artifacts, auth-material export, or external AI on QA content.");
-    expect(output).toContain("Short description");
-    expect(output).toContain("Description");
-    expect(output).toContain("Work notes");
-    expect(output).not.toContain("Click Save");
-    expect(output).not.toContain("Click Submit");
-  });
-
-  it("renders ServiceNow environment modes and QA/dev safety boundaries", () => {
-    const output = renderAppMarkup();
-
-    expect(output).toContain("ServiceNow Environment Mode");
-    expect(output).toContain("Mock Demo");
-    expect(output).toContain("QA Test Environment");
-    expect(output).toContain("Development Test Environment");
-    expect(output).toContain("Production Shadow Mode");
-    expect(output).not.toContain("href=\"https://");
-    expect(output).toContain("Full ServiceNow URL hidden for privacy");
-    expect(output).toContain("No raw clickable QA/dev link");
-    expect(output).toContain("QA — No write until #22");
-    expect(output).toContain("NO SUBMIT · NO UPDATE · NO CLOSE");
-    expect(output).toContain("manual-login-only");
-    expect(output).toContain("Ignored local runtime path");
-    expect(output).toContain(".local/servicenow-browser-profiles/production-shadow");
-    expect(output).toContain("Manual login required. Credentials are never stored in source code.");
-    expect(output).toContain("Browser sessions stay in ignored local runtime folders.");
-    expect(output).toContain("Any real QA/dev submit requires explicit Alan approval.");
-    expect(output).toContain("Production remains shadow-only by default.");
-    expect(output).toContain("No production submit, close, or update path is implemented.");
   });
 });

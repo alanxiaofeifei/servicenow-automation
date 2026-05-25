@@ -6,6 +6,7 @@ export * from "./source-cleanup";
 export * from "./real-action-gate";
 export * from "./qa-single-ticket-smoke";
 export * from "./qa-browser-autofill";
+export * from "./qa-incident-defaults";
 export * from "./service-desk-workflow";
 
 export type HumanReviewPolicy = {

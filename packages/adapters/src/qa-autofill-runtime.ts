@@ -9,6 +9,10 @@ import {
   type QaAutofillOperation,
   type QaAutofillPlan,
   type QaAutofillSelectorVerification,
+  type QaIncidentDefaultFieldKey,
+  type QaIncidentDefaultPlannedField,
+  type QaIncidentFormFieldEvidence,
+  type QaIncidentFormFieldType,
   type TicketDraft
 } from "@servicenow-automation/core";
 import {
@@ -65,6 +69,106 @@ export type QaAutofillRuntimePageDriver = {
   fillAllowedTextFields(request: QaAutofillRuntimeFillRequest): Promise<QaAutofillRuntimeFillResult>;
 };
 
+export type QaIncidentFieldRuntimeBlockedReason =
+  | "qa-dev-only"
+  | "cdp-endpoint-denied"
+  | "browser-runtime-error"
+  | "current-page-target-denied";
+
+export type QaIncidentFieldRuntimeInspection = {
+  currentUrl: string;
+  pageFingerprint: string;
+  fields: QaIncidentFormFieldEvidence[];
+};
+
+export type QaIncidentFieldRuntimePageDriver = {
+  inspectIncidentFormFields(): Promise<QaIncidentFieldRuntimeInspection>;
+};
+
+export type QaIncidentFieldRuntimeResult = {
+  status: "verified" | "blocked";
+  blockedReason?: QaIncidentFieldRuntimeBlockedReason;
+  pageFingerprint?: string;
+  fields: QaIncidentFormFieldEvidence[];
+  safety: {
+    browserProcessLaunched: false;
+    browserAutomationCalled: boolean;
+    realServiceNowApiCalled: false;
+    noServiceNowWrite: true;
+    noSaveSubmitUpdateClose: true;
+    artifactsCaptured: false;
+    productionWriteAllowed: false;
+  };
+};
+
+export type QaIncidentDefaultFieldRuntimeFillBlockedReason =
+  | QaIncidentFieldRuntimeBlockedReason
+  | "execute-flag-required"
+  | "plan-not-ready"
+  | "approval-page-fingerprint-required"
+  | "runtime-text-fields-only"
+  | "approval-stale-after-page-change"
+  | "field-control-missing"
+  | "field-control-ambiguous"
+  | "field-option-not-found"
+  | "non-writable-control";
+
+export type QaIncidentDefaultFieldRuntimeFillRequest = {
+  plannedFields: Array<Pick<QaIncidentDefaultPlannedField, "key" | "label" | "value" | "valueLength">>;
+  expectedPageFingerprint?: string;
+  allowedHost: string;
+};
+
+export type QaIncidentDefaultFieldRuntimeFillResult = {
+  status: "completed" | "blocked";
+  blockedReason?: QaIncidentDefaultFieldRuntimeFillBlockedReason;
+  filledFields: Array<{
+    key: QaIncidentDefaultFieldKey;
+    label: string;
+    valueLength: number;
+    value?: never;
+  }>;
+  writeActionsAttempted: false;
+  artifactsCaptured: false;
+  serviceNowApiCalled: false;
+  browserProcessLaunched: false;
+  stoppedBeforeSaveSubmitUpdateClose: true;
+};
+
+export type QaIncidentDefaultFieldAutofillRuntimeResult = {
+  status: "verified" | "completed" | "blocked";
+  blockedReason?: QaIncidentDefaultFieldRuntimeFillBlockedReason;
+  pageFingerprint?: string;
+  pageFingerprintMatched: boolean;
+  filledFields: QaIncidentDefaultFieldRuntimeFillResult["filledFields"];
+  safety: {
+    browserProcessLaunched: false;
+    browserAutomationCalled: boolean;
+    realServiceNowApiCalled: false;
+    noServiceNowWrite: true;
+    noSaveSubmitUpdateClose: true;
+    artifactsCaptured: false;
+    productionWriteAllowed: false;
+  };
+};
+
+export type QaIncidentDefaultFieldAutofillRuntimePageDriver = QaIncidentFieldRuntimePageDriver & {
+  fillIncidentDefaultFields(request: QaIncidentDefaultFieldRuntimeFillRequest): Promise<QaIncidentDefaultFieldRuntimeFillResult>;
+};
+
+export type RunQaIncidentFieldInspectionRuntimeRequest = {
+  environment: ServiceNowEnvironmentConfig;
+  driver?: QaIncidentFieldRuntimePageDriver;
+};
+
+export type RunQaIncidentDefaultFieldAutofillRuntimeRequest = {
+  environment: ServiceNowEnvironmentConfig;
+  driver?: QaIncidentDefaultFieldAutofillRuntimePageDriver;
+  plannedFields: QaIncidentDefaultFieldRuntimeFillRequest["plannedFields"];
+  execute: boolean;
+  approvalPageFingerprint?: string;
+};
+
 export type QaAutofillRuntimeResult = {
   status: "verified" | "completed" | "blocked";
   blockedReason?: QaAutofillRuntimeBlockedReason | QaAutofillPlan["blockedReason"];
@@ -97,7 +201,14 @@ export type RunQaTextFieldAutofillRuntimeRequest = {
 
 export type CdpQaAutofillRuntimePageDriverOptions = {
   endpoint: string;
+  targetUrl?: string;
 };
+
+const QA_INCIDENT_DEFAULT_RUNTIME_TEXT_FIELD_KEYS = new Set<QaIncidentDefaultFieldKey>([
+  "shortDescription",
+  "description",
+  "workNotes"
+]);
 
 export async function runQaTextFieldAutofillRuntime(
   request: RunQaTextFieldAutofillRuntimeRequest
@@ -238,7 +349,7 @@ export function createCdpQaAutofillRuntimePageDriver(
   validateLocalCdpEndpoint(options.endpoint);
   return {
     async inspectAllowedTextFields(descriptors) {
-      return withCdpClient(options.endpoint, (client) =>
+      return withCdpClient(options.endpoint, options.targetUrl, (client) =>
         client.evaluate<QaAutofillRuntimeInspection>(buildInspectionExpression(descriptors))
       );
     },
@@ -246,11 +357,157 @@ export function createCdpQaAutofillRuntimePageDriver(
       if (request.operations.some((operation) => operation.kind !== "fill-text")) {
         return blockedFillResult("plan-not-ready");
       }
-      return withCdpClient(options.endpoint, (client) =>
+      return withCdpClient(options.endpoint, options.targetUrl, (client) =>
         client.evaluate<QaAutofillRuntimeFillResult>(buildFillExpression(request))
       );
     }
   };
+}
+
+export function createCdpQaIncidentFieldInspectionRuntimePageDriver(
+  options: CdpQaAutofillRuntimePageDriverOptions
+): QaIncidentFieldRuntimePageDriver {
+  validateLocalCdpEndpoint(options.endpoint);
+  return {
+    async inspectIncidentFormFields() {
+      return withCdpClient(options.endpoint, options.targetUrl, (client) =>
+        client.evaluate<QaIncidentFieldRuntimeInspection>(buildIncidentFieldInspectionExpression())
+      );
+    }
+  };
+}
+
+export function createCdpQaIncidentDefaultFieldAutofillRuntimePageDriver(
+  options: CdpQaAutofillRuntimePageDriverOptions
+): QaIncidentDefaultFieldAutofillRuntimePageDriver {
+  validateLocalCdpEndpoint(options.endpoint);
+  return {
+    async inspectIncidentFormFields() {
+      return withCdpClient(options.endpoint, options.targetUrl, (client) =>
+        client.evaluate<QaIncidentFieldRuntimeInspection>(buildIncidentFieldInspectionExpression())
+      );
+    },
+    async fillIncidentDefaultFields(request) {
+      return withCdpClient(options.endpoint, options.targetUrl, (client) =>
+        client.evaluate<QaIncidentDefaultFieldRuntimeFillResult>(buildIncidentDefaultFieldFillExpression(request))
+      );
+    }
+  };
+}
+
+export async function runQaIncidentDefaultFieldAutofillRuntime(
+  request: RunQaIncidentDefaultFieldAutofillRuntimeRequest
+): Promise<QaIncidentDefaultFieldAutofillRuntimeResult> {
+  const preflightReason = incidentFieldRuntimePreflightBlockedReason(request.environment);
+  if (preflightReason) {
+    return blockedDefaultFieldAutofillRuntimeResult(preflightReason, false);
+  }
+  if (!request.driver) {
+    return blockedDefaultFieldAutofillRuntimeResult("cdp-endpoint-denied", false);
+  }
+  if (request.plannedFields.length === 0) {
+    return blockedDefaultFieldAutofillRuntimeResult("plan-not-ready", false);
+  }
+  if (!request.plannedFields.every((field) => QA_INCIDENT_DEFAULT_RUNTIME_TEXT_FIELD_KEYS.has(field.key))) {
+    return blockedDefaultFieldAutofillRuntimeResult("runtime-text-fields-only", false);
+  }
+  if (request.execute && !request.approvalPageFingerprint?.trim()) {
+    return blockedDefaultFieldAutofillRuntimeResult("approval-page-fingerprint-required", false);
+  }
+
+  let inspection: QaIncidentFieldRuntimeInspection;
+  try {
+    inspection = await request.driver.inspectIncidentFormFields();
+  } catch {
+    return blockedDefaultFieldAutofillRuntimeResult("browser-runtime-error", true);
+  }
+
+  const targetValidation = validateRuntimeCurrentPageTarget(request.environment, inspection.currentUrl);
+  if (!targetValidation.allowed || !targetValidation.allowedHost) {
+    return blockedDefaultFieldAutofillRuntimeResult("current-page-target-denied", true);
+  }
+
+  if (!request.execute) {
+    return {
+      status: "verified",
+      pageFingerprint: inspection.pageFingerprint,
+      pageFingerprintMatched: false,
+      filledFields: [],
+      safety: defaultFieldAutofillRuntimeSafety(true)
+    };
+  }
+
+  const expectedPageFingerprint = request.approvalPageFingerprint?.trim();
+  if (!expectedPageFingerprint) {
+    return blockedDefaultFieldAutofillRuntimeResult("approval-page-fingerprint-required", true);
+  }
+  if (expectedPageFingerprint !== inspection.pageFingerprint) {
+    return blockedDefaultFieldAutofillRuntimeResult("approval-stale-after-page-change", true);
+  }
+
+  let execution: QaIncidentDefaultFieldRuntimeFillResult;
+  try {
+    execution = await request.driver.fillIncidentDefaultFields({
+      plannedFields: request.plannedFields,
+      expectedPageFingerprint,
+      allowedHost: targetValidation.allowedHost
+    });
+  } catch {
+    execution = blockedDefaultFieldFillResult("browser-runtime-error");
+  }
+
+  return {
+    status: execution.status,
+    blockedReason: execution.blockedReason,
+    pageFingerprint: undefined,
+    pageFingerprintMatched: execution.status === "completed",
+    filledFields: execution.filledFields,
+    safety: defaultFieldAutofillRuntimeSafety(true)
+  };
+}
+
+export async function inspectQaIncidentDefaultFieldsRuntime(
+  request: RunQaIncidentFieldInspectionRuntimeRequest
+): Promise<QaIncidentFieldRuntimeResult> {
+  const preflightReason = incidentFieldRuntimePreflightBlockedReason(request.environment);
+  if (preflightReason) {
+    return blockedIncidentFieldRuntimeResult(preflightReason, false);
+  }
+  if (!request.driver) {
+    return blockedIncidentFieldRuntimeResult("cdp-endpoint-denied", false);
+  }
+
+  let inspection: QaIncidentFieldRuntimeInspection;
+  try {
+    inspection = await request.driver.inspectIncidentFormFields();
+  } catch {
+    return blockedIncidentFieldRuntimeResult("browser-runtime-error", true);
+  }
+
+  const targetValidation = validateRuntimeCurrentPageTarget(request.environment, inspection.currentUrl);
+  if (!targetValidation.allowed) {
+    return blockedIncidentFieldRuntimeResult("current-page-target-denied", true, inspection.pageFingerprint);
+  }
+
+  return {
+    status: "verified",
+    pageFingerprint: inspection.pageFingerprint,
+    fields: inspection.fields,
+    safety: incidentFieldRuntimeSafety(true)
+  };
+}
+
+function incidentFieldRuntimePreflightBlockedReason(
+  environment: ServiceNowEnvironmentConfig
+): QaIncidentFieldRuntimeBlockedReason | undefined {
+  if (environment.mode !== "qa" && environment.mode !== "dev") {
+    return "qa-dev-only";
+  }
+  const configuredTargetValidation = validateServiceNowTargetUrl(environment, environment.url);
+  if (!configuredTargetValidation.allowed || !configuredTargetValidation.allowedHost) {
+    return "current-page-target-denied";
+  }
+  return undefined;
 }
 
 function runtimePreflightBlockedReason(environment: ServiceNowEnvironmentConfig): QaAutofillRuntimeBlockedReason | undefined {
@@ -273,6 +530,20 @@ function blockedRuntimeResult(
     blockedReason,
     pageFingerprintMatched: false,
     safety: runtimeSafety(browserAutomationCalled)
+  };
+}
+
+function blockedIncidentFieldRuntimeResult(
+  blockedReason: QaIncidentFieldRuntimeBlockedReason,
+  browserAutomationCalled: boolean,
+  pageFingerprint?: string
+): QaIncidentFieldRuntimeResult {
+  return {
+    status: "blocked",
+    blockedReason,
+    pageFingerprint,
+    fields: [],
+    safety: incidentFieldRuntimeSafety(browserAutomationCalled)
   };
 }
 
@@ -357,6 +628,61 @@ function runtimeSafety(browserAutomationCalled: boolean): QaAutofillRuntimeResul
   };
 }
 
+function incidentFieldRuntimeSafety(browserAutomationCalled: boolean): QaIncidentFieldRuntimeResult["safety"] {
+  return {
+    browserProcessLaunched: false,
+    browserAutomationCalled,
+    realServiceNowApiCalled: false,
+    noServiceNowWrite: true,
+    noSaveSubmitUpdateClose: true,
+    artifactsCaptured: false,
+    productionWriteAllowed: false
+  };
+}
+
+function defaultFieldAutofillRuntimeSafety(
+  browserAutomationCalled: boolean
+): QaIncidentDefaultFieldAutofillRuntimeResult["safety"] {
+  return {
+    browserProcessLaunched: false,
+    browserAutomationCalled,
+    realServiceNowApiCalled: false,
+    noServiceNowWrite: true,
+    noSaveSubmitUpdateClose: true,
+    artifactsCaptured: false,
+    productionWriteAllowed: false
+  };
+}
+
+function blockedDefaultFieldAutofillRuntimeResult(
+  blockedReason: QaIncidentDefaultFieldRuntimeFillBlockedReason,
+  browserAutomationCalled: boolean
+): QaIncidentDefaultFieldAutofillRuntimeResult {
+  return {
+    status: "blocked",
+    blockedReason,
+    pageFingerprint: undefined,
+    pageFingerprintMatched: false,
+    filledFields: [],
+    safety: defaultFieldAutofillRuntimeSafety(browserAutomationCalled)
+  };
+}
+
+function blockedDefaultFieldFillResult(
+  blockedReason: QaIncidentDefaultFieldRuntimeFillBlockedReason
+): QaIncidentDefaultFieldRuntimeFillResult {
+  return {
+    status: "blocked",
+    blockedReason,
+    filledFields: [],
+    writeActionsAttempted: false,
+    artifactsCaptured: false,
+    serviceNowApiCalled: false,
+    browserProcessLaunched: false,
+    stoppedBeforeSaveSubmitUpdateClose: true
+  };
+}
+
 function blockedFillResult(blockedReason: QaAutofillRuntimeBlockedReason): QaAutofillRuntimeFillResult {
   return {
     status: "blocked",
@@ -370,8 +696,8 @@ function blockedFillResult(blockedReason: QaAutofillRuntimeBlockedReason): QaAut
   };
 }
 
-async function withCdpClient<T>(endpoint: string, callback: (client: CdpClient) => Promise<T>): Promise<T> {
-  const webSocketUrl = await resolveCdpPageWebSocketUrl(endpoint);
+async function withCdpClient<T>(endpoint: string, targetUrl: string | undefined, callback: (client: CdpClient) => Promise<T>): Promise<T> {
+  const webSocketUrl = await resolveCdpPageWebSocketUrl(endpoint, targetUrl);
   const client = await CdpClient.connect(webSocketUrl);
   try {
     return await callback(client);
@@ -380,7 +706,9 @@ async function withCdpClient<T>(endpoint: string, callback: (client: CdpClient) 
   }
 }
 
-async function resolveCdpPageWebSocketUrl(endpoint: string): Promise<string> {
+type CdpPageTarget = { type?: string; url?: string; webSocketDebuggerUrl?: string };
+
+async function resolveCdpPageWebSocketUrl(endpoint: string, targetUrl?: string): Promise<string> {
   const url = new URL(endpoint);
   if (url.protocol === "ws:" || url.protocol === "wss:") {
     validateLocalCdpEndpoint(endpoint);
@@ -392,14 +720,91 @@ async function resolveCdpPageWebSocketUrl(endpoint: string): Promise<string> {
   if (!response.ok) {
     throw new Error("Unable to inspect the local browser debugging endpoint.");
   }
-  const pages = (await response.json()) as Array<{ type?: string; url?: string; webSocketDebuggerUrl?: string }>;
+  const pages = (await response.json()) as CdpPageTarget[];
   const pageTargets = pages.filter((page) => page.type === "page" && page.webSocketDebuggerUrl);
-  if (pageTargets.length !== 1) {
-    throw new Error("Expected exactly one local browser page target for QA autofill runtime.");
+  const selectedTarget = selectCdpPageTarget(pageTargets, targetUrl);
+  if (!selectedTarget?.webSocketDebuggerUrl) {
+    throw new Error("Unable to select a single current browser page target for QA verify-only inspection.");
   }
-  const webSocketUrl = pageTargets[0].webSocketDebuggerUrl as string;
+  const webSocketUrl = selectedTarget.webSocketDebuggerUrl;
   validateLocalCdpEndpoint(webSocketUrl);
   return webSocketUrl;
+}
+
+function selectCdpPageTarget(pageTargets: CdpPageTarget[], targetUrl?: string): CdpPageTarget | undefined {
+  if (pageTargets.length === 1) return pageTargets[0];
+
+  const configuredHost = hostFromTargetUrl(targetUrl);
+  if (configuredHost) {
+    const configuredHostTargets = pageTargets.filter((target) => pageTargetMatchesHost(target, configuredHost));
+    const configuredIncidentTargets = configuredHostTargets.filter(isLikelyIncidentPageTarget);
+    const configuredIncidentTarget = single(configuredIncidentTargets);
+    if (configuredIncidentTarget) return configuredIncidentTarget;
+    const configuredHostTarget = single(configuredHostTargets);
+    if (configuredHostTarget) return configuredHostTarget;
+    return undefined;
+  }
+
+  const inspectableTargets = pageTargets.filter(isInspectablePageTarget);
+  return single(inspectableTargets);
+}
+
+function hostFromTargetUrl(targetUrl?: string): string | undefined {
+  if (!targetUrl?.trim()) return undefined;
+  try {
+    const url = new URL(targetUrl);
+    if (url.protocol !== "https:" || url.username || url.password) return undefined;
+    return url.host.toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
+function pageTargetMatchesHost(target: CdpPageTarget, host: string): boolean {
+  const url = parsePageTargetUrl(target.url);
+  return Boolean(url && url.protocol === "https:" && !url.username && !url.password && url.host.toLowerCase() === host);
+}
+
+function isInspectablePageTarget(target: CdpPageTarget): boolean {
+  const url = parsePageTargetUrl(target.url);
+  if (!url) return false;
+  if (["about:", "chrome:", "devtools:", "edge:"].includes(url.protocol)) return false;
+  return url.protocol === "https:" || url.protocol === "http:";
+}
+
+function isLikelyIncidentPageTarget(target: CdpPageTarget): boolean {
+  const url = parsePageTargetUrl(target.url);
+  if (!url) return false;
+  const decodedLocation = decodeForTargetSelection(`${url.pathname}${url.search}`);
+  return decodedLocation.toLowerCase().includes("incident.do");
+}
+
+function parsePageTargetUrl(value?: string): URL | undefined {
+  if (!value?.trim()) return undefined;
+  try {
+    return new URL(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function decodeForTargetSelection(value: string): string {
+  let current = value;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    if (!current.includes("%")) break;
+    try {
+      const decoded = decodeURIComponent(current);
+      if (decoded === current) break;
+      current = decoded;
+    } catch {
+      break;
+    }
+  }
+  return current;
+}
+
+function single<T>(items: T[]): T | undefined {
+  return items.length === 1 ? items[0] : undefined;
 }
 
 function validateLocalCdpEndpoint(endpoint: string): void {
@@ -496,6 +901,26 @@ function buildInspectionExpression(descriptors: QaAutofillFieldDescriptor[]): st
   return `(${inspectionScript})(${JSON.stringify(descriptors)})`;
 }
 
+function buildIncidentFieldInspectionExpression(): string {
+  return `(${incidentFieldInspectionScript})()`;
+}
+
+function buildIncidentDefaultFieldFillExpression(request: QaIncidentDefaultFieldRuntimeFillRequest): string {
+  const sanitizedRequest = {
+    plannedFields: request.plannedFields.map((field) => ({
+      key: field.key,
+      label: field.label,
+      value: field.value,
+      valueLength: field.valueLength
+    })),
+    expectedPageFingerprint: request.expectedPageFingerprint,
+    allowedHost: request.allowedHost.toLowerCase()
+  };
+  return `(${incidentDefaultFieldFillScript})(${JSON.stringify(sanitizedRequest)}, ${JSON.stringify(
+    incidentFieldInspectionScript.toString()
+  )})`;
+}
+
 function buildFillExpression(request: QaAutofillRuntimeFillRequest): string {
   const sanitizedRequest = {
     operations: request.operations.map((operation) => ({
@@ -517,17 +942,526 @@ function buildFillExpression(request: QaAutofillRuntimeFillRequest): string {
   return `(${fillScript})(${JSON.stringify(sanitizedRequest)})`;
 }
 
+const incidentDefaultFieldFillScript = async (
+  request: {
+    plannedFields: Array<{ key: QaIncidentDefaultFieldKey; label: string; value: string; valueLength: number }>;
+    expectedPageFingerprint?: string;
+    allowedHost: string;
+  },
+  inspectionScriptSource: string
+): Promise<QaIncidentDefaultFieldRuntimeFillResult> => {
+  if (!request.plannedFields.every((field) => isRuntimeTextOnlyDefaultField(field.key))) {
+    return blocked("runtime-text-fields-only");
+  }
+  const expectedPageFingerprint = request.expectedPageFingerprint?.trim();
+  if (!expectedPageFingerprint) {
+    return blocked("approval-page-fingerprint-required");
+  }
+
+  const inspect = (0, eval)(`(${inspectionScriptSource})`) as () => Promise<QaIncidentFieldRuntimeInspection>;
+  const inspection = await inspect();
+  if (!currentPageTargetAllowed(request.allowedHost)) {
+    return blocked("current-page-target-denied");
+  }
+  if (inspection.pageFingerprint !== expectedPageFingerprint) {
+    return blocked("approval-stale-after-page-change");
+  }
+
+  const documents = collectSameOriginDocuments();
+  const filledFields: QaIncidentDefaultFieldRuntimeFillResult["filledFields"] = [];
+
+  for (const field of request.plannedFields) {
+    const control = findIncidentControl(documents, field.key, field.label);
+    if (!control) return blocked("field-control-missing");
+    if (control.ambiguous) return blocked("field-control-ambiguous");
+    if (!runtimeTextControlMatches(control.element, field.key)) return blocked("runtime-text-fields-only");
+    if (!isWritable(control.element)) return blocked("non-writable-control");
+    const fillStatus = fillControl(control.element, field.key, field.value);
+    if (fillStatus !== "ok") return blocked(fillStatus);
+    filledFields.push({
+      key: field.key,
+      label: field.label,
+      valueLength: field.value.length
+    });
+  }
+
+  return {
+    status: "completed",
+    filledFields,
+    writeActionsAttempted: false,
+    artifactsCaptured: false,
+    serviceNowApiCalled: false,
+    browserProcessLaunched: false,
+    stoppedBeforeSaveSubmitUpdateClose: true
+  };
+
+  function blocked(blockedReason: QaIncidentDefaultFieldRuntimeFillBlockedReason): QaIncidentDefaultFieldRuntimeFillResult {
+    return {
+      status: "blocked",
+      blockedReason,
+      filledFields: [],
+      writeActionsAttempted: false,
+      artifactsCaptured: false,
+      serviceNowApiCalled: false,
+      browserProcessLaunched: false,
+      stoppedBeforeSaveSubmitUpdateClose: true
+    };
+  }
+
+  function currentPageTargetAllowed(allowedHost: string): boolean {
+    if (!allowedHost) return false;
+    try {
+      const current = new URL(globalThis.location.href);
+      return current.protocol === "https:" && !current.username && !current.password && current.host.toLowerCase() === allowedHost.toLowerCase();
+    } catch {
+      return false;
+    }
+  }
+
+  function collectSameOriginDocuments(): Document[] {
+    const docs: Document[] = [globalThis.document];
+    const visit = (win: Window) => {
+      for (const frame of Array.from(win.frames)) {
+        try {
+          const doc = frame.document;
+          docs.push(doc);
+          visit(frame);
+        } catch {
+          // Cross-origin frames are ignored. Editable ServiceNow form controls must be same-origin.
+        }
+      }
+    };
+    visit(globalThis.window);
+    return docs;
+  }
+
+  function findIncidentControl(
+    docs: Document[],
+    key: QaIncidentDefaultFieldKey,
+    label: string
+  ): { element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement; ambiguous: boolean } | null {
+    const scored: Array<{ element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement; score: number }> = [];
+    for (const doc of docs) {
+      for (const element of Array.from(doc.querySelectorAll("input, textarea, select"))) {
+        if (!isIncidentControlElement(element)) continue;
+        if (!isVisibleElement(element)) continue;
+        const score = scoreControl(element, key, label);
+        if (score > 0) scored.push({ element, score });
+      }
+    }
+    if (scored.length === 0) return null;
+    scored.sort((left, right) => right.score - left.score);
+    const bestScore = scored[0].score;
+    const best = scored.filter((candidate) => candidate.score === bestScore);
+    if (best.length > 1 && bestScore < 120) return { element: best[0].element, ambiguous: true };
+    return { element: best[0].element, ambiguous: false };
+  }
+
+  function scoreControl(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, key: QaIncidentDefaultFieldKey, label: string): number {
+    const candidates = fieldIdentityCandidates(key);
+    const name = normalizeIdentity(element.getAttribute("name") ?? "");
+    const id = normalizeIdentity(element.getAttribute("id") ?? "");
+    const aria = normalizeText(element.getAttribute("aria-label") ?? "");
+    const title = normalizeText(element.getAttribute("title") ?? "");
+    const associated = normalizeText(associatedLabelText(element));
+    const canonical = normalizeText(label);
+    let score = 0;
+    for (const candidate of candidates) {
+      if (name === candidate || id === candidate) score = Math.max(score, 140);
+      if (name === `sys_display.${candidate}` || id === `sys_display.${candidate}`) score = Math.max(score, 135);
+      if (name.endsWith(`.${candidate}`) || id.endsWith(`.${candidate}`)) score = Math.max(score, 120);
+      const suffix = candidate.split(".").pop() ?? candidate;
+      if (name.endsWith(`.${suffix}`) || id.endsWith(`.${suffix}`)) score = Math.max(score, 110);
+    }
+    if (canonical && (associated === canonical || aria === canonical || title === canonical)) score = Math.max(score, 90);
+    if (canonical && (associated.includes(canonical) || aria.includes(canonical) || title.includes(canonical))) score = Math.max(score, 70);
+    if (!preferredElementTypeMatches(element, key)) score -= 40;
+    if (isInputControl(element) && element.type === "hidden") return 0;
+    return score;
+  }
+
+  function fillControl(
+    element: HTMLInputElement | HTMLTextAreaElement,
+    key: QaIncidentDefaultFieldKey,
+    value: string
+  ): "ok" | "field-option-not-found" {
+    setNativeTextValue(element, value);
+    dispatchFieldEvents(element);
+    if (isReferenceField(key)) {
+      element.dispatchEvent(new Event("blur", { bubbles: true }));
+    }
+    return "ok";
+  }
+
+  function setNativeTextValue(element: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+    const ownerWindow = element.ownerDocument.defaultView;
+    const prototype = isTextAreaControl(element)
+      ? (ownerWindow?.HTMLTextAreaElement ?? HTMLTextAreaElement).prototype
+      : (ownerWindow?.HTMLInputElement ?? HTMLInputElement).prototype;
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+    if (descriptor?.set) {
+      descriptor.set.call(element, value);
+    } else {
+      element.value = value;
+    }
+  }
+
+  function dispatchFieldEvents(element: HTMLElement): void {
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function isWritable(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): boolean {
+    if (isInputControl(element) || isTextAreaControl(element)) {
+      return !element.disabled && !element.readOnly && element.getAttribute("aria-disabled") !== "true";
+    }
+    return !element.disabled && element.getAttribute("aria-disabled") !== "true";
+  }
+
+  function isVisibleElement(element: Element): boolean {
+    try {
+      const rect = element.getBoundingClientRect();
+      const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style?.display !== "none" && style?.visibility !== "hidden";
+    } catch {
+      return false;
+    }
+  }
+
+  function associatedLabelText(element: Element): string {
+    const doc = element.ownerDocument;
+    const id = element.getAttribute("id") ?? "";
+    const directLabel = id ? doc.querySelector(`label[for="${escapeAttributeSelectorValue(id)}"]`)?.textContent ?? "" : "";
+    const container = element.closest(".form-group, .form-field, .sn-form-field, .control, tr, td, div");
+    const containerLabel = container?.querySelector("label, .label, .control-label, .form-control-label")?.textContent ?? "";
+    return cleanLabelText(directLabel || containerLabel);
+  }
+
+  function cleanLabelText(text: string): string {
+    return text.replace(/[\\n\\r\\t]+/g, " ").replace(/\s+/g, " ").replace(/^\*\s*/, "").trim();
+  }
+
+  function escapeAttributeSelectorValue(value: string): string {
+    return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  }
+
+  function normalizeIdentity(value: string): string {
+    return value.trim().toLowerCase().replace(/^sys_display\./, "sys_display.");
+  }
+
+  function normalizeText(value: string): string {
+    return value.replace(/[\\n\\r\\t]+/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+  }
+
+  function fieldIdentityCandidates(key: QaIncidentDefaultFieldKey): string[] {
+    const map: Record<QaIncidentDefaultFieldKey, string[]> = {
+      requester: ["incident.caller_id", "incident.opened_for", "incident.requested_for"],
+      category: ["incident.category"],
+      subcategory: ["incident.subcategory"],
+      location: ["incident.location"],
+      channel: ["incident.contact_type", "incident.u_channel", "incident.channel"],
+      impact: ["incident.impact"],
+      urgency: ["incident.urgency"],
+      assignmentGroup: ["incident.assignment_group"],
+      assignedTo: ["incident.assigned_to"],
+      state: ["incident.state"],
+      shortDescription: ["incident.short_description"],
+      description: ["incident.description"],
+      workNotes: ["incident.work_notes"]
+    };
+    return map[key];
+  }
+
+  function isRuntimeTextOnlyDefaultField(key: QaIncidentDefaultFieldKey): boolean {
+    return key === "shortDescription" || key === "description" || key === "workNotes";
+  }
+
+  function preferredElementTypeMatches(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, key: QaIncidentDefaultFieldKey): boolean {
+    if (key === "shortDescription") return isTextInputControl(element);
+    if (key === "description" || key === "workNotes") return isTextAreaControl(element);
+    return false;
+  }
+
+  function runtimeTextControlMatches(
+    element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+    key: QaIncidentDefaultFieldKey
+  ): element is HTMLInputElement | HTMLTextAreaElement {
+    if (key === "shortDescription") return isTextInputControl(element);
+    if (key === "description" || key === "workNotes") return isTextAreaControl(element);
+    return false;
+  }
+
+  function isIncidentControlElement(element: Element): element is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
+    return isInputControl(element) || isTextAreaControl(element) || isSelectControl(element);
+  }
+
+  function isInputControl(element: Element): element is HTMLInputElement {
+    return element.tagName.toLowerCase() === "input";
+  }
+
+  function isTextAreaControl(element: Element): element is HTMLTextAreaElement {
+    return element.tagName.toLowerCase() === "textarea";
+  }
+
+  function isSelectControl(element: Element): element is HTMLSelectElement {
+    return element.tagName.toLowerCase() === "select";
+  }
+
+  function isTextInputControl(element: Element): element is HTMLInputElement {
+    if (!isInputControl(element)) return false;
+    const type = (element.getAttribute("type") || element.type || "text").toLowerCase();
+    return ["", "text", "search", "email", "url", "tel"].includes(type);
+  }
+
+  function isReferenceField(key: QaIncidentDefaultFieldKey): boolean {
+    return ["requester", "location", "assignmentGroup", "assignedTo"].includes(key);
+  }
+};
+
+const incidentFieldInspectionScript = async (): Promise<QaIncidentFieldRuntimeInspection> => {
+  const documents = collectSameOriginDocuments();
+  const fieldsByIdentity = new Map<string, QaIncidentFormFieldEvidence>();
+  const visibleControlCountsByIdentity = new Map<string, number>();
+
+  for (const doc of documents) {
+    for (const element of Array.from(doc.querySelectorAll("input, textarea, select"))) {
+      if (!isIncidentInspectableControl(element)) continue;
+      if (!isVisibleElement(element)) continue;
+      const label = associatedLabelText(element);
+      if (!looksLikeIncidentControl(element, label)) continue;
+      const field = fieldEvidenceFor(element, label);
+      const identity = field.name ?? field.id ?? field.label ?? `incident-field-${fieldsByIdentity.size}`;
+      visibleControlCountsByIdentity.set(identity, (visibleControlCountsByIdentity.get(identity) ?? 0) + 1);
+      const existing = fieldsByIdentity.get(identity);
+      if (!existing || shouldPreferField(field, existing)) {
+        fieldsByIdentity.set(identity, field);
+      }
+    }
+  }
+
+  const fields = Array.from(fieldsByIdentity.entries()).map(([identity, field]) => {
+    const visibleControlCount = visibleControlCountsByIdentity.get(identity) ?? 1;
+    return {
+      ...field,
+      matchedControlCount: visibleControlCount,
+      visibleControlCount
+    };
+  });
+  const fingerprintShape = {
+    href: globalThis.location.href,
+    title: globalThis.document.title,
+    readyState: globalThis.document.readyState,
+    fields: fields.map((field) => ({
+      name: field.name ?? "",
+      id: field.id ?? "",
+      label: field.label ?? "",
+      type: field.type,
+      required: field.required,
+      starred: field.starred,
+      writable: field.writable,
+      valuePresent: field.valuePresent,
+      matchedControlCount: field.matchedControlCount,
+      visibleControlCount: field.visibleControlCount
+    }))
+  };
+
+  return {
+    currentUrl: globalThis.location.href,
+    pageFingerprint: await sha256Hex(JSON.stringify(fingerprintShape)),
+    fields
+  };
+
+  function fieldEvidenceFor(
+    element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+    label: string
+  ): QaIncidentFormFieldEvidence {
+    const rawName = element.getAttribute("name") ?? "";
+    const rawId = element.getAttribute("id") ?? "";
+    const logicalName = normalizedIncidentName(rawName || rawId);
+    const starred = hasRequiredMarker(element, label);
+    const required = starred || element.hasAttribute("required") || element.getAttribute("aria-required") === "true";
+    return {
+      name: logicalName || rawName || undefined,
+      id: rawId || undefined,
+      label: label || undefined,
+      type: classifyIncidentFieldType(element, logicalName || rawName || rawId, label),
+      required,
+      starred,
+      writable: isWritableForIncidentInspection(element),
+      valuePresent: currentValuePresent(element)
+    };
+  }
+
+  function shouldPreferField(candidate: QaIncidentFormFieldEvidence, existing: QaIncidentFormFieldEvidence): boolean {
+    if (candidate.required && !existing.required) return true;
+    if (candidate.starred && !existing.starred) return true;
+    if (candidate.writable && !existing.writable) return true;
+    if (candidate.label && !existing.label) return true;
+    return false;
+  }
+
+  function looksLikeIncidentControl(
+    element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+    label: string
+  ): boolean {
+    const haystack = [
+      element.getAttribute("name") ?? "",
+      element.getAttribute("id") ?? "",
+      element.getAttribute("aria-label") ?? "",
+      label
+    ]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes("incident.") || haystack.includes("sys_display.incident.");
+  }
+
+  function normalizedIncidentName(raw: string): string {
+    const trimmed = raw.trim();
+    if (!trimmed) return "";
+    return trimmed.replace(/^sys_display\./, "");
+  }
+
+  function classifyIncidentFieldType(
+    element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+    identity: string,
+    label: string
+  ): QaIncidentFormFieldType {
+    if (isTextAreaControl(element)) return "textarea";
+    const haystack = `${identity} ${label}`.toLowerCase();
+    if (
+      ["caller_id", "opened_for", "requested_for", "location", "assignment_group", "assigned_to"].some((token) =>
+        haystack.includes(token)
+      )
+    ) {
+      return "reference";
+    }
+    if (isSelectControl(element)) return "select";
+    if (["category", "subcategory", "contact_type", "channel", "impact", "urgency", "state"].some((token) => haystack.includes(token))) {
+      return "select";
+    }
+    if (isInputControl(element)) {
+      const type = (element.getAttribute("type") || element.type || "text").toLowerCase();
+      return ["", "text", "search", "email", "url", "tel"].includes(type) ? "text" : "other";
+    }
+    return "other";
+  }
+
+  function associatedLabelText(element: Element): string {
+    const doc = element.ownerDocument;
+    const id = element.getAttribute("id") ?? "";
+    const ariaLabel = element.getAttribute("aria-label") ?? "";
+    const title = element.getAttribute("title") ?? "";
+    const directLabel = id ? doc.querySelector(`label[for="${escapeAttributeSelectorValue(id)}"]`)?.textContent ?? "" : "";
+    const container = fieldContainer(element);
+    const containerLabel = container?.querySelector("label, .label, .control-label, .form-control-label")?.textContent ?? "";
+    return cleanLabelText(directLabel || containerLabel || ariaLabel || title);
+  }
+
+  function cleanLabelText(text: string): string {
+    return text.replace(/[\\n\\r\\t]+/g, " ").replace(/\s+/g, " ").replace(/^\*\s*/, "").trim();
+  }
+
+  function escapeAttributeSelectorValue(value: string): string {
+    return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  }
+
+  function hasRequiredMarker(element: Element, label: string): boolean {
+    if (label.trim().startsWith("*") || /(^|\s)\*(\s|$)/.test(label)) return true;
+    const container = fieldContainer(element);
+    if (!container) return false;
+    if (
+      container.querySelector(
+        '.required-marker, .mandatory, .icon-required, .fa-asterisk, [aria-required="true"], [title*="required" i], [title*="mandatory" i], [aria-label*="required" i], [aria-label*="mandatory" i]'
+      )
+    ) {
+      return true;
+    }
+    return Array.from(container.querySelectorAll("label, span, div")).some((candidate) =>
+      /(^|\s)\*(\s|$)/.test(candidate.textContent ?? "")
+    );
+  }
+
+  function fieldContainer(element: Element): Element | null {
+    return element.closest(".form-group, .form-field, .sn-form-field, .control, tr, td, div");
+  }
+
+  function isVisibleElement(element: Element): boolean {
+    try {
+      const rect = element.getBoundingClientRect();
+      const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style?.display !== "none" && style?.visibility !== "hidden";
+    } catch {
+      return false;
+    }
+  }
+
+  function isWritableForIncidentInspection(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): boolean {
+    if (isInputControl(element) || isTextAreaControl(element)) {
+      return !element.disabled && !element.readOnly && element.getAttribute("aria-disabled") !== "true";
+    }
+    return !element.disabled && element.getAttribute("aria-disabled") !== "true";
+  }
+
+  function currentValuePresent(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): boolean {
+    return element.value.trim().length > 0;
+  }
+
+  function isIncidentInspectableControl(element: Element): element is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
+    return isInputControl(element) || isTextAreaControl(element) || isSelectControl(element);
+  }
+
+  function isInputControl(element: Element): element is HTMLInputElement {
+    return element.tagName.toLowerCase() === "input";
+  }
+
+  function isTextAreaControl(element: Element): element is HTMLTextAreaElement {
+    return element.tagName.toLowerCase() === "textarea";
+  }
+
+  function isSelectControl(element: Element): element is HTMLSelectElement {
+    return element.tagName.toLowerCase() === "select";
+  }
+
+  function collectSameOriginDocuments(): Document[] {
+    const docs: Document[] = [globalThis.document];
+    const visit = (win: Window) => {
+      for (const frame of Array.from(win.frames)) {
+        try {
+          const doc = frame.document;
+          docs.push(doc);
+          visit(frame);
+        } catch {
+          // Cross-origin frames are ignored; readable ServiceNow controls must be same-origin.
+        }
+      }
+    };
+    visit(globalThis.window);
+    return docs;
+  }
+
+  async function sha256Hex(text: string): Promise<string> {
+    const encoded = new TextEncoder().encode(text);
+    const digest = await crypto.subtle.digest("SHA-256", encoded);
+    return Array.from(new Uint8Array(digest))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+  }
+};
+
 const inspectionScript = async (descriptors: QaAutofillFieldDescriptor[]): Promise<QaAutofillRuntimeInspection> => {
   const documents = collectSameOriginDocuments();
   const allowedElements: Element[] = [];
   const fields = descriptors.map((descriptor) => {
     const matches = collectUniqueElements(documents, descriptor.selectors);
+    const visibleMatches = matches.filter(isVisibleElement);
+    const effectiveMatch = visibleMatches.length === 1 ? visibleMatches[0] : undefined;
     allowedElements.push(...matches);
     return {
       key: descriptor.key,
       matchedSelectorCount: matches.length,
-      elementType: matches.length === 1 ? classifyElement(matches[0]) : "other",
-      writable: matches.length === 1 ? isWritable(matches[0]) : false
+      visibleSelectorCount: visibleMatches.length,
+      elementType: effectiveMatch ? classifyElement(effectiveMatch) : "other",
+      writable: effectiveMatch ? isWritable(effectiveMatch) : false
     };
   });
 
@@ -611,6 +1545,16 @@ const inspectionScript = async (descriptors: QaAutofillFieldDescriptor[]): Promi
     return false;
   }
 
+  function isVisibleElement(element: Element): boolean {
+    try {
+      const rect = element.getBoundingClientRect();
+      const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style?.display !== "none" && style?.visibility !== "hidden";
+    } catch {
+      return false;
+    }
+  }
+
   function currentValueLength(element: Element): number {
     if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
       return element.value.length;
@@ -690,11 +1634,12 @@ const fillScript = async (request: {
     const field = inspection.fields.find((candidate) => candidate.key === operation.fieldKey);
     if (!descriptor || !field) return blocked("plan-not-ready");
     const matches = collectUniqueElements(documents, descriptor.selectors);
-    if (matches.length !== 1) return blocked("selector-mismatch");
-    if (field.matchedSelectorCount !== 1 || field.elementType !== descriptor.type || !field.writable) {
+    const visibleMatches = matches.filter(isVisibleElement);
+    if (visibleMatches.length !== 1) return blocked("selector-mismatch");
+    if ((field.visibleSelectorCount ?? field.matchedSelectorCount) !== 1 || field.elementType !== descriptor.type || !field.writable) {
       return blocked("selector-mismatch");
     }
-    const element = matches[0];
+    const element = visibleMatches[0];
     if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)) {
       return blocked("selector-mismatch");
     }
@@ -749,12 +1694,15 @@ const fillScript = async (request: {
     const allowedElements: Element[] = [];
     const fields = descriptors.map((descriptor) => {
       const matches = collectUniqueElements(docs, descriptor.selectors);
+      const visibleMatches = matches.filter(isVisibleElement);
+      const effectiveMatch = visibleMatches.length === 1 ? visibleMatches[0] : undefined;
       allowedElements.push(...matches);
       return {
         key: descriptor.key,
         matchedSelectorCount: matches.length,
-        elementType: matches.length === 1 ? classifyElement(matches[0]) : "other",
-        writable: matches.length === 1 ? isWritable(matches[0]) : false
+        visibleSelectorCount: visibleMatches.length,
+        elementType: effectiveMatch ? classifyElement(effectiveMatch) : "other",
+        writable: effectiveMatch ? isWritable(effectiveMatch) : false
       };
     });
     const fingerprintShape = {
@@ -769,6 +1717,7 @@ const fillScript = async (request: {
           expectedType: descriptor.type,
           actualType: fields[index].elementType,
           writable: fields[index].writable,
+          visibleCount: fields[index].visibleSelectorCount,
           signatures: matches.map((element) => ({
             tag: element.tagName,
             id: (element as HTMLInputElement).id ?? "",
@@ -851,6 +1800,16 @@ const fillScript = async (request: {
     return false;
   }
 
+  function isVisibleElement(element: Element): boolean {
+    try {
+      const rect = element.getBoundingClientRect();
+      const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+      return rect.width > 0 && rect.height > 0 && style?.display !== "none" && style?.visibility !== "hidden";
+    } catch {
+      return false;
+    }
+  }
+
   function currentValueLength(element: Element): number {
     if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement) {
       return element.value.length;
@@ -898,4 +1857,10 @@ const fillScript = async (request: {
       element.value = value;
     }
   }
+};
+
+export const qaAutofillRuntimeTestHooks = {
+  incidentDefaultFieldFillScript,
+  incidentFieldInspectionScript,
+  resolveCdpPageWebSocketUrl
 };

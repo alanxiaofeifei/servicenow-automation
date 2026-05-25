@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildQaAutofillSelectorVerificationFromEvidence,
   buildQaTextFieldAutofillPlan,
   executeQaTextFieldAutofillFixture,
   getRequiredQaAutofillApprovalPhrase,
   type QaAutofillSelectorVerification
 } from "./qa-browser-autofill";
 import type { FieldDraft, TicketDraft } from "./models";
-import { getRequiredRealActionApprovalPhrase, type RealActionEnvironment, type RealActionTargetValidation } from "./real-action-gate";
+import { getRequiredRealActionApprovalPhrase } from "./real-action-gate";
+import type { RealActionEnvironment, RealActionTargetValidation } from "./real-action-gate";
 
 const qaEnvironment: RealActionEnvironment = {
   mode: "qa",
@@ -50,8 +52,10 @@ const selectorVerification: QaAutofillSelectorVerification = {
   workNotes: "found"
 };
 
-const qaApprovalPhrase = getRequiredQaAutofillApprovalPhrase("qa");
-const devApprovalPhrase = getRequiredQaAutofillApprovalPhrase("dev");
+const qaApprovalPhrase =
+  getRequiredQaAutofillApprovalPhrase("qa");
+const devApprovalPhrase =
+  getRequiredQaAutofillApprovalPhrase("dev");
 const freshPageApproval = {
   approvalPageFingerprint: "qa-incident-form-reviewed",
   currentPageFingerprint: "qa-incident-form-reviewed"
@@ -453,6 +457,25 @@ describe("QA browser-assisted text-field autofill gate", () => {
     expect(executeQaTextFieldAutofillFixture(plan, { fields: [baseFields[0], baseFields[1], { ...baseFields[2], writable: false }] }).blockedReason).toBe("selector-mismatch");
     expect(executeQaTextFieldAutofillFixture(plan, { fields: baseFields, unexpectedRequiredFieldCount: 1 }).blockedReason).toBe("unexpected-required-field");
     expect(executeQaTextFieldAutofillFixture(plan, { fields: [...baseFields, { ...baseFields[1], matchedSelectorCount: 2 }] }).blockedReason).toBe("selector-mismatch");
+  });
+
+  it("accepts one visible ServiceNow control when hidden duplicate selector matches exist", () => {
+    const plan = readyPlan();
+    const fields = [
+      { key: "shortDescription" as const, matchedSelectorCount: 5, visibleSelectorCount: 1, elementType: "text" as const, writable: true },
+      { key: "description" as const, matchedSelectorCount: 1, visibleSelectorCount: 1, elementType: "textarea" as const, writable: true },
+      { key: "workNotes" as const, matchedSelectorCount: 1, visibleSelectorCount: 1, elementType: "textarea" as const, writable: true }
+    ];
+
+    expect(buildQaAutofillSelectorVerificationFromEvidence({ fields })).toEqual({
+      shortDescription: "found",
+      description: "found",
+      workNotes: "found"
+    });
+    expect(executeQaTextFieldAutofillFixture(plan, { fields }).status).toBe("completed");
+    expect(executeQaTextFieldAutofillFixture(plan, {
+      fields: [{ ...fields[0], visibleSelectorCount: 2 }, fields[1], fields[2]]
+    }).blockedReason).toBe("selector-mismatch");
   });
 });
 
