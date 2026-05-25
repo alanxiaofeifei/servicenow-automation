@@ -1490,7 +1490,7 @@ const englishOperatorWorkbenchCopy = {
     cdpLabel: "CDP",
     cdpReady: "Ready",
     cdpWaiting: "Waiting",
-    sanitizedEvidence: "Sanitized runtime evidence only.",
+    sanitizedEvidence: "Sanitized runtime evidence available.",
     noEvidence: "No runtime evidence yet; only sanitized status is shown.",
     safetyTitle: "Safety note",
     safetyNote: "AI drafts and fills allowed text fields only. Human reviews and handles the record in ServiceNow."
@@ -2613,11 +2613,9 @@ export function App({
     initialOperatorLastResponse
   );
   const [operatorBusyAction, setOperatorBusyAction] = useState<"launch" | "verify" | "autofill" | null>(null);
-  const [operatorStatus, setOperatorStatus] = useState<OperatorActionStatus>({
-    label: "Ready",
-    tone: "idle",
-    details: "Use the buttons below to start the dedicated QA Chromium, verify the current Incident form, then autofill fields for manual review."
-  });
+  const [operatorStatus, setOperatorStatus] = useState<OperatorActionStatus>(() =>
+    initialOperatorStatusFromResponse(initialOperatorLastResponse)
+  );
 
   useEffect(() => {
     if (!settingsOpen) {
@@ -5526,10 +5524,76 @@ function sanitizeOperatorRuntimeError(_error: unknown): string {
   return "Desktop backend failed before returning a sanitized operator result. Verify remains disabled; retry Start QA Chromium from the desktop app.";
 }
 
+function defaultOperatorActionStatus(): OperatorActionStatus {
+  return {
+    label: "Ready",
+    tone: "idle",
+    details: "Use the buttons below to start the dedicated QA Chromium, verify the current Incident form, then autofill fields for manual review."
+  };
+}
+
+function initialOperatorStatusFromResponse(response: OperatorRuntimeResponse | null): OperatorActionStatus {
+  if (!response) {
+    return defaultOperatorActionStatus();
+  }
+  if (response.launch) {
+    return operatorStatusFromResponse("launch", response);
+  }
+  if (response.runtime) {
+    return operatorStatusFromResponse("autofill", response);
+  }
+  if (response.fieldInspection || response.defaultPlan) {
+    return operatorStatusFromResponse("verify", response);
+  }
+  return defaultOperatorActionStatus();
+}
+
+function sanitizeOperatorRuntimeLogPath(value?: string): string | undefined {
+  const normalized = value?.trim().replace(/\\/g, "/");
+  if (!normalized) {
+    return undefined;
+  }
+
+  const marker = ".local/startup-logs/";
+  const relativeCandidate = normalized.startsWith(marker)
+    ? normalized
+    : normalized.includes(`/${marker}`)
+      ? `${marker}${normalized.slice(normalized.lastIndexOf(`/${marker}`) + marker.length + 1)}`
+      : undefined;
+
+  return relativeCandidate && /^\.local\/startup-logs\/[A-Za-z0-9._-]+\.jsonl$/.test(relativeCandidate)
+    ? relativeCandidate
+    : undefined;
+}
+
+function operatorRuntimeLogDetails(response: OperatorRuntimeResponse): string {
+  const runtimeLogPath = sanitizeOperatorRuntimeLogPath(response.launch?.runtimeLogPath);
+  return runtimeLogPath ? ` Sanitized runtime log: ${runtimeLogPath}.` : "";
+}
+
+function sanitizeOperatorDiagnosticText(value: string | undefined, fallback: string): string {
+  const raw = value?.trim() || fallback;
+  return raw
+    .replace(/\bsha256:[a-f0-9]{32,}\b/gi, "[REDACTED_FINGERPRINT]")
+    .replace(/\b[a-f0-9]{64,}\b/gi, "[REDACTED_FINGERPRINT]")
+    .replace(/\bauthorization\s*:\s*(?:bearer|basic)?\s*[^\s<>"')]+/gi, "[REDACTED_SECRET]")
+    .replace(/\b[A-Za-z0-9_-]*(?:api[_-]?key|token|secret|password|passwd|cookie|session|auth)[A-Za-z0-9_-]*\s*[:=]\s*(?:(?:bearer|basic)\s+)?[^\s<>"')]+/gi, "[REDACTED_SECRET]")
+    .replace(/\b(?:https?|wss?):\/\/[^\s<>"')]+/gi, "[REDACTED_URL]")
+    .replace(/\b(?:127\.0\.0\.1|localhost):\d+\/[^\s<>"')]+/gi, "[REDACTED_URL]")
+    .replace(/\b(?:127\.0\.0\.1|localhost|0\.0\.0\.0):\d+\b/gi, "[REDACTED_URL]")
+    .replace(/\[::1\]:\d+\b/gi, "[REDACTED_URL]")
+    .replace(/\b(?:[A-Za-z0-9-]+\.)*(?:service-now|servicenow)[A-Za-z0-9.-]*(?::\d+)?(?:\/[^\s<>"')]+)?/gi, "[REDACTED_HOST]")
+    .replace(/\b(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?::\d+)?\/[^\s<>"')]+/g, "[REDACTED_URL]")
+    .replace(/\b[A-Za-z]:[\\/][^\s<>"')]+/g, "[REDACTED_PATH]")
+    .replace(/\\\\[A-Za-z0-9._$-]+\\[^\s<>"')]+/g, "[REDACTED_PATH]")
+    .replace(/\/(?:[^\s<>"')/]+\/)*[^\s<>"')]+/g, "[REDACTED_PATH]");
+}
+
 function operatorLaunchDetails(response: OperatorRuntimeResponse, fallbackStatus: string): string {
-  return response.ok
+  const baseDetails = response.ok
     ? "A dedicated Chromium window is open. Log in and open an Incident form, then click Verify current Incident."
-    : response.launch?.blockedReason ?? fallbackStatus;
+    : sanitizeOperatorDiagnosticText(response.launch?.blockedReason, fallbackStatus);
+  return `${baseDetails}${operatorRuntimeLogDetails(response)}`;
 }
 
 function operatorStatusFromResponse(
@@ -5546,12 +5610,12 @@ function operatorStatusFromResponse(
     const plannedCount = response.defaultPlan?.plannedFields?.length ?? 0;
     return response.ok
       ? { label: "Incident form verified", tone: "success", details: `${plannedCount} fields are ready for local review. Runtime autofill remains text-only; click Autofill text fields only after reviewing the preview.` }
-      : { label: "Verify blocked", tone: "blocked", details: response.fieldInspection?.blockedReason ?? response.defaultPlan?.blockedReason ?? "Current page is not a verified QA Incident form." };
+      : { label: "Verify blocked", tone: "blocked", details: sanitizeOperatorDiagnosticText(response.fieldInspection?.blockedReason ?? response.defaultPlan?.blockedReason, "Current page is not a verified QA Incident form.") };
   }
   const filledCount = response.runtime?.filledFields?.length ?? 0;
   return response.ok
     ? { label: "Autofill completed", tone: "success", details: `${filledCount} text fields were filled. Review manually in ServiceNow. This tool did not Save, Submit, Update, Resolve, Close, upload, email, or call ServiceNow API.` }
-    : { label: "Autofill blocked", tone: "blocked", details: response.runtime?.blockedReason ?? response.defaultPlan?.blockedReason ?? "No field was changed." };
+    : { label: "Autofill blocked", tone: "blocked", details: sanitizeOperatorDiagnosticText(response.runtime?.blockedReason ?? response.defaultPlan?.blockedReason, "No field was changed.") };
 }
 
 function QaOperatorRuntimePanel({
@@ -5721,6 +5785,7 @@ function QaOperatorRuntimePanel({
           </div>
         </dl>
         <p>{runtimeStatusDescription}</p>
+        <p className="runtime-status-detail">{status.details}</p>
         <small>{evidenceText}</small>
       </section>
 

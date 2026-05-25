@@ -270,6 +270,146 @@ describe("App", () => {
     expect(output).not.toContain(rawFingerprint);
   });
 
+  it("surfaces launch blocked diagnostics with a sanitized ignored runtime log path", () => {
+    const absoluteProjectPrefix = ["", "tmp", "servicenow-automation"].join("/");
+    const rawRuntimeLogPath = `${absoluteProjectPrefix}/.local/startup-logs/qa-dedicated-cdp-20260525123456-1234-a1b2c3.jsonl`;
+    const rawEndpoint = "http://127.0.0.1:54656/devtools/browser/private-session";
+    const output = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "qa",
+      initialRuntimeRailExpanded: true,
+      initialOperatorLastResponse: {
+        ok: false,
+        launch: {
+          status: "blocked",
+          blockedReason:
+            "Dedicated Chromium started but CDP did not become ready before timeout. See the startup/runtime log path for sanitized details.",
+          cdpEndpoint: rawEndpoint,
+          runtimeLogPath: rawRuntimeLogPath,
+          safety: { browserProcessLaunched: true, cdpEndpointReady: false, noWriteMode: true }
+        }
+      }
+    });
+
+    expect(output).toContain("Dedicated Chromium started but CDP did not become ready before timeout.");
+    expect(output).toContain(".local/startup-logs/qa-dedicated-cdp-20260525123456-1234-a1b2c3.jsonl");
+    expect(output).toContain("Sanitized runtime evidence available.");
+    expect(output).not.toContain(absoluteProjectPrefix);
+    expect(output).not.toContain(rawEndpoint);
+  });
+
+  it("redacts unsafe launch blocked diagnostics before rendering status details", () => {
+    const rawEndpoint = "http://127.0.0.1:54656/devtools/browser/private-session";
+    const rawAbsolutePath = ["", "tmp", "servicenow-automation", ".local", "startup-logs", "unsafe.jsonl"].join("/");
+    const rawServiceNowUrl = "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do";
+    const secretMarker = ["to", "ken"].join("") + "=unsafe-value";
+    const rawFingerprint = `sha256:${"a".repeat(64)}`;
+    const output = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "qa",
+      initialRuntimeRailExpanded: true,
+      initialOperatorLastResponse: {
+        ok: false,
+        launch: {
+          status: "blocked",
+          blockedReason: `Launch failed at ${rawEndpoint} ${rawAbsolutePath} ${rawServiceNowUrl} ${secretMarker} ${rawFingerprint}.`,
+          runtimeLogPath: rawAbsolutePath,
+          safety: { browserProcessLaunched: true, cdpEndpointReady: false, noWriteMode: true }
+        }
+      }
+    });
+
+    expect(output).toContain("Launch failed at");
+    expect(output).toContain("[REDACTED_URL]");
+    expect(output).toContain("[REDACTED_PATH]");
+    expect(output).toContain("[REDACTED_SECRET]");
+    expect(output).toContain("[REDACTED_FINGERPRINT]");
+    expect(output).toContain(".local/startup-logs/unsafe.jsonl");
+    expect(output).not.toContain(rawEndpoint);
+    expect(output).not.toContain("127.0.0.1");
+    expect(output).not.toContain("devtools/browser");
+    expect(output).not.toContain(rawAbsolutePath);
+    expect(output).not.toContain("qa.service-now.example.invalid");
+    expect(output).not.toContain(secretMarker);
+    expect(output).not.toContain(rawFingerprint);
+  });
+
+  it("redacts unsafe verify and autofill blocked diagnostics before rendering status details", () => {
+    const bareFingerprint = "b".repeat(64);
+    const posixPath = ["", "opt", "servicenow", "runtime", "unsafe.log"].join("/");
+    const windowsPath = ["C:", "Users", "Operator", "AppData", "Local", "Temp", "unsafe.log"].join("/");
+    const backslashWindowsPath = ["C:", "Users", "Operator", "AppData", "Local", "Temp", "unsafe.log"].join("\\");
+    const uncPath = ["", "", "server", "share", "unsafe.log"].join("\\");
+    const localEndpoint = ["127.0.0.1", "9222"].join(":");
+    const localhostEndpoint = ["localhost", "9333"].join(":");
+    const serviceNowHost = "dev.servicenow.example.invalid/now/nav/ui/classic/params/target/home_splash.do";
+    const authorizationHeader = ["Authorization", "Bearer unsafe-value"].join(": ");
+    const authTokenHeader = ["X", "Auth", "Token"].join("-") + ": Bearer unsafe-header";
+    const sessionMarker = ["session", "Id"].join("") + "=unsafe-session";
+    const authTokenMarker = ["auth", "_", "token"].join("") + "=unsafe-token";
+    const cookieMarker = ["cook", "ie", "_value"].join("") + "=unsafe-cookie";
+    const passwordMarker = ["pass", "word"].join("") + "=unsafe-password";
+    const apiKeyMarker = ["api", "_", "key"].join("") + "=unsafe-key";
+    const unsafeDiagnostic = `Runtime blocked ${posixPath} ${windowsPath} ${backslashWindowsPath} ${uncPath} ${localEndpoint} ${localhostEndpoint} ${serviceNowHost} ${authorizationHeader} ${authTokenHeader} ${sessionMarker} ${authTokenMarker} ${cookieMarker} ${passwordMarker} ${apiKeyMarker} ${bareFingerprint}`;
+
+    const verifyOutput = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "qa",
+      initialRuntimeRailExpanded: true,
+      initialOperatorLastResponse: {
+        ok: false,
+        fieldInspection: { status: "blocked", blockedReason: unsafeDiagnostic }
+      }
+    });
+    const autofillOutput = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "qa",
+      initialRuntimeRailExpanded: true,
+      initialOperatorLastResponse: {
+        ok: false,
+        runtime: { status: "blocked", blockedReason: unsafeDiagnostic }
+      }
+    });
+
+    for (const output of [verifyOutput, autofillOutput]) {
+      expect(output).toContain("Runtime blocked");
+      expect(output).toContain("[REDACTED_PATH]");
+      expect(output).toContain("[REDACTED_HOST]");
+      expect(output).toContain("[REDACTED_SECRET]");
+      expect(output).toContain("[REDACTED_FINGERPRINT]");
+      expect(output).not.toContain(posixPath);
+      expect(output).not.toContain(windowsPath);
+      expect(output).not.toContain(backslashWindowsPath);
+      expect(output).not.toContain(uncPath);
+      expect(output).not.toContain(localEndpoint);
+      expect(output).not.toContain(localhostEndpoint);
+      expect(output).not.toContain("localhost:9333");
+      expect(output).not.toContain("127.0.0.1:9222");
+      expect(output).not.toContain("dev.servicenow.example.invalid");
+      expect(output).not.toContain(authorizationHeader);
+      expect(output).not.toContain(authTokenHeader);
+      expect(output).not.toContain(sessionMarker);
+      expect(output).not.toContain(authTokenMarker);
+      expect(output).not.toContain(cookieMarker);
+      expect(output).not.toContain(passwordMarker);
+      expect(output).not.toContain(apiKeyMarker);
+      expect(output).not.toContain(bareFingerprint);
+    }
+  });
+
+  it("prefers autofill runtime diagnostics when initial response also includes default plan metadata", () => {
+    const defaultPlanMarker = "Default plan metadata marker should stay hidden.";
+    const runtimeMarker = "Autofill runtime marker should be visible.";
+    const output = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "qa",
+      initialRuntimeRailExpanded: true,
+      initialOperatorLastResponse: {
+        ok: false,
+        defaultPlan: { status: "blocked", blockedReason: defaultPlanMarker, plannedFields: [] },
+        runtime: { status: "blocked", blockedReason: runtimeMarker }
+      }
+    });
+
+    expect(output).toContain(runtimeMarker);
+    expect(output).not.toContain(defaultPlanMarker);
+  });
+
   it("keeps the visible safety boundary compact and avoids state-changing ServiceNow controls", () => {
     const primaryMarkup = mainMarkupWithoutSettings(
       renderAppMarkup("en-US", { initialEnvironmentMode: "qa", initialRuntimeRailExpanded: true })
