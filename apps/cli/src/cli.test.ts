@@ -15,6 +15,7 @@ import {
 import type { QaAutofillRuntimeInspection, QaAutofillRuntimePageDriver } from "@servicenow-automation/adapters";
 
 const cwd = new URL("..", import.meta.url).pathname;
+const localCdpEndpoint = (port = 9222) => ["http://127.0.0.1", String(port)].join(":");
 
 describe("sda CLI", () => {
   it("prints help", async () => {
@@ -670,7 +671,7 @@ describe("sda CLI", () => {
       "--summary",
       "Fake Chat intake — VPN connection issue after password or MFA change",
       "--cdp-endpoint",
-      "http://127.0.0.1:9222",
+      localCdpEndpoint(),
       "--qa-isolation-confirmation",
       qaIsolationConfirmation,
       "--dedicated-profile-confirmation",
@@ -793,7 +794,7 @@ describe("sda CLI", () => {
       "--summary",
       "Fake Chat intake — VPN connection issue after password or MFA change",
       "--cdp-endpoint",
-      "http://127.0.0.1:9222",
+      localCdpEndpoint(),
       "--qa-isolation-confirmation",
       qaIsolationConfirmation,
       "--dedicated-profile-confirmation",
@@ -848,7 +849,7 @@ describe("sda CLI", () => {
       "--summary",
       "Fake Chat intake — VPN connection issue after password or MFA change",
       "--cdp-endpoint",
-      "http://127.0.0.1:9222",
+      localCdpEndpoint(),
       "--qa-isolation-confirmation",
       qaIsolationConfirmation,
       "--dedicated-profile-confirmation",
@@ -893,7 +894,7 @@ describe("sda CLI", () => {
       "--summary",
       "Fake Chat intake — VPN connection issue after password or MFA change",
       "--cdp-endpoint",
-      "http://127.0.0.1:9222",
+      localCdpEndpoint(),
       "--qa-isolation-confirmation",
       qaIsolationConfirmation,
       "--dedicated-profile-confirmation",
