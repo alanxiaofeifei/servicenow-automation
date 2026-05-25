@@ -415,7 +415,7 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
         command: "qa smoke",
         mode,
         template,
-        plan,
+        plan: sanitizeQaSmokePlan(plan),
         safety: safetyEnvelope()
       }, formatQaSmokePlan(plan));
     }
@@ -576,7 +576,8 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
           requiredQaIsolationConfirmation: autofillQaIsolationConfirmationPhrase,
           requiredDedicatedProfileConfirmation: dedicatedProfileConfirmationPhrase,
           selectorVerification: runtime.selectorVerification,
-          pageFingerprint: runtime.pageFingerprint,
+          pageFingerprint: undefined,
+          pageFingerprintCaptured: Boolean(runtime.pageFingerprint),
           pageFingerprintMatched: runtime.pageFingerprintMatched,
           filledFields: runtime.execution?.filledFields ?? [],
           stopMessage:
@@ -596,7 +597,7 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
           noGraphWrite: true,
           productionWriteAllowed: false
         })
-      }, formatQaAutofillRuntimeResult(runtime.status, runtime.blockedReason, runtime.pageFingerprint));
+      }, formatQaAutofillRuntimeResult(runtime.status, runtime.blockedReason, Boolean(runtime.pageFingerprint)));
     }
 
     if (namespace === "qa" && action === "manual-fill") {
@@ -803,14 +804,16 @@ function parseQaDefaultPlanFieldSource(value: string): QaDefaultPlanFieldSource 
 function summarizeQaIncidentFieldInspection(inspection: QaIncidentFieldRuntimeResult): {
   status: QaIncidentFieldRuntimeResult["status"];
   blockedReason?: QaIncidentFieldRuntimeResult["blockedReason"];
-  pageFingerprint?: string;
+  pageFingerprint?: undefined;
+  pageFingerprintCaptured: boolean;
   detectedFieldCount: number;
   safety: QaIncidentFieldRuntimeResult["safety"];
 } {
   return {
     status: inspection.status,
     blockedReason: inspection.blockedReason,
-    pageFingerprint: inspection.pageFingerprint,
+    pageFingerprint: undefined,
+    pageFingerprintCaptured: Boolean(inspection.pageFingerprint),
     detectedFieldCount: inspection.fields.length,
     safety: inspection.safety
   };
@@ -935,12 +938,13 @@ function formatBrowserCdpStart(status: string, blockedReason?: string, cdpEndpoi
 }
 
 function formatQaSmokePlan(plan: QaSingleTicketSmokePlan): string {
+  const safeGateDecision = plan.status === "ready-for-manual-fill" ? "ready-for-manual-fill" : manualFillSafeBlockReason(plan);
   const lines = [
     `Controlled QA single-ticket smoke: ${plan.status}`,
     `Mode: ${plan.mode}`,
-    plan.targetHost ? `Target host: ${plan.targetHost}` : "Target host: not validated",
-    `Required approval phrase: ${plan.requiredApprovalPhrase}`,
-    `Gate decision: ${plan.gateDecision.reason}`
+    plan.targetHost ? "Target host: configured (redacted)" : "Target host: not validated",
+    "Required approval phrase: redacted; CLI output does not print approval phrases.",
+    `Gate decision: ${safeGateDecision}`
   ];
 
   if (plan.missingRequiredFields.length > 0) {
@@ -1234,13 +1238,13 @@ function formatQaAutofillFixtureResult(plan: QaAutofillPlan, executionStatus: "c
   ].join("\n");
 }
 
-function formatQaAutofillRuntimeResult(status: string, blockedReason?: string, pageFingerprint?: string): string {
+function formatQaAutofillRuntimeResult(status: string, blockedReason?: string, pageFingerprintCaptured = false): string {
   const lines = [`QA runtime text-field autofill: ${status}`];
   if (blockedReason) {
     lines.push(`Blocked reason: ${blockedReason}`);
   }
-  if (status === "verified" && pageFingerprint) {
-    lines.push(`Reviewed page fingerprint: ${pageFingerprint}`);
+  if (status === "verified" && pageFingerprintCaptured) {
+    lines.push("Reviewed page fingerprint: captured (redacted).");
     lines.push("Re-run with --execute and --approval-page-fingerprint after manual review and exact approval phrase.");
   }
   if (status === "completed") {
@@ -1298,6 +1302,36 @@ function manualFillSafeBlockReason(plan: QaSingleTicketSmokePlan): string {
     case "approved-for-qa-dev-write":
       return "manual-fill-readiness-blocked";
   }
+}
+
+
+function sanitizeQaSmokePlan(plan: QaSingleTicketSmokePlan) {
+  const {
+    targetHost: _targetHost,
+    gateDecision: _gateDecision,
+    requiredApprovalPhrase: _requiredApprovalPhrase,
+    writeActionApprovalPhrases: _writeActionApprovalPhrases,
+    stopRules: _stopRules,
+    ...smokePlan
+  } = plan;
+
+  return {
+    ...smokePlan,
+    targetHost: undefined,
+    gateDecision: undefined,
+    requiredApprovalPhrase: undefined,
+    writeActionApprovalPhrases: undefined,
+    stopRules: [
+      "Stop before every Save/Submit/Update/Close; this command never authorizes write actions.",
+      "Stop if any real user, real ticket text, real ticket number, credential, cookie, session, screenshot, or recording detail appears.",
+      "Stop if browser DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated close/update appears."
+    ],
+    redactions: {
+      targetHost: Boolean(plan.targetHost),
+      gateDecision: true,
+      approvalPhrase: true
+    }
+  };
 }
 
 function sanitizeQaManualFillPlan(plan: QaSingleTicketSmokePlan) {

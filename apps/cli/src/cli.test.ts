@@ -6,7 +6,13 @@ import { describe, expect, it } from "vitest";
 
 import { runCli } from "./cli";
 import { getServiceNowEnvironmentConfig } from "@servicenow-automation/profiles";
-import type { QaAutofillFixtureField, QaAutofillOperation, QaIncidentFormFieldEvidence } from "@servicenow-automation/core";
+import {
+  getRequiredQaAutofillApprovalPhrase,
+  getRequiredRealActionApprovalPhrase,
+  type QaAutofillFixtureField,
+  type QaAutofillOperation,
+  type QaIncidentFormFieldEvidence
+} from "@servicenow-automation/core";
 import type {
   QaAutofillRuntimeInspection,
   QaAutofillRuntimePageDriver,
@@ -77,6 +83,7 @@ describe("sda CLI", () => {
     expect(result.exitCode).toBe(0);
     expect(payload.command).toBe("qa default-plan");
     expect(payload.defaultPlan.status).toBe("ready-for-local-review");
+    expect(serialized).not.toContain("current-page-field-fingerprint");
     expect(payload.defaultPlan.plannedFields.map((field: { key: string }) => field.key)).toEqual([
       "requester",
       "category",
@@ -205,10 +212,12 @@ describe("sda CLI", () => {
     expect(payload.fieldSource).toBe("current-page-readonly");
     expect(payload.fieldInspection).toMatchObject({
       status: "verified",
-      pageFingerprint: "current-page-field-fingerprint",
+      pageFingerprintCaptured: true,
       detectedFieldCount: 12
     });
+    expect(payload.fieldInspection.pageFingerprint).toBeUndefined();
     expect(payload.defaultPlan.status).toBe("ready-for-local-review");
+    expect(serialized).not.toContain("current-page-field-fingerprint");
     expect(payload.defaultPlan.plannedFields.map((field: { key: string }) => field.key)).toContain("impact");
     expect(payload.defaultPlan.plannedFields.map((field: { key: string }) => field.key)).toContain("urgency");
     expect(payload.fieldRuntimeVerification).toMatchObject({
@@ -284,7 +293,7 @@ describe("sda CLI", () => {
       "--summary",
       "Cannot connect to VPN after password change",
       "--approval-phrase",
-      "I APPROVE QA SUBMIT ONLY",
+      getRequiredRealActionApprovalPhrase("qa", "submit_incident"),
       "--json"
     ], { cwd });
     const payload = JSON.parse(result.stdout);
@@ -292,8 +301,14 @@ describe("sda CLI", () => {
     expect(result.exitCode).toBe(0);
     expect(payload.command).toBe("qa smoke");
     expect(payload.plan.status).toBe("ready-for-manual-fill");
-    expect(payload.plan.targetHost).toBe("qa.service-now.example.invalid");
-    expect(payload.plan.requiredApprovalPhrase).toBe("I APPROVE QA SUBMIT ONLY");
+    expect(payload.plan.targetHost).toBeUndefined();
+    expect(payload.plan.requiredApprovalPhrase).toBeUndefined();
+    expect(payload.plan.writeActionApprovalPhrases).toBeUndefined();
+    expect(payload.plan.redactions).toEqual({
+      targetHost: true,
+      gateDecision: true,
+      approvalPhrase: true
+    });
     expect(payload.plan.fieldMappings.find((field: { key: string }) => field.key === "shortDescription").value).toContain("VPN");
     expect(payload.plan.safety.manualFillOnly).toBe(true);
     expect(payload.plan.safety.noBrowserAutomation).toBe(true);
@@ -302,6 +317,9 @@ describe("sda CLI", () => {
     expect(payload.plan.safety.noExternalActionPerformed).toBe(true);
     expect(payload.safety.noExternalActionPerformed).toBe(true);
     expect(payload.safety.browserProcessLaunched).toBe(false);
+    const serialized = JSON.stringify(payload);
+    expect(serialized).not.toContain("service" + "-now.");
+    expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "submit_incident"));
   });
 
   it("prepares a combined QA manual-fill dry-run with a sanitized browser launch preview", async () => {
@@ -320,7 +338,7 @@ describe("sda CLI", () => {
       "--summary",
       "Fake Chat intake — VPN connection issue after password or MFA change",
       "--approval-phrase",
-      "I APPROVE QA SUBMIT ONLY",
+      getRequiredRealActionApprovalPhrase("qa", "submit_incident"),
       "--qa-isolation-confirmation",
       qaIsolationConfirmation,
       "--json"
@@ -366,10 +384,10 @@ describe("sda CLI", () => {
     expect(payload.safety.noServiceNowWrite).toBe(true);
     expect(serialized).not.toContain(serviceNowDomain);
     expect(serialized).not.toContain("https" + "://");
-    expect(serialized).not.toContain("I APPROVE QA SUBMIT ONLY");
-    expect(serialized).not.toContain("I APPROVE QA SAVE ONLY");
-    expect(serialized).not.toContain("I APPROVE QA UPDATE ONLY");
-    expect(serialized).not.toContain("I APPROVE QA CLOSE ONLY");
+    expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "submit_incident"));
+    expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "save_incident"));
+    expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "update_incident"));
+    expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "close_incident"));
     expect(serialized).not.toContain(sensitiveQueryName);
     expect(serialized).not.toContain(sensitiveTokenName);
   });
@@ -392,7 +410,7 @@ describe("sda CLI", () => {
       "--write-action",
       "save_incident",
       "--approval-phrase",
-      "I APPROVE QA SAVE ONLY",
+      getRequiredRealActionApprovalPhrase("qa", "save_incident"),
       "--qa-isolation-confirmation",
       qaIsolationConfirmation,
       "--json"
@@ -417,12 +435,12 @@ describe("sda CLI", () => {
     expect(payload.safety.noServiceNowWrite).toBe(true);
     expect(payload.plan.requiredApprovalPhrase).toBeUndefined();
     expect(payload.plan.writeActionApprovalPhrases).toBeUndefined();
-    expect(serialized).not.toContain("I APPROVE QA SAVE ONLY");
+    expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "save_incident"));
     expect(serialized).not.toContain("approved-for-qa-dev-write");
   });
 
   it("does not echo invalid QA manual-fill write-action values", async () => {
-    const sensitiveApprovalPhrase = "I APPROVE QA SAVE ONLY";
+    const sensitiveApprovalPhrase = getRequiredRealActionApprovalPhrase("qa", "save_incident");
     const sensitiveTarget = "https" + "://" + "qa-example." + "service" + "-now.com/nav_to.do?sys" + "_id=123";
 
     for (const invalidWriteAction of [sensitiveApprovalPhrase, sensitiveTarget]) {
@@ -468,7 +486,7 @@ describe("sda CLI", () => {
       "--summary",
       "Fake Chat intake — VPN connection issue after password or MFA change",
       "--approval-phrase",
-      "I APPROVE QA SUBMIT ONLY",
+      getRequiredRealActionApprovalPhrase("qa", "submit_incident"),
       "--json"
     ], { cwd: projectRoot });
     const payload = JSON.parse(result.stdout);
@@ -500,7 +518,7 @@ describe("sda CLI", () => {
       "--summary",
       "Fake Chat intake — VPN connection issue after password or MFA change",
       "--approval-phrase",
-      "I APPROVE QA SUBMIT ONLY",
+      getRequiredRealActionApprovalPhrase("qa", "submit_incident"),
       "--qa-isolation-confirmation",
       qaIsolationConfirmation,
       "--execute",
@@ -534,7 +552,7 @@ describe("sda CLI", () => {
         "--summary",
         "Fake Chat intake — VPN connection issue after password or MFA change",
         "--approval-phrase",
-        "I APPROVE QA SUBMIT ONLY",
+        getRequiredRealActionApprovalPhrase("qa", "submit_incident"),
         "--qa-isolation-confirmation",
         qaIsolationConfirmation,
         "--json"
@@ -551,7 +569,7 @@ describe("sda CLI", () => {
       expect(payload.browserLaunch.status).toBe("blocked");
       expect(payload.browserLaunch.commandPreview).toBeUndefined();
       expect(payload.safety.browserProcessLaunched).toBe(false);
-      expect(serialized).not.toContain("I APPROVE QA SUBMIT ONLY");
+      expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "submit_incident"));
     }
   });
 
@@ -575,7 +593,7 @@ describe("sda CLI", () => {
       "--summary",
       "Fake Chat intake — VPN connection issue after password or MFA change",
       "--approval-phrase",
-      "I APPROVE QA SUBMIT ONLY",
+      getRequiredRealActionApprovalPhrase("qa", "submit_incident"),
       "--qa-isolation-confirmation",
       qaIsolationConfirmation,
       "--target-url",
@@ -597,7 +615,7 @@ describe("sda CLI", () => {
     expect(serialized).not.toContain("https" + "://");
     expect(serialized).not.toContain(sensitiveQueryName);
     expect(serialized).not.toContain(sensitiveTokenName);
-    expect(serialized).not.toContain("I APPROVE QA SUBMIT ONLY");
+    expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "submit_incident"));
   });
 
   it("blocks manual-fill when required mappings are missing without leaking approved write-gate text", async () => {
@@ -616,7 +634,7 @@ describe("sda CLI", () => {
       "--summary",
       "Generic request needs help",
       "--approval-phrase",
-      "I APPROVE QA SUBMIT ONLY",
+      getRequiredRealActionApprovalPhrase("qa", "submit_incident"),
       "--qa-isolation-confirmation",
       qaIsolationConfirmation,
       "--json"
@@ -635,14 +653,14 @@ describe("sda CLI", () => {
     expect(payload.browserLaunch.blockedReason).toBe("QA manual-fill plan is blocked: missing-required-field-mappings.");
     expect(payload.safety.browserProcessLaunched).toBe(false);
     expect(serialized).not.toContain("approved-for-qa-dev-write");
-    expect(serialized).not.toContain("I APPROVE QA SUBMIT ONLY");
+    expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "submit_incident"));
     expect(serialized).not.toContain("https" + "://");
   });
 
   it("prepares a QA text-field autofill review plan without launching a browser or writing", async () => {
     const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
     const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
-    const approvalPhrase = "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED";
+    const approvalPhrase = getRequiredQaAutofillApprovalPhrase("qa");
 
     const result = await runCli([
       "qa",
@@ -691,7 +709,7 @@ describe("sda CLI", () => {
   it("runs a sanitized QA autofill fixture harness without launching a browser or writing", async () => {
     const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
     const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
-    const approvalPhrase = "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED";
+    const approvalPhrase = getRequiredQaAutofillApprovalPhrase("qa");
 
     const result = await runCli([
       "qa",
@@ -734,6 +752,7 @@ describe("sda CLI", () => {
     expect(payload.safety.browserAutomationCalled).toBe(false);
     expect(payload.safety.noServiceNowWrite).toBe(true);
     expect(serialized).not.toContain(approvalPhrase);
+    expect(serialized).not.toContain("reviewed-page");
     expect(serialized).not.toContain("Fake Chat intake");
     expect(serialized).not.toContain("VPN connection issue");
     expect(serialized).not.toContain("https" + "://");
@@ -758,7 +777,7 @@ describe("sda CLI", () => {
       "--summary",
       "Fake Chat intake — VPN connection issue after password or MFA change",
       "--approval-phrase",
-      "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED",
+      getRequiredQaAutofillApprovalPhrase("qa"),
       "--qa-isolation-confirmation",
       qaIsolationConfirmation,
       "--dedicated-profile-confirmation",
@@ -780,7 +799,7 @@ describe("sda CLI", () => {
     expect(payload.safety.browserProcessLaunched).toBe(false);
     expect(payload.safety.browserAutomationCalled).toBe(false);
     expect(payload.safety.noServiceNowWrite).toBe(true);
-    expect(serialized).not.toContain("I APPROVE QA SINGLE-TICKET AUTOFILL ONLY");
+    expect(serialized).not.toContain(getRequiredQaAutofillApprovalPhrase("qa"));
     expect(serialized).not.toContain("https" + "://");
   });
 
@@ -800,7 +819,7 @@ describe("sda CLI", () => {
       "--summary",
       "Fake Chat intake — VPN connection issue after password or MFA change",
       "--approval-phrase",
-      "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED",
+      getRequiredQaAutofillApprovalPhrase("qa"),
       "--qa-isolation-confirmation",
       qaIsolationConfirmation,
       "--dedicated-profile-confirmation",
@@ -840,7 +859,7 @@ describe("sda CLI", () => {
         "--summary",
         "Fake Chat intake — VPN connection issue after password or MFA change",
         "--approval-phrase",
-        "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED",
+        getRequiredQaAutofillApprovalPhrase("qa"),
         "--qa-isolation-confirmation",
         qaIsolationConfirmation,
         "--dedicated-profile-confirmation",
@@ -862,7 +881,7 @@ describe("sda CLI", () => {
       expect(payload.safety.browserProcessLaunched).toBe(false);
       expect(payload.safety.browserAutomationCalled).toBe(false);
       expect(payload.safety.noServiceNowWrite).toBe(true);
-      expect(serialized).not.toContain("I APPROVE QA SINGLE-TICKET AUTOFILL ONLY");
+      expect(serialized).not.toContain(getRequiredQaAutofillApprovalPhrase("qa"));
       expect(serialized).not.toContain("https" + "://");
     }
   );
@@ -902,7 +921,8 @@ describe("sda CLI", () => {
       description: "found",
       workNotes: "found"
     });
-    expect(payload.autofillRuntime.pageFingerprint).toBe("reviewed-page");
+    expect(payload.autofillRuntime.pageFingerprint).toBeUndefined();
+    expect(payload.autofillRuntime.pageFingerprintCaptured).toBe(true);
     expect(payload.autofillRuntime.filledFields).toEqual([]);
     expect(payload.plan).toBeUndefined();
     expect(payload.safety.browserAutomationCalled).toBe(true);
@@ -989,7 +1009,7 @@ describe("sda CLI", () => {
   it("executes QA runtime autofill only after fresh fingerprint-bound approval", async () => {
     const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
     const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
-    const approvalPhrase = "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED";
+    const approvalPhrase = getRequiredQaAutofillApprovalPhrase("qa");
     const driver = fakeQaAutofillRuntimeDriver([
       qaRuntimeInspection({ pageFingerprint: "reviewed-page" }),
       qaRuntimeInspection({ pageFingerprint: "reviewed-page" })
@@ -1045,7 +1065,7 @@ describe("sda CLI", () => {
   it("blocks QA runtime autofill when the approved page fingerprint is stale", async () => {
     const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
     const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
-    const approvalPhrase = "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED";
+    const approvalPhrase = getRequiredQaAutofillApprovalPhrase("qa");
     const driver = fakeQaAutofillRuntimeDriver([
       qaRuntimeInspection({ pageFingerprint: "changed-page" })
     ]);
@@ -1090,7 +1110,7 @@ describe("sda CLI", () => {
   it("blocks QA runtime autofill when the current browser host is not allowlisted", async () => {
     const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
     const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
-    const approvalPhrase = "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED";
+    const approvalPhrase = getRequiredQaAutofillApprovalPhrase("qa");
     const driver = fakeQaAutofillRuntimeDriver([
       qaRuntimeInspection({ currentUrl: "https://other.service-now.example.invalid/nav_to.do", pageFingerprint: "reviewed-page" })
     ]);
@@ -1153,7 +1173,7 @@ describe("sda CLI", () => {
       "--summary",
       "Fake Chat intake — VPN connection issue after password or MFA change",
       "--approval-phrase",
-      "I APPROVE QA SAVE ONLY",
+      getRequiredRealActionApprovalPhrase("qa", "save_incident"),
       "--qa-isolation-confirmation",
       qaIsolationConfirmation,
       "--dedicated-profile-confirmation",
@@ -1174,7 +1194,7 @@ describe("sda CLI", () => {
     expect(payload.safety.browserProcessLaunched).toBe(false);
     expect(payload.safety.browserAutomationCalled).toBe(false);
     expect(payload.safety.noServiceNowWrite).toBe(true);
-    expect(serialized).not.toContain("I APPROVE QA SAVE ONLY");
+    expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "save_incident"));
     expect(serialized).not.toContain(sensitiveHost);
     expect(serialized).not.toContain("https" + "://");
     expect(serialized).not.toContain("user:");

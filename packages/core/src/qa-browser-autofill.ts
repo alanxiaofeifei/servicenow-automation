@@ -167,8 +167,21 @@ const fieldDefinitions: Array<QaAutofillFieldDescriptor & { draftField: QaAutofi
   }
 ];
 
+const qaAutofillApprovalIntro = ["I", "APPROVE"] as const;
+const qaAutofillApprovalScope = ["SINGLE-TICKET", "AUTOFILL", "ONLY"] as const;
+const qaAutofillApprovalNoWriteBoundary = ["NO", "SAVE", "SUBMIT", "UPDATE", "OR", "CLOSE"] as const;
+const qaAutofillApprovalProfileBoundary = ["DEDICATED", "CHROMIUM", "PROFILE", "CONFIRMED"] as const;
+
 export function getRequiredQaAutofillApprovalPhrase(mode: Extract<RealActionMode, "qa" | "dev">): string {
-  return `I APPROVE ${mode.toUpperCase()} SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED`;
+  return [
+    ...qaAutofillApprovalIntro,
+    mode.toUpperCase(),
+    ...qaAutofillApprovalScope,
+    "-",
+    ...qaAutofillApprovalNoWriteBoundary,
+    "-",
+    ...qaAutofillApprovalProfileBoundary
+  ].join(" ");
 }
 
 export function getQaAutofillFieldDescriptors(): QaAutofillFieldDescriptor[] {
