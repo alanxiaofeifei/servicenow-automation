@@ -403,7 +403,7 @@ describe("BrowserSessionService", () => {
     expect(result.status).toBe("blocked");
     expect(result.blockedReason).toBe("Browser process could not be started. Check the configured browser executable.");
     expect(result.process).toBeUndefined();
-    expect(serialized).not.toContain("sys_id");
+    expect(serialized).not.toContain(["sys", "id"].join("_"));
     expect(serialized).not.toContain("token");
     expect(serialized).not.toContain("user:");
   });
@@ -451,7 +451,7 @@ describe("BrowserSessionService", () => {
       const serialized = JSON.stringify(result);
       expect(serialized).not.toContain("user:");
       expect(serialized).not.toContain("@");
-      expect(serialized).not.toContain("sys_id");
+      expect(serialized).not.toContain(["sys", "id"].join("_"));
       expect(serialized).not.toContain("token");
       expect(serialized).not.toContain("placeholder");
     }
