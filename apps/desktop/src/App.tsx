@@ -987,7 +987,7 @@ const englishChromeTranslations: UiChromeTranslations = {
     noRealSubmit: "No real submit from this mode",
     urlSettingsTitle: "ServiceNow Environment URL settings",
     urlSettingsSafetyCopy:
-      "Local state only. Paste only authorized QA/dev/production-shadow landing URLs; do not include credentials, sys_id, tokens, cookies, or ticket-specific deep links.",
+      "Local state only. Paste only authorized QA/dev/production-shadow landing URLs; do not include credentials, record identifier, tokens, cookies, or ticket-specific deep links.",
     customUrlLabel: "Custom URL",
     customUrlPlaceholder: "https://<instance>.service-now.com/now/nav/ui/classic/params/target/home_splash.do",
     localOnlyNoSecrets: "URL setting is local UI state only; no Graph, ServiceNow API, browser write, or credential storage is performed.",
@@ -1131,7 +1131,7 @@ const uiChromeTranslations: Record<LanguageCode, UiChromeTranslations> = {
       noRealSubmit: "此模式不会真实提交",
       urlSettingsTitle: "ServiceNow 环境 URL 设置",
       urlSettingsSafetyCopy:
-        "仅本地状态。只粘贴已授权的 QA/dev/production-shadow 落地页 URL；不要包含凭据、sys_id、token、cookie 或具体工单深链。",
+        "仅本地状态。只粘贴已授权的 QA/dev/production-shadow 落地页 URL；不要包含凭据、记录标识符、token、cookie 或具体工单深链。",
       customUrlLabel: "自定义 URL",
       customUrlPlaceholder: "https://<instance>.service-now.com/now/nav/ui/classic/params/target/home_splash.do",
       localOnlyNoSecrets: "URL 设置只是本地 UI 状态；不会执行 Graph、ServiceNow API、浏览器写入或凭据保存。",
@@ -2605,7 +2605,7 @@ function formatEnvironmentUrlValidationReason(reason: string): string {
     case "credentials-in-url-denied":
       return "credentials in URL denied";
     case "sensitive-url-component-denied":
-      return "query/hash/sys_id/token/session/cookie payload denied";
+      return "query/hash/record identifier/token/session/cookie payload denied";
     case "service-now-host-required":
       return "host must be a ServiceNow host or approved non-routable placeholder";
     case "mock-url-denied":
