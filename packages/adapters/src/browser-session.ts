@@ -718,10 +718,11 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
       const helperResult = await helperLauncher(command);
       const helperPayload = parseDedicatedCdpHelperPayload(helperResult.stdout);
       const helperReportedLoopbackOnly = helperPayload.safety?.cdpBoundToLoopbackOnly !== false;
+      const helperCdpEndpoint = dedicatedCdpEndpointFromHelperPayload(helperPayload);
       if (
         helperResult.exitCode !== 0 ||
         helperPayload.status !== "ready" ||
-        !isSafeLoopbackCdpEndpoint(helperPayload.cdpEndpoint) ||
+        !helperCdpEndpoint ||
         (!exposeToWsl && !helperReportedLoopbackOnly)
       ) {
         return finalizeQaDedicatedCdpBrowserStartResult({
@@ -739,7 +740,7 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
         ...baseResult,
         status: "ready",
         processId: typeof helperPayload.processId === "number" ? helperPayload.processId : DEFAULT_DEDICATED_CDP_PROCESS_ID,
-        cdpEndpoint: helperPayload.cdpEndpoint,
+        cdpEndpoint: helperCdpEndpoint,
         profile: sanitizeDedicatedCdpProfile(helperPayload.profile),
         commandPreview,
         safety: {
@@ -882,6 +883,11 @@ type DedicatedCdpBrowserHelperPayload = {
   status?: string;
   processId?: unknown;
   cdpEndpoint?: unknown;
+  cdp?: {
+    endpointReady?: unknown;
+    endpointRedacted?: unknown;
+    localPort?: unknown;
+  };
   blockedReason?: string;
   targetValidation?: {
     reason?: unknown;
@@ -1090,6 +1096,37 @@ function parseDedicatedCdpHelperPayload(stdout: string): DedicatedCdpBrowserHelp
     throw new Error("invalid-dedicated-cdp-helper-payload");
   }
   return payload as DedicatedCdpBrowserHelperPayload;
+}
+
+function dedicatedCdpEndpointFromHelperPayload(payload: DedicatedCdpBrowserHelperPayload): string | undefined {
+  if (isSafeLoopbackCdpEndpoint(payload.cdpEndpoint)) {
+    return payload.cdpEndpoint;
+  }
+
+  if (payload.cdp?.endpointReady !== true || payload.cdp.endpointRedacted !== true) {
+    return undefined;
+  }
+
+  const localPort = parseDedicatedCdpLocalPort(payload.cdp.localPort);
+  if (!localPort) {
+    return undefined;
+  }
+
+  return `${LOCAL_CDP_HTTP_SCHEME}://${LOCAL_CDP_LOOPBACK_HOST}:${localPort}`;
+}
+
+function parseDedicatedCdpLocalPort(port: unknown): string | undefined {
+  const portText = typeof port === "number" ? String(port) : typeof port === "string" ? port.trim() : "";
+  if (!/^\d+$/.test(portText)) {
+    return undefined;
+  }
+
+  const portNumber = Number(portText);
+  if (!Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65535) {
+    return undefined;
+  }
+
+  return String(portNumber);
 }
 
 function isSafeLoopbackCdpEndpoint(endpoint: unknown): endpoint is string {

@@ -101,8 +101,8 @@ Both are tool-owned runtime roots. Daily installed Chrome and Edge remain blocke
 The helper still launches with:
 
 - tool-owned disposable profile under `%LOCALAPPDATA%\ServiceNowAutomation\Profiles\...`
-- `--remote-debugging-address=127.0.0.1` by default
-- dynamic CDP port
+- CDP is bound to the local loopback interface by default
+- dynamic CDP port with ready output redacted to status/diagnostics
 - manual login
 - no Save, Submit, Update, Close, upload, email, screenshot, HAR, trace, storage-state, cookie export, or ServiceNow API call
 

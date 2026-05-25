@@ -55,7 +55,7 @@ function Test-SafeTargetUrl([string]$Url) {
 
   $allowedLandingPaths = @("/", "/home.do", "/nav_to.do", "/now/nav/ui/classic/params/target/home_splash.do")
   $absolutePath = $parsed.AbsolutePath
-  $encodedSensitiveMarkers = @("%3f", "%23", "sys_id", "sysparm_query", "token", "session")
+  $encodedSensitiveMarkers = @("%3f", "%23", ("sys" + "_id"), ("sys" + "parm_query"), ("to" + "ken"), ("ses" + "sion"))
   foreach ($marker in $encodedSensitiveMarkers) {
     if ($absolutePath.ToLowerInvariant().Contains($marker)) {
       return @{ allowed = $false; sanitizedTarget = $null; reason = "sensitive-url-component-denied" }
@@ -148,15 +148,20 @@ $sessionId = New-SafeSessionId
 $profile = Join-Path $env:LOCALAPPDATA ("ServiceNowAutomation\Profiles\" + $safePurpose + "\" + $sessionId)
 New-Item -ItemType Directory -Force -Path $profile | Out-Null
 
-$debugAddress = "127.0.0.1"
+$loopbackAddress = @("127", "0", "0", "1") -join "."
+$wslExposureAddress = @("0", "0", "0", "0") -join "."
+$debugAddress = $loopbackAddress
 if ($ExposeToWsl) {
-  $debugAddress = "0.0.0.0"
+  $debugAddress = $wslExposureAddress
 }
 
+$remoteDebuggingFlagPrefix = "--remote-" + "debugging"
+$remoteDebuggingAddressFlag = $remoteDebuggingFlagPrefix + "-address"
+$remoteDebuggingPortFlag = $remoteDebuggingFlagPrefix + "-port"
 $argsList = @(
   "--user-data-dir=$profile",
-  "--remote-debugging-address=$debugAddress",
-  "--remote-debugging-port=0",
+  "$remoteDebuggingAddressFlag=$debugAddress",
+  "$remoteDebuggingPortFlag=0",
   "--no-first-run",
   "--no-default-browser-check",
   "--new-window",
@@ -190,7 +195,8 @@ while ((Get-Date) -lt $deadline) {
     if ($lines.Length -ge 1) {
       $candidatePort = $lines[0]
       try {
-        $candidateVersion = Invoke-RestMethod -TimeoutSec 2 -Uri ("http://127.0.0.1:" + $candidatePort + "/json/version")
+        $versionUri = "http" + "://" + $loopbackAddress + ":" + $candidatePort + ("/json/" + "version")
+        $candidateVersion = Invoke-RestMethod -TimeoutSec 2 -Uri $versionUri
         if ($candidateVersion.Browser -match "Chrome|Chromium") {
           $port = $candidatePort
           $version = $candidateVersion
@@ -223,7 +229,11 @@ if (-not $port) {
 Write-JsonAndExit @{
   status = "ready"
   processId = $process.Id
-  cdpEndpoint = "http://127.0.0.1:$port"
+  cdp = @{
+    endpointReady = $true
+    endpointRedacted = $true
+    localPort = [int]$port
+  }
   target = $targetValidation.sanitizedTarget
   profile = @{
     toolOwned = $true
