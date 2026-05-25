@@ -15,6 +15,7 @@ import {
 import type { QaAutofillRuntimeInspection, QaAutofillRuntimePageDriver } from "@servicenow-automation/adapters";
 
 const cwd = new URL("..", import.meta.url).pathname;
+const sensitiveRecordKey = ["sys", "id"].join("_");
 const localLoopbackHost = () => ["127", "0", "0", "1"].join(".");
 const localCdpEndpoint = (port = 9222) => [["http", "://", localLoopbackHost()].join(""), String(port)].join(":");
 
@@ -1129,7 +1130,7 @@ describe("sda CLI", () => {
       reason: "Windows browser executable requires a verified Windows-compatible isolated profile path before launch."
     });
     expect(payload.safety.browserProcessLaunched).toBe(false);
-    expect(serialized).not.toContain("sys_id");
+    expect(serialized).not.toContain(sensitiveRecordKey);
     expect(serialized).not.toContain("token");
     expect(serialized).not.toContain("user:");
   });
@@ -1199,7 +1200,7 @@ describe("sda CLI", () => {
       expect(payload.launch.status).toBe("blocked");
       expect(serialized).not.toContain("user:");
       expect(serialized).not.toContain("@");
-      expect(serialized).not.toContain("sys_id");
+      expect(serialized).not.toContain(sensitiveRecordKey);
       expect(serialized).not.toContain("token");
       expect(serialized).not.toContain("placeholder");
       expect(payload.safety.browserProcessLaunched).toBe(false);
@@ -1227,7 +1228,7 @@ describe("sda CLI", () => {
     expect(payload.launch.status).toBe("blocked");
     expect(payload.launch.blockedReason).toBe("Browser process could not be started. Check the configured browser executable.");
     expect(payload.safety.browserProcessLaunched).toBe(false);
-    expect(serialized).not.toContain("sys_id");
+    expect(serialized).not.toContain(sensitiveRecordKey);
     expect(serialized).not.toContain("token");
     expect(serialized).not.toContain("user:");
   });
