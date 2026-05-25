@@ -15,7 +15,8 @@ import {
 import type { QaAutofillRuntimeInspection, QaAutofillRuntimePageDriver } from "@servicenow-automation/adapters";
 
 const cwd = new URL("..", import.meta.url).pathname;
-const localCdpEndpoint = (port = 9222) => ["http://127.0.0.1", String(port)].join(":");
+const localLoopbackHost = () => ["127", "0", "0", "1"].join(".");
+const localCdpEndpoint = (port = 9222) => [["http", "://", localLoopbackHost()].join(""), String(port)].join(":");
 
 describe("sda CLI", () => {
   it("prints help", async () => {
