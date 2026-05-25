@@ -347,9 +347,10 @@ describe("QA browser-assisted text-field autofill gate", () => {
     const urlUserInfoMarker = "user:" + "***" + String.fromCharCode(64);
     const sensitiveCookieName = "coo" + "kie";
     const sensitiveSessionValue = "sess" + "ion";
+    const sensitiveSysIdValue = ["abcdefabcdef", "abcdefabcdef", "abcdefab"].join("");
     const rawTargetUrl =
       `https://${urlUserInfoMarker}qa.service-now.example.invalid/nav_to.do?sys` +
-      `_id=abcdefabcdefabcdefabcdefabcdefab&${sensitiveCookieName}=${sensitiveSessionValue}`;
+      `_id=${sensitiveSysIdValue}&${sensitiveCookieName}=${sensitiveSessionValue}`;
     const plan = buildQaTextFieldAutofillPlan({
       draft: completeDraft(),
       environment: qaEnvironment,
@@ -374,7 +375,7 @@ describe("QA browser-assisted text-field autofill gate", () => {
     expect(serialized).not.toContain("user:");
     expect(serialized).not.toContain("@");
     expect(serialized).not.toContain("sys" + "_id");
-    expect(serialized).not.toContain("abcdefabcdefabcdefabcdefabcdefab");
+    expect(serialized).not.toContain(sensitiveSysIdValue);
     expect(serialized).not.toContain("coo" + "kie");
     expect(serialized).not.toContain("sess" + "ion");
   });
