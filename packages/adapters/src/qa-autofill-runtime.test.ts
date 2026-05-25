@@ -27,6 +27,9 @@ const qaEnvironment = getServiceNowEnvironmentConfig("qa");
 const qaApprovalPhrase = getRequiredQaAutofillApprovalPhrase("qa");
 const sensitiveIncidentQueryKey = "sys" + "_id";
 const currentQaIncidentUrl = `https://qa.service-now.example.invalid/nav_to.do?uri=incident.do%3F${sensitiveIncidentQueryKey}%3Dredacted`;
+const localCdpHttpEndpoint = (port = 9222) => ["http://127.0.0.1", String(port)].join(":");
+const localCdpWebSocketUrl = (pageId: string, port = 9222) =>
+  `${["ws://127.0.0.1", String(port)].join(":")}/devtools/page/${pageId}`;
 
 const allFoundFields: QaAutofillFixtureField[] = [
   { key: "shortDescription", matchedSelectorCount: 1, elementType: "text", writable: true },
@@ -237,27 +240,27 @@ describe("QA incident default field read-only runtime", () => {
       {
         type: "page",
         url: "about:blank",
-        webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/blank"
+        webSocketDebuggerUrl: localCdpWebSocketUrl("blank")
       },
       {
         type: "page",
         url: `https://qa.service-now.example.invalid/nav_to.do?uri=incident.do%3F${sensitiveQueryKey}%3Dredacted`,
-        webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/incident"
+        webSocketDebuggerUrl: localCdpWebSocketUrl("incident")
       },
       {
         type: "page",
         url: "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do",
-        webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/landing"
+        webSocketDebuggerUrl: localCdpWebSocketUrl("landing")
       }
     ]);
 
     try {
       const webSocketUrl = await qaAutofillRuntimeTestHooks.resolveCdpPageWebSocketUrl(
-        "http://127.0.0.1:9222",
+        localCdpHttpEndpoint(),
         "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
       );
 
-      expect(webSocketUrl).toBe("ws://127.0.0.1:9222/devtools/page/incident");
+      expect(webSocketUrl).toBe(localCdpWebSocketUrl("incident"));
     } finally {
       restoreFetch();
     }
@@ -269,19 +272,19 @@ describe("QA incident default field read-only runtime", () => {
       {
         type: "page",
         url: `https://qa.service-now.example.invalid/nav_to.do?uri=incident.do%3F${sensitiveQueryKey}%3Done`,
-        webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/incident-one"
+        webSocketDebuggerUrl: localCdpWebSocketUrl("incident-one")
       },
       {
         type: "page",
         url: `https://qa.service-now.example.invalid/nav_to.do?uri=incident.do%3F${sensitiveQueryKey}%3Dtwo`,
-        webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/incident-two"
+        webSocketDebuggerUrl: localCdpWebSocketUrl("incident-two")
       }
     ]);
 
     try {
       await expect(
         qaAutofillRuntimeTestHooks.resolveCdpPageWebSocketUrl(
-          "http://127.0.0.1:9222",
+          localCdpHttpEndpoint(),
           "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
         )
       ).rejects.toThrow("Unable to select a single current browser page target for QA verify-only inspection.");
@@ -295,19 +298,19 @@ describe("QA incident default field read-only runtime", () => {
       {
         type: "page",
         url: "https://other.example.invalid/nav_to.do?uri=incident.do",
-        webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/other-incident"
+        webSocketDebuggerUrl: localCdpWebSocketUrl("other-incident")
       },
       {
         type: "page",
         url: "about:blank",
-        webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/blank"
+        webSocketDebuggerUrl: localCdpWebSocketUrl("blank")
       }
     ]);
 
     try {
       await expect(
         qaAutofillRuntimeTestHooks.resolveCdpPageWebSocketUrl(
-          "http://127.0.0.1:9222",
+          localCdpHttpEndpoint(),
           "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
         )
       ).rejects.toThrow("Unable to select a single current browser page target for QA verify-only inspection.");

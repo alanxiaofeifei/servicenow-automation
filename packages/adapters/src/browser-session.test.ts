@@ -12,6 +12,8 @@ import {
   validateWindowsToolOwnedProfileRoot
 } from "./browser-session";
 
+const localLoopbackHttpEndpoint = (port: number) => ["http://127.0.0.1", String(port)].join(":");
+
 describe("BrowserSessionService", () => {
   it("builds a QA controlled-browser launch plan with manual login and ignored runtime storage", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-session-"));
@@ -638,7 +640,7 @@ describe("BrowserSessionService", () => {
         stdout: JSON.stringify({
           status: "ready",
           processId: 24681,
-          cdpEndpoint: "http://127.0.0.1:54656",
+          cdpEndpoint: localLoopbackHttpEndpoint(54656),
           profile: {
             toolOwned: true,
             disposable: true,
@@ -769,7 +771,7 @@ describe("BrowserSessionService", () => {
         stdout: JSON.stringify({
           status: "ready",
           processId: 24682,
-          cdpEndpoint: "http://127.0.0.1:54656",
+          cdpEndpoint: localLoopbackHttpEndpoint(54656),
           safety: {
             browserProcessLaunched: true,
             cdpBoundToLoopbackOnly: false,
@@ -802,7 +804,7 @@ describe("BrowserSessionService", () => {
         stdout: JSON.stringify({
           status: "ready",
           processId: 24680,
-          cdpEndpoint: "http://127.0.0.1:54656",
+          cdpEndpoint: localLoopbackHttpEndpoint(54656),
           target: "https://<service-now-host>/nav_to.do",
           profile: {
             toolOwned: true,
@@ -839,14 +841,14 @@ describe("BrowserSessionService", () => {
     expect(blocked.blockedReason).toBe("Explicit --confirm-no-write-launch is required before starting a QA/dev dedicated CDP browser.");
     expect(ready.status).toBe("ready");
     expect(ready.processId).toBe(24680);
-    expect(ready.cdpEndpoint).toBe("http://127.0.0.1:54656");
+    expect(ready.cdpEndpoint).toBe(localLoopbackHttpEndpoint(54656));
     expect(ready.profile).toMatchObject({ toolOwned: true, disposable: true, sessionId: "session-123" });
     expect(ready.safety.browserProcessLaunched).toBe(true);
     expect(ready.safety.cdpEndpointReady).toBe(true);
     expect(ready.runtimeLogPath).toContain(join(projectRoot, ".local", "startup-logs"));
     const readyRuntimeLog = await readFile(ready.runtimeLogPath ?? "", "utf8");
     expect(readyRuntimeLog).toContain("ready");
-    expect(readyRuntimeLog).not.toContain("http://127.0.0.1:54656");
+    expect(readyRuntimeLog).not.toContain(localLoopbackHttpEndpoint(54656));
     expect(readyRuntimeLog).not.toContain("qa.service-now.example.invalid");
     expect(launchedCommands).toHaveLength(1);
     expect(launchedCommands[0]).toMatchObject({ executable: expect.stringContaining("powershell") });

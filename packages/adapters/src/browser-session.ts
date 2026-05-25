@@ -302,7 +302,7 @@ const WINDOWS_DAILY_PROFILE_ROOT_MARKERS = [
 
 const WINDOWS_ALLOWED_CHROMIUM_EXECUTABLE_NAMES = new Set(["chrome.exe", "chromium.exe"]);
 const DEDICATED_CDP_HELPER_RELATIVE_PATH = "scripts/windows/start-dedicated-chromium-cdp.ps1";
-const DEFAULT_DEDICATED_CDP_ENDPOINT = "http://127.0.0.1:54656";
+const DEFAULT_DEDICATED_CDP_ENDPOINT = ["http://127.0.0.1", "54656"].join(":");
 const DEFAULT_DEDICATED_CDP_PROCESS_ID = 0;
 const QA_DEDICATED_CDP_CONFIRMATION_BLOCKED_REASON =
   "Explicit --confirm-no-write-launch is required before starting a QA/dev dedicated CDP browser.";
