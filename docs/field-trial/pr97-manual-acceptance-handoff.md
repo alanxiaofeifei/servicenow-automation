@@ -9,15 +9,28 @@ This document is a sanitized handoff for external review and the next developmen
 
 ## Executive status
 
-Manual acceptance failed after the last pushed implementation.
+Current status after the K6I5D2R follow-up: Alan's manual UI acceptance passed for the warm-light Operator Workbench layout.
+
+This document originally recorded the earlier PR #97 manual acceptance failure. Keep that history for traceability, but treat the UI-redesign blocker below as superseded by the later accepted K6I5D2R work.
+
+The PR remains a draft/review handoff until Windows runtime/packaging acceptance and any first real QA/dev trial boundaries are separately verified.
+
+Historical acceptance failure after the earlier implementation:
 
 Observed by the user:
 
 - Clicking `Start QA Chromium` from the QA/dev Incident operator UI produced no visible browser launch.
 - `Verify current Incident` stayed disabled/greyed out because Chromium/CDP was not started.
 - The later autofill steps were therefore not testable.
-- The intended desktop UI restructuring was not accepted: the visible application still behaves like an overcrowded vertical/stream layout, not a simplified operator workbench.
-- The promised `operator workbench` three-step flow and localized three-column layout were not materially visible enough for acceptance.
+- The intended desktop UI restructuring was not accepted at that time: the visible application still behaved like an overcrowded vertical/stream layout, not a simplified operator workbench.
+- The promised `operator workbench` three-step flow and localized three-column layout were not materially visible enough for acceptance at that time.
+
+Later accepted UI closure:
+
+- Smaller far-left double-chevron handle with vertical drag support.
+- Settings exists as one row in the expanded left sidebar navigation, not under the Today/Yesterday list.
+- Expanded blank left rail is removed; collapsed state keeps a compact functional rail.
+- Production is visible in Settings while remaining separated from safe production-shadow behavior.
 
 Important correction: local typecheck/build/test/privacy gates passed, but they did not prove the Windows double-click product flow, real QA Chromium launch, CDP readiness, or accepted UI redesign.
 
@@ -92,13 +105,15 @@ This is probably downstream of the Chromium/CDP launch failure. Acceptance crite
 - After successful launch and local CDP readiness: Verify enabled.
 - If browser launch fails: Verify disabled with a visible sanitized error and log path.
 
-### P0 — UI redesign not accepted
+### Resolved P0 — UI redesign accepted after K6I5D2R
 
-The current UI still feels like an overgrown vertical application. The next design effort should stop patching more cards into the same stream and instead restructure the app into a simplified three-column operator workbench.
+This blocker is superseded. Alan later confirmed that the UI manual check passed after the K6I5D2R follow-up.
+
+Keep these regression guardrails for future changes:
 
 Requested final UI direction:
 
-- Left column: source/loading area, todo list, history, mode/function switching, and bottom-left settings.
+- Left column: source/loading area, todo list, history, mode/function switching, and one Settings row inside the expanded navigation.
 - Center column: selected source/detail view and transformed ServiceNow Incident field preview, including required/common fields and the autofill plan.
 - Right column: runtime actions and controls, including browser launch, verify-only, autofill buttons, templates, status, safety boundary, and environment controls.
 - Warm/light theme should remain the default.
@@ -188,8 +203,8 @@ Suggested Kanban graph for the next phase:
 - K2 Runtime bug investigation: reproduce `Start QA Chromium` no-op from Windows double-click app and identify the broken IPC/helper/state path.
 - K3 Runtime fix: repair button-to-browser launch and user-visible sanitized errors.
 - K4 Verify-only fix: enable Verify after CDP readiness and prove read-only field inspection.
-- K5 Three-column redesign exploration: OpenDesign/public reference exploration and static mockups.
-- K6 Three-column implementation: refactor app shell into left/center/right workbench.
+- K5 Three-column redesign exploration: completed/superseded by the accepted K6I5D2R visual recovery.
+- K6 Three-column implementation: completed/superseded by the accepted K6I5D2R visual recovery.
 - K7 Packaging guardrail: prove packaged Windows artifact runs without WSL dev dependencies.
 - K8 Independent safety/privacy review.
 - K9 Manual Windows acceptance pass/fail run.
@@ -198,9 +213,9 @@ Dependencies:
 
 - K3 depends on K2.
 - K4 depends on K3.
-- K6 depends on K5.
-- K7 can run in parallel after K3 starts, but final verification depends on K6 and K4.
-- K8 depends on K3/K4/K6/K7.
+- K6 depended on K5 and is now accepted for the current UI scope.
+- K7 can run in parallel after K3 starts, but final verification still depends on the runtime/verify path and the accepted UI not regressing.
+- K8 depends on K3/K4/K7 plus a no-regression check for the accepted UI.
 - K9 depends on K8.
 
 ## What GPT-5.5 Pro should investigate first
@@ -209,7 +224,7 @@ Ask GPT-5.5 Pro to inspect the PR and source with these failure facts in mind:
 
 1. The current branch is pushed to GitHub PR #97.
 2. Manual acceptance found Start QA Chromium no-op and Verify disabled.
-3. The UI redesign was not accepted as a real three-column workbench.
+3. The UI redesign blocker has since been resolved by Alan's K6I5D2R manual acceptance.
 4. Local automated gates passed but did not cover Windows product acceptance.
 5. The next plan should recommend concrete Hermes Agent profiles and Kanban responsibilities before more coding.
 6. The next coding phase should prioritize Windows launch/runtime observability before additional autofill scope.
@@ -219,5 +234,5 @@ Ask GPT-5.5 Pro to inspect the PR and source with these failure facts in mind:
 - Do not add Save/Submit/Update/Resolve/Close automation.
 - Do not expand runtime autofill to reference/select/status fields before the browser launch and verify-only path work.
 - Do not claim packaging is complete until a packaged Windows artifact is tested outside the WSL development dependency chain.
-- Do not keep adding cards to the vertical UI instead of performing an app-shell refactor.
+- Do not regress the accepted app-shell layout back into a crowded vertical card stream.
 - Do not ask the user to debug via more CLI steps when the product requirement is a Windows double-click tool.
