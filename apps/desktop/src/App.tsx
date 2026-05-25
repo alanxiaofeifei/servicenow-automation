@@ -4,7 +4,6 @@ import { demoManualPasteScenarios, type ManualPasteScenario } from "@servicenow-
 import { generateMockTicketDraft } from "@servicenow-automation/ai";
 import { demoKnowledgeArticles, searchKnowledgeArticles } from "@servicenow-automation/kb/browser";
 import {
-  getDefaultServiceNowEnvironmentMode,
   getServiceNowEnvironmentConfig,
   loadDemoYageoProfile,
   serviceNowEnvironmentConfigs,
@@ -879,7 +878,7 @@ const visibleServiceNowEnvironmentModes: WorkbenchEnvironmentMode[] = ["qa", "pr
 const serviceNowEnvironmentUrlSettingModes: WorkbenchEnvironmentMode[] = visibleServiceNowEnvironmentModes;
 
 function toWorkbenchEnvironmentMode(mode: ServiceNowEnvironmentMode): WorkbenchEnvironmentMode {
-  return mode === "production-shadow" ? "production-shadow" : "qa";
+  return mode === "qa" ? "qa" : "production-shadow";
 }
 
 function isQaWorkbenchMode(mode: WorkbenchEnvironmentMode): boolean {
@@ -2547,7 +2546,7 @@ export function getNextEnvironmentUrlOverrideFromDraft(mode: Exclude<ServiceNowE
 
 export function App({
   initialLanguage = "en-US",
-  initialEnvironmentMode = getDefaultServiceNowEnvironmentMode(),
+  initialEnvironmentMode = "qa",
   initialHighSeverityState = "normal",
   initialHighSeverityMonitoredGroups = defaultHighSeverityMonitoredGroups,
   initialQaSmokeWriteAction = "save_incident",
@@ -5648,9 +5647,11 @@ function QaOperatorRuntimePanel({
   workbenchCopy: OperatorWorkbenchCopy;
 }) {
   const canUseRuntime = isQaWorkbenchMode(mode);
+  const qaBoundCdpEndpointReady = canUseRuntime && cdpEndpointReady;
+  const qaBoundVerifiedPageFingerprintReady = qaBoundCdpEndpointReady && verifiedPageFingerprintReady;
   const launchDisabled = !canUseRuntime || !targetReady || busyAction !== null;
-  const verifyDisabled = !canUseRuntime || !targetReady || !cdpEndpointReady || busyAction !== null;
-  const autofillDisabled = !canUseRuntime || !targetReady || !cdpEndpointReady || busyAction !== null || !verifiedPageFingerprintReady;
+  const verifyDisabled = !canUseRuntime || !targetReady || !qaBoundCdpEndpointReady || busyAction !== null;
+  const autofillDisabled = !canUseRuntime || !targetReady || !qaBoundCdpEndpointReady || busyAction !== null || !qaBoundVerifiedPageFingerprintReady;
   const launchDisabledReason = !canUseRuntime
     ? workbenchCopy.runtime.disabledProductionReason
     : !targetReady
@@ -5662,7 +5663,7 @@ function QaOperatorRuntimePanel({
     ? workbenchCopy.runtime.disabledProductionReason
     : !targetReady
       ? workbenchCopy.runtime.disabledTargetReason
-      : !cdpEndpointReady
+      : !qaBoundCdpEndpointReady
         ? workbenchCopy.runtime.verifyCdpReason
         : busyAction !== null
           ? workbenchCopy.runtime.disabledBusyReason
@@ -5671,9 +5672,9 @@ function QaOperatorRuntimePanel({
     ? workbenchCopy.runtime.disabledProductionReason
     : !targetReady
       ? workbenchCopy.runtime.disabledTargetReason
-      : !cdpEndpointReady
+      : !qaBoundCdpEndpointReady
         ? workbenchCopy.runtime.verifyCdpReason
-        : !verifiedPageFingerprintReady
+        : !qaBoundVerifiedPageFingerprintReady
           ? workbenchCopy.runtime.autofillVerifyReason
           : busyAction !== null
             ? workbenchCopy.runtime.disabledBusyReason
@@ -5686,9 +5687,9 @@ function QaOperatorRuntimePanel({
         : status.tone === "success"
           ? workbenchCopy.runtime.statusSuccess
           : workbenchCopy.runtime.statusReady;
-  const runtimeStatusDescription = verifiedPageFingerprintReady
+  const runtimeStatusDescription = qaBoundVerifiedPageFingerprintReady
     ? workbenchCopy.runtime.statusVerified
-    : cdpEndpointReady
+    : qaBoundCdpEndpointReady
       ? workbenchCopy.runtime.statusCdpReady
       : workbenchCopy.runtime.statusWaiting;
   const lastPlanCount = lastResponse?.defaultPlan?.plannedFields?.length ?? 0;
@@ -5781,7 +5782,7 @@ function QaOperatorRuntimePanel({
           </div>
           <div>
             <dt>{workbenchCopy.runtime.cdpLabel}</dt>
-            <dd>{cdpEndpointReady ? workbenchCopy.runtime.cdpReady : workbenchCopy.runtime.cdpWaiting}</dd>
+            <dd>{qaBoundCdpEndpointReady ? workbenchCopy.runtime.cdpReady : workbenchCopy.runtime.cdpWaiting}</dd>
           </div>
         </dl>
         <p>{runtimeStatusDescription}</p>

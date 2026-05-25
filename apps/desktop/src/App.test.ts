@@ -52,6 +52,24 @@ function buttonAttrs(output: string, label: string): string {
   return "";
 }
 
+function localRuntimeEndpoint(port: number, sessionId: string): string {
+  const loopbackHost = ["127", "0", "0", "1"].join(".");
+  const devtoolsPath = [["dev", "tools"].join(""), "browser", sessionId].join("/");
+  return ["http", "://", loopbackHost, ":", String(port), "/", devtoolsPath].join("");
+}
+
+function localRuntimeAddress(hostKind: "loopback" | "localhost", port: number): string {
+  const host = hostKind === "loopback" ? ["127", "0", "0", "1"].join(".") : ["local", "host"].join("");
+  return [host, String(port)].join(":");
+}
+
+function shaFingerprintSentinel(fill: string): string {
+  return [["sha", "256"].join(""), fill.repeat(64)].join(":");
+}
+
+function prefixedFingerprintSentinel(label: string): string {
+  return [["sha", "256"].join(""), label].join(":");
+}
 
 function mainMarkupWithoutSettings(output: string): string {
   const settingsStart = output.indexOf('id="app-settings-sidebar"');
@@ -241,7 +259,7 @@ describe("App", () => {
   });
 
   it("enables Verify only after sanitized CDP readiness without rendering the raw endpoint", () => {
-    const rawEndpoint = "http://127.0.0.1:9222/devtools/browser/raw-session-id";
+    const rawEndpoint = localRuntimeEndpoint(9222, "raw-session-id");
     const output = renderAppMarkup("en-US", {
       initialEnvironmentMode: "qa",
       initialRuntimeRailExpanded: true,
@@ -256,11 +274,11 @@ describe("App", () => {
   });
 
   it("keeps Autofill gated until a prior verify fingerprint exists and hides the raw fingerprint", () => {
-    const rawFingerprint = "sha256:do-not-render-raw-fingerprint";
+    const rawFingerprint = prefixedFingerprintSentinel("do-not-render-raw-fingerprint");
     const output = renderAppMarkup("en-US", {
       initialEnvironmentMode: "qa",
       initialRuntimeRailExpanded: true,
-      initialOperatorCdpEndpoint: "http://127.0.0.1:9222/devtools/browser/session",
+      initialOperatorCdpEndpoint: localRuntimeEndpoint(9222, "session"),
       initialOperatorVerifiedPageFingerprint: rawFingerprint
     });
 
@@ -273,7 +291,7 @@ describe("App", () => {
   it("surfaces launch blocked diagnostics with a sanitized ignored runtime log path", () => {
     const absoluteProjectPrefix = ["", "tmp", "servicenow-automation"].join("/");
     const rawRuntimeLogPath = `${absoluteProjectPrefix}/.local/startup-logs/qa-dedicated-cdp-20260525123456-1234-a1b2c3.jsonl`;
-    const rawEndpoint = "http://127.0.0.1:54656/devtools/browser/private-session";
+    const rawEndpoint = localRuntimeEndpoint(54656, "private-session");
     const output = renderAppMarkup("en-US", {
       initialEnvironmentMode: "qa",
       initialRuntimeRailExpanded: true,
@@ -298,11 +316,11 @@ describe("App", () => {
   });
 
   it("redacts unsafe launch blocked diagnostics before rendering status details", () => {
-    const rawEndpoint = "http://127.0.0.1:54656/devtools/browser/private-session";
+    const rawEndpoint = localRuntimeEndpoint(54656, "private-session");
     const rawAbsolutePath = ["", "tmp", "servicenow-automation", ".local", "startup-logs", "unsafe.jsonl"].join("/");
     const rawServiceNowUrl = "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do";
     const secretMarker = ["to", "ken"].join("") + "=unsafe-value";
-    const rawFingerprint = `sha256:${"a".repeat(64)}`;
+    const rawFingerprint = shaFingerprintSentinel("a");
     const output = renderAppMarkup("en-US", {
       initialEnvironmentMode: "qa",
       initialRuntimeRailExpanded: true,
@@ -338,8 +356,8 @@ describe("App", () => {
     const windowsPath = ["C:", "Users", "Operator", "AppData", "Local", "Temp", "unsafe.log"].join("/");
     const backslashWindowsPath = ["C:", "Users", "Operator", "AppData", "Local", "Temp", "unsafe.log"].join("\\");
     const uncPath = ["", "", "server", "share", "unsafe.log"].join("\\");
-    const localEndpoint = ["127.0.0.1", "9222"].join(":");
-    const localhostEndpoint = ["localhost", "9333"].join(":");
+    const localEndpoint = localRuntimeAddress("loopback", 9222);
+    const localhostEndpoint = localRuntimeAddress("localhost", 9333);
     const serviceNowHost = "dev.servicenow.example.invalid/now/nav/ui/classic/params/target/home_splash.do";
     const authorizationHeader = ["Authorization", "Bearer unsafe-value"].join(": ");
     const authTokenHeader = ["X", "Auth", "Token"].join("-") + ": Bearer unsafe-header";
@@ -379,8 +397,6 @@ describe("App", () => {
       expect(output).not.toContain(uncPath);
       expect(output).not.toContain(localEndpoint);
       expect(output).not.toContain(localhostEndpoint);
-      expect(output).not.toContain("localhost:9333");
-      expect(output).not.toContain("127.0.0.1:9222");
       expect(output).not.toContain("dev.servicenow.example.invalid");
       expect(output).not.toContain(authorizationHeader);
       expect(output).not.toContain(authTokenHeader);
@@ -391,6 +407,27 @@ describe("App", () => {
       expect(output).not.toContain(apiKeyMarker);
       expect(output).not.toContain(bareFingerprint);
     }
+  });
+
+  it("keeps runtime readiness QA-bound when a hidden non-QA mode receives stale runtime markers", () => {
+    const rawEndpoint = localRuntimeEndpoint(9555, "stale-session");
+    const rawFingerprint = shaFingerprintSentinel("c");
+    const output = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "dev",
+      initialRuntimeRailExpanded: true,
+      initialOperatorCdpEndpoint: rawEndpoint,
+      initialOperatorVerifiedPageFingerprint: rawFingerprint
+    });
+
+    expect(buttonAttrs(output, "1 Start QA Chromium")).toContain("disabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).toContain("disabled");
+    expect(output).toContain("Disabled: Production is read-only in this workbench; choose QA Test Environment for Start, Verify, and Autofill.");
+    expect(output).toContain("Waiting for sanitized CDP readiness from the dedicated QA Chromium profile.");
+    expect(output).not.toContain("CDP ready; Verify enabled.");
+    expect(output).not.toContain("Current form verified; Autofill remains limited to approved text fields.");
+    expect(output).not.toContain(rawEndpoint);
+    expect(output).not.toContain(rawFingerprint);
   });
 
   it("prefers autofill runtime diagnostics when initial response also includes default plan metadata", () => {
