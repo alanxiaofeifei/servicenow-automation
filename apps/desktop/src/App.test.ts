@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { demoManualPasteScenarios } from "@servicenow-automation/adapters/browser";
+import { getRequiredQaAutofillApprovalPhrase, getRequiredRealActionApprovalPhrase } from "@servicenow-automation/core";
 
 import {
   App,
@@ -617,15 +618,15 @@ describe("App", () => {
     expect(output).toContain('value="close_incident"');
     expect(output).toContain("Required approval phrase for selected action");
     expect(output).toContain("save_incident");
-    expect(output).toContain("I APPROVE MOCK SAVE ONLY");
+    expect(output).toContain(getRequiredRealActionApprovalPhrase("mock", "save_incident"));
     expect(output).toContain("First smoke safe scope");
     expect(output).toContain("Dry-run first: review the local field mapping and Excel row preview only.");
     expect(output).toContain("Manual copy only: Alan copies or types values; the app never fills ServiceNow.");
     expect(output).toContain("Save-only readiness: Submit, Update, and Close remain deferred to a later checkpoint.");
     expect(output).toContain("Action-specific approval phrases");
-    expect(output).toContain("I APPROVE MOCK SUBMIT ONLY");
-    expect(output).toContain("I APPROVE MOCK UPDATE ONLY");
-    expect(output).toContain("I APPROVE MOCK CLOSE ONLY");
+    expect(output).toContain(getRequiredRealActionApprovalPhrase("mock", "submit_incident"));
+    expect(output).toContain(getRequiredRealActionApprovalPhrase("mock", "update_incident"));
+    expect(output).toContain(getRequiredRealActionApprovalPhrase("mock", "close_incident"));
     expect(output).toContain("Stop rules");
     expect(output).toContain(
       "Stop before every Save/Submit/Update/Close unless Alan gives the exact action-specific approval phrase."
@@ -653,10 +654,10 @@ describe("App", () => {
     });
 
     const actionPhrases = [
-      ["save_incident", "I APPROVE MOCK SAVE ONLY"],
-      ["submit_incident", "I APPROVE MOCK SUBMIT ONLY"],
-      ["update_incident", "I APPROVE MOCK UPDATE ONLY"],
-      ["close_incident", "I APPROVE MOCK CLOSE ONLY"]
+      ["save_incident", getRequiredRealActionApprovalPhrase("mock", "save_incident")],
+      ["submit_incident", getRequiredRealActionApprovalPhrase("mock", "submit_incident")],
+      ["update_incident", getRequiredRealActionApprovalPhrase("mock", "update_incident")],
+      ["close_incident", getRequiredRealActionApprovalPhrase("mock", "close_incident")]
     ] as const;
 
     for (const [initialQaSmokeWriteAction, expectedPhrase] of actionPhrases) {
@@ -718,7 +719,7 @@ describe("App", () => {
       initialQaAutofillQaIsolationConfirmed: true,
       initialQaAutofillDedicatedProfileConfirmed: true,
       initialQaAutofillApprovalPhrase:
-        "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED"
+        getRequiredQaAutofillApprovalPhrase("qa")
     });
 
     expect(output).toContain("QA browser-assisted text-field autofill planning gate");
@@ -726,7 +727,7 @@ describe("App", () => {
     expect(output).toContain("Planning/review only in this slice.");
     expect(output).toContain("Text fields only: Short description, Description, Work notes");
     expect(output).toContain("Autofill approval does not approve Save, Submit, Update, or Close.");
-    expect(output).toContain("I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED");
+    expect(output).toContain(getRequiredQaAutofillApprovalPhrase("qa"));
     expect(output).toContain("Selector verification is mandatory; missing or mismatched selectors keep this panel blocked.");
     expect(output).toContain("Planning gate only: browser text-field execution remains blocked until a later selector-verified execution slice is reviewed.");
     expect(output).toContain("No ServiceNow API, bulk fill, browser artifacts, auth-material export, or external AI on QA content.");

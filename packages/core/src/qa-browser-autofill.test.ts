@@ -7,7 +7,7 @@ import {
   type QaAutofillSelectorVerification
 } from "./qa-browser-autofill";
 import type { FieldDraft, TicketDraft } from "./models";
-import type { RealActionEnvironment, RealActionTargetValidation } from "./real-action-gate";
+import { getRequiredRealActionApprovalPhrase, type RealActionEnvironment, type RealActionTargetValidation } from "./real-action-gate";
 
 const qaEnvironment: RealActionEnvironment = {
   mode: "qa",
@@ -50,10 +50,8 @@ const selectorVerification: QaAutofillSelectorVerification = {
   workNotes: "found"
 };
 
-const qaApprovalPhrase =
-  "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED";
-const devApprovalPhrase =
-  "I APPROVE DEV SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED";
+const qaApprovalPhrase = getRequiredQaAutofillApprovalPhrase("qa");
+const devApprovalPhrase = getRequiredQaAutofillApprovalPhrase("dev");
 const freshPageApproval = {
   approvalPageFingerprint: "qa-incident-form-reviewed",
   currentPageFingerprint: "qa-incident-form-reviewed"
@@ -128,7 +126,7 @@ describe("QA browser-assisted text-field autofill gate", () => {
       draft: completeDraft(),
       environment: qaEnvironment,
       targetValidation: qaTargetValidation,
-      approvalPhrase: "I APPROVE QA SAVE ONLY",
+      approvalPhrase: getRequiredRealActionApprovalPhrase("qa", "save_incident"),
       qaIsolationConfirmed: true,
       dedicatedProfileConfirmed: true,
       selectorVerification,
