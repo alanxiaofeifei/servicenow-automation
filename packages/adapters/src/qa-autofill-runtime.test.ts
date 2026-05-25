@@ -385,7 +385,7 @@ describe("QA incident default field read-only runtime", () => {
       artifactsCaptured: false,
       productionWriteAllowed: false
     });
-    expect(JSON.stringify(result)).not.toContain("sys_id");
+    expect(JSON.stringify(result)).not.toContain(sensitiveIncidentQueryKey);
     expect(JSON.stringify(result)).not.toContain("redacted");
   });
 

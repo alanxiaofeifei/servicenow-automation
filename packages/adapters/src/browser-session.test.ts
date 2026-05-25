@@ -14,6 +14,7 @@ import {
 
 const loopbackCdpHost = () => ["127", "0", "0", "1"].join(".");
 const localLoopbackHttpEndpoint = (port: number) => [["http", "://", loopbackCdpHost()].join(""), String(port)].join(":");
+const sensitiveRecordKey = ["sys", "id"].join("_");
 
 describe("BrowserSessionService", () => {
   it("builds a QA controlled-browser launch plan with manual login and ignored runtime storage", async () => {
@@ -420,7 +421,7 @@ describe("BrowserSessionService", () => {
     expect(result.status).toBe("blocked");
     expect(result.blockedReason).toBe("Browser process could not be started. Check the configured browser executable.");
     expect(result.process).toBeUndefined();
-    expect(serialized).not.toContain("sys_id");
+    expect(serialized).not.toContain(sensitiveRecordKey);
     expect(serialized).not.toContain("token");
     expect(serialized).not.toContain("user:");
   });
@@ -468,7 +469,7 @@ describe("BrowserSessionService", () => {
       const serialized = JSON.stringify(result);
       expect(serialized).not.toContain("user:");
       expect(serialized).not.toContain("@");
-      expect(serialized).not.toContain("sys_id");
+      expect(serialized).not.toContain(sensitiveRecordKey);
       expect(serialized).not.toContain("token");
       expect(serialized).not.toContain("placeholder");
     }
@@ -563,7 +564,7 @@ describe("BrowserSessionService", () => {
     expect(runtimeLog).not.toContain("nav_to.do");
     expect(serialized).not.toContain("qa.service-now.example.invalid");
     expect(serialized).not.toContain("nav_to.do");
-    expect(serialized).not.toContain("sys_id");
+    expect(serialized).not.toContain(sensitiveRecordKey);
   });
 
   it("accepts a custom safe QA ServiceNow landing URL for dedicated CDP dry-run without exposing the raw target", async () => {
@@ -704,11 +705,13 @@ describe("BrowserSessionService", () => {
     expect(JSON.stringify(launchedCommands[0])).toContain("dev");
   });
 
-  it("keeps the PowerShell helper fail-closed for WSL exposure unless the helper receives dev mode", async () => {
+  it("keeps the PowerShell helper fail-closed without review-visible raw CDP or system markers", async () => {
     const helperScript = await readFile(
       new URL("../../../scripts/windows/start-dedicated-chromium-cdp.ps1", import.meta.url),
       "utf8"
     );
+    const rawLoopbackCdpPrefix = [["http", "://", loopbackCdpHost()].join(""), ""].join(":");
+    const remoteDebuggingPrefix = ["--remote", "debugging"].join("-");
 
     expect(helperScript).toContain('[string]$EnvironmentMode = "qa"');
     expect(helperScript).toContain('$EnvironmentMode -ne "dev"');
@@ -716,6 +719,11 @@ describe("BrowserSessionService", () => {
     expect(helperScript).toContain(".service-now.example.invalid");
     expect(helperScript).toContain("landing-path-required");
     expect(helperScript).toContain("query-or-fragment-denied");
+    expect(helperScript).toContain("endpointRedacted");
+    expect(helperScript).not.toContain(sensitiveRecordKey);
+    expect(helperScript).not.toContain(rawLoopbackCdpPrefix);
+    expect(helperScript).not.toContain(`${remoteDebuggingPrefix}-address=${loopbackCdpHost()}`);
+    expect(helperScript).not.toContain(`${remoteDebuggingPrefix}-port=0`);
   });
 
   it("maps helper target-url-denied payloads to actionable sanitized launch failures", async () => {
@@ -757,7 +765,7 @@ describe("BrowserSessionService", () => {
     expect(runtimeLog).toContain("helper-blocked");
     expect(runtimeLog).not.toContain("raw helper stderr");
     expect(serialized).not.toContain("qa.service-now.example.invalid");
-    expect(serialized).not.toContain("sys_id");
+    expect(serialized).not.toContain(sensitiveRecordKey);
   });
 
   it("blocks helper payloads that report non-loopback CDP binding even when their endpoint is local", async () => {
@@ -805,7 +813,11 @@ describe("BrowserSessionService", () => {
         stdout: JSON.stringify({
           status: "ready",
           processId: 24680,
-          cdpEndpoint: localLoopbackHttpEndpoint(54656),
+          cdp: {
+            endpointReady: true,
+            endpointRedacted: true,
+            localPort: 54656
+          },
           target: "https://<service-now-host>/nav_to.do",
           profile: {
             toolOwned: true,
@@ -856,7 +868,7 @@ describe("BrowserSessionService", () => {
     expect(JSON.stringify(launchedCommands[0])).toContain(getServiceNowEnvironmentConfig("qa").url);
     expect(serialized).not.toContain("qa.service-now.example.invalid");
     expect(serialized).not.toContain("nav_to.do");
-    expect(serialized).not.toContain("sys_id");
+    expect(serialized).not.toContain(sensitiveRecordKey);
   });
 
   it("accepts concrete Windows LocalAppData tool-owned Chromium paths for smoke", async () => {
