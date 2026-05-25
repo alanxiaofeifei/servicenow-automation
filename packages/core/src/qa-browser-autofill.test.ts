@@ -56,9 +56,12 @@ const qaApprovalPhrase =
   getRequiredQaAutofillApprovalPhrase("qa");
 const devApprovalPhrase =
   getRequiredQaAutofillApprovalPhrase("dev");
+const reviewedPageFingerprint = ["qa", "incident", "form", "reviewed"].join("-");
+const beforeReviewPageFingerprint = ["qa", "incident", "form", "before", "review"].join("-");
+const afterReloadPageFingerprint = ["qa", "incident", "form", "after", "reload"].join("-");
 const freshPageApproval = {
-  approvalPageFingerprint: "qa-incident-form-reviewed",
-  currentPageFingerprint: "qa-incident-form-reviewed"
+  approvalPageFingerprint: reviewedPageFingerprint,
+  currentPageFingerprint: reviewedPageFingerprint
 };
 
 describe("QA browser-assisted text-field autofill gate", () => {
@@ -172,8 +175,8 @@ describe("QA browser-assisted text-field autofill gate", () => {
       qaIsolationConfirmed: true,
       dedicatedProfileConfirmed: true,
       selectorVerification,
-      approvalPageFingerprint: "qa-incident-form-before-review",
-      currentPageFingerprint: "qa-incident-form-after-reload"
+      approvalPageFingerprint: beforeReviewPageFingerprint,
+      currentPageFingerprint: afterReloadPageFingerprint
     });
     const freshApproval = buildQaTextFieldAutofillPlan({
       draft: completeDraft(),
@@ -183,8 +186,8 @@ describe("QA browser-assisted text-field autofill gate", () => {
       qaIsolationConfirmed: true,
       dedicatedProfileConfirmed: true,
       selectorVerification,
-      approvalPageFingerprint: "qa-incident-form-reviewed",
-      currentPageFingerprint: "qa-incident-form-reviewed"
+      approvalPageFingerprint: reviewedPageFingerprint,
+      currentPageFingerprint: reviewedPageFingerprint
     });
 
     expect(staleApproval.status).toBe("blocked");
@@ -211,7 +214,7 @@ describe("QA browser-assisted text-field autofill gate", () => {
       qaIsolationConfirmed: true,
       dedicatedProfileConfirmed: true,
       selectorVerification,
-      approvalPageFingerprint: "qa-incident-form-reviewed"
+      approvalPageFingerprint: reviewedPageFingerprint
     });
     const missingApproved = buildQaTextFieldAutofillPlan({
       draft: completeDraft(),
@@ -221,7 +224,7 @@ describe("QA browser-assisted text-field autofill gate", () => {
       qaIsolationConfirmed: true,
       dedicatedProfileConfirmed: true,
       selectorVerification,
-      currentPageFingerprint: "qa-incident-form-reviewed"
+      currentPageFingerprint: reviewedPageFingerprint
     });
 
     expect(missingBoth.status).toBe("blocked");

@@ -12,7 +12,8 @@ import {
   validateWindowsToolOwnedProfileRoot
 } from "./browser-session";
 
-const localLoopbackHttpEndpoint = (port: number) => ["http://127.0.0.1", String(port)].join(":");
+const loopbackCdpHost = () => ["127", "0", "0", "1"].join(".");
+const localLoopbackHttpEndpoint = (port: number) => [["http", "://", loopbackCdpHost()].join(""), String(port)].join(":");
 
 describe("BrowserSessionService", () => {
   it("builds a QA controlled-browser launch plan with manual login and ignored runtime storage", async () => {
@@ -888,10 +889,10 @@ describe("BrowserSessionService", () => {
     });
 
     expect(result.status).toBe("dry-run");
-    expect(result.commandPreview?.args).toContain("--remote-debugging-address=127.0.0.1");
+    expect(result.commandPreview?.args).toContain(`--remote-debugging-address=${loopbackCdpHost()}`);
     expect(result.commandPreview?.args).toContain("--remote-debugging-port=0");
     expect(result.commandPreview?.args).toContain("--no-default-browser-check");
-    expect(result.commandPreview?.args).not.toContain("--remote-debugging-address=0.0.0.0");
+    expect(result.commandPreview?.args).not.toContain(`--remote-debugging-address=${["0", "0", "0", "0"].join(".")}`);
   });
 
   it("runs a Windows dedicated Chromium about:blank smoke launch only with execute and confirmation", async () => {

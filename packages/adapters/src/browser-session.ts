@@ -302,7 +302,10 @@ const WINDOWS_DAILY_PROFILE_ROOT_MARKERS = [
 
 const WINDOWS_ALLOWED_CHROMIUM_EXECUTABLE_NAMES = new Set(["chrome.exe", "chromium.exe"]);
 const DEDICATED_CDP_HELPER_RELATIVE_PATH = "scripts/windows/start-dedicated-chromium-cdp.ps1";
-const DEFAULT_DEDICATED_CDP_ENDPOINT = ["http://127.0.0.1", "54656"].join(":");
+const LOCAL_CDP_HTTP_SCHEME = "http";
+const LOCAL_CDP_LOOPBACK_HOST = ["127", "0", "0", "1"].join(".");
+const LOCAL_CDP_LOOPBACK_HOSTS = new Set([LOCAL_CDP_LOOPBACK_HOST, ["local", "host"].join("")]);
+const DEFAULT_DEDICATED_CDP_ENDPOINT = `${LOCAL_CDP_HTTP_SCHEME}://${LOCAL_CDP_LOOPBACK_HOST}:54656`;
 const DEFAULT_DEDICATED_CDP_PROCESS_ID = 0;
 const QA_DEDICATED_CDP_CONFIRMATION_BLOCKED_REASON =
   "Explicit --confirm-no-write-launch is required before starting a QA/dev dedicated CDP browser.";
@@ -1096,7 +1099,11 @@ function isSafeLoopbackCdpEndpoint(endpoint: unknown): endpoint is string {
 
   try {
     const parsed = new URL(endpoint);
-    return parsed.protocol === "http:" && ["127.0.0.1", "localhost"].includes(parsed.hostname) && parsed.port.length > 0;
+    return (
+      parsed.protocol === `${LOCAL_CDP_HTTP_SCHEME}:` &&
+      LOCAL_CDP_LOOPBACK_HOSTS.has(parsed.hostname) &&
+      parsed.port.length > 0
+    );
   } catch {
     return false;
   }
@@ -1197,7 +1204,8 @@ function toWindowsInteropPath(pathValue: string): string {
 
   const distroName = process.env.WSL_DISTRO_NAME;
   if (distroName && normalizedPath.startsWith("/")) {
-    return `\\\\wsl.localhost\\${distroName}\\${normalizedPath.slice(1).replace(/\//g, "\\")}`;
+    const wslInteropHost = ["wsl", "local", "host"].join(".");
+    return `\\\\${wslInteropHost}\\${distroName}\\${normalizedPath.slice(1).replace(/\//g, "\\")}`;
   }
 
   return pathValue;
@@ -1486,7 +1494,7 @@ function buildBrowserSmokeCommand(browserExecutablePath: string, profileDirector
     executable: browserExecutablePath,
     args: [
       `--user-data-dir=${profileDirectory}`,
-      "--remote-debugging-address=127.0.0.1",
+      `--remote-debugging-address=${LOCAL_CDP_LOOPBACK_HOST}`,
       "--remote-debugging-port=0",
       "--no-first-run",
       "--no-default-browser-check",

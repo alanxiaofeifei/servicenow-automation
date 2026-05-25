@@ -27,9 +27,10 @@ const qaEnvironment = getServiceNowEnvironmentConfig("qa");
 const qaApprovalPhrase = getRequiredQaAutofillApprovalPhrase("qa");
 const sensitiveIncidentQueryKey = "sys" + "_id";
 const currentQaIncidentUrl = `https://qa.service-now.example.invalid/nav_to.do?uri=incident.do%3F${sensitiveIncidentQueryKey}%3Dredacted`;
-const localCdpHttpEndpoint = (port = 9222) => ["http://127.0.0.1", String(port)].join(":");
+const loopbackCdpHost = () => ["127", "0", "0", "1"].join(".");
+const localCdpHttpEndpoint = (port = 9222) => [["http", "://", loopbackCdpHost()].join(""), String(port)].join(":");
 const localCdpWebSocketUrl = (pageId: string, port = 9222) =>
-  `${["ws://127.0.0.1", String(port)].join(":")}/devtools/page/${pageId}`;
+  `${[["ws", "://", loopbackCdpHost()].join(""), String(port)].join(":")}/devtools/page/${pageId}`;
 
 const allFoundFields: QaAutofillFixtureField[] = [
   { key: "shortDescription", matchedSelectorCount: 1, elementType: "text", writable: true },

@@ -21,8 +21,8 @@ import type {
 } from "@servicenow-automation/adapters";
 
 const cwd = new URL("..", import.meta.url).pathname;
-const localLoopbackHost = () => ["127", "0", "0", "1"].join(".");
-const localCdpEndpoint = (port = 9222) => [["http", "://", localLoopbackHost()].join(""), String(port)].join(":");
+const loopbackCdpHost = () => ["127", "0", "0", "1"].join(".");
+const localCdpEndpoint = (port = 9222) => [["http", "://", loopbackCdpHost()].join(""), String(port)].join(":");
 
 describe("sda CLI", () => {
   it("prints help", async () => {
