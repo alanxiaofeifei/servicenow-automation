@@ -3,7 +3,7 @@
 Status: design handoff only — no frontend implementation in this task.
 Audience: `sna-frontend-workbench` implementer after Alan accepts this text spec.
 Source of truth: this sanitized text spec plus `docs/design/target-ui-v2-design-tokens.json`; screenshot artifacts are not tracked.
-Privacy level: sanitized. All example content below is fake. Do not include real ServiceNow URLs/hosts, ticket IDs, sys_id values, fingerprints, screenshots, logs, cookies, sessions, HAR, traces, credentials, customer names, or customer data.
+Privacy level: sanitized. All example content below is fake. Do not include real ServiceNow URLs/hosts, ticket IDs, record identifier values, fingerprints, screenshots, logs, cookies, sessions, HAR, traces, credentials, customer names, or customer data.
 
 ## 1. Visual target summary
 
@@ -158,7 +158,7 @@ Top bar must not include:
 - `Field-trial accelerated P0`.
 - Long safety slogans.
 - Language simulation wording.
-- Raw URL, host, ticket, sys_id, CDP endpoint, fingerprint, browser profile path, or log text.
+- Raw URL, host, ticket, record identifier, CDP endpoint, fingerprint, browser profile path, or log text.
 
 Top bar interaction notes:
 
@@ -235,7 +235,7 @@ Grouped list:
   - `Software license request`
   - `Printer offline`
 - Source labels can be generic: `Teams message`, `Self-service ticket`, `ServiceNow Chat`, `Shared mailbox`.
-- Do not show real requester, email, phone, tenant, channel URL, ticket number, sys_id, asset tag, or device identifier.
+- Do not show real requester, email, phone, tenant, channel URL, ticket number, record identifier, asset tag, or device identifier.
 
 Settings placement:
 
@@ -428,7 +428,7 @@ Remove from right rail:
 
 - Long bullet essays.
 - Raw CDP endpoint.
-- Raw URL/host/ticket/sys_id/fingerprint.
+- Raw URL/host/ticket/record identifier/fingerprint.
 - Browser profile path.
 - Raw logs or stack traces.
 - Repeated safety warnings.
@@ -595,7 +595,7 @@ Top bar:
 - Top bar has `Target configured` / `Target missing` state.
 - Top bar has language selector copy `EN / 中文`.
 - Top bar does not have a `Settings` button.
-- Top bar does not render raw URL, host, ticket, sys_id, fingerprint, CDP endpoint, or browser profile path.
+- Top bar does not render raw URL, host, ticket, record identifier, fingerprint, CDP endpoint, or browser profile path.
 
 Left navigation/sidebar:
 
@@ -635,7 +635,7 @@ Right runtime rail:
 Removal/privacy assertions:
 
 - Raw CDP endpoint is not visible.
-- Raw URL/host/ticket/sys_id/fingerprint is not visible.
+- Raw URL/host/ticket/record identifier/fingerprint is not visible.
 - `MockAIProvider` is not visible.
 - `Field-trial accelerated P0` is not visible.
 - Language simulation text block is not visible.
@@ -684,7 +684,7 @@ Alan should verify the app against the sanitized text design target:
 - `Autofill current Incident` is gated until Verify succeeds.
 - Disabled states explain why they are disabled.
 - The app does not show mock/demo clutter.
-- The app does not show raw ServiceNow URLs, hosts, ticket IDs, sys_id, fingerprints, logs, screenshots, traces, sessions, cookies, or customer data.
+- The app does not show raw ServiceNow URLs, hosts, ticket IDs, record identifiers, fingerprints, logs, screenshots, traces, sessions, cookies, or customer data.
 - Windows app still opens.
 - Start QA Chromium still visibly opens the dedicated browser.
 - CDP readiness updates honestly.

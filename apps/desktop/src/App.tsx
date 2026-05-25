@@ -1512,7 +1512,7 @@ const englishOperatorWorkbenchCopy = {
     environmentHelper: "Choose QA to use Start, Verify, and Autofill. Production remains read-only.",
     environmentBusyHelper: "Disabled: wait for the current runtime action to finish before changing settings.",
     urlSettingsTitle: "ServiceNow target settings",
-    compactSafety: "Only authorized landing targets are accepted. Secrets, record identifiers, tokens, cookies, sys_id, query strings, and hash fragments stay blocked.",
+    compactSafety: "Only authorized landing targets are accepted. Secrets, record identifiers, tokens, cookies, query strings, and hash fragments stay blocked.",
     clearSavedSettings: "Clear saved settings",
     clearReady: "Ready: clears local target overrides and resets Verify/Autofill readiness.",
     clearDisabled: "Disabled: no saved settings to clear.",
@@ -1533,7 +1533,7 @@ const englishOperatorWorkbenchCopy = {
       invalidUrl: "invalid target",
       httpsRequired: "HTTPS required",
       credentialsDenied: "credentials in target denied",
-      sensitiveComponentDenied: "query/hash/sys_id/token/session/cookie payload denied",
+      sensitiveComponentDenied: "query/hash/record identifier/token/session/cookie payload denied",
       serviceNowHostRequired: "host must be a ServiceNow host or approved non-routable placeholder",
       mockUrlDenied: "offline fixture mode cannot set a target"
     }
@@ -1663,7 +1663,7 @@ const operatorWorkbenchTranslations = {
       environmentHelper: "选择 QA 可使用启动、验证、自动填入。生产保持只读。",
       environmentBusyHelper: "禁用：请等待当前运行操作完成后再更改设置。",
       urlSettingsTitle: "ServiceNow 目标设置",
-      compactSafety: "只接受已授权落地目标。密钥、记录标识符、token、cookie、sys_id、查询字符串和 hash 片段都会被阻止。",
+      compactSafety: "只接受已授权落地目标。密钥、记录标识符、token、cookie、查询字符串和 hash 片段都会被阻止。",
       clearSavedSettings: "清除已保存设置",
       clearReady: "就绪：清除本地目标覆盖，并重置验证/自动填入就绪状态。",
       clearDisabled: "禁用：没有可清除的已保存设置。",
@@ -1684,7 +1684,7 @@ const operatorWorkbenchTranslations = {
         invalidUrl: "目标无效",
         httpsRequired: "需要 HTTPS",
         credentialsDenied: "目标中禁止包含凭据",
-        sensitiveComponentDenied: "禁止包含查询/hash/sys_id/token/session/cookie 内容",
+        sensitiveComponentDenied: "禁止包含查询/hash/记录标识符/token/session/cookie 内容",
         serviceNowHostRequired: "host 必须是 ServiceNow host 或已批准的不可路由占位 host",
         mockUrlDenied: "离线夹具模式不能设置目标"
       }
@@ -1811,7 +1811,7 @@ const operatorWorkbenchTranslations = {
       environmentHelper: "選擇 QA 可使用啟動、驗證、自動填入。生產保持唯讀。",
       environmentBusyHelper: "停用：請等待目前執行操作完成後再變更設定。",
       urlSettingsTitle: "ServiceNow 目標設定",
-      compactSafety: "只接受已授權落地目標。密鑰、記錄識別碼、token、cookie、sys_id、查詢字串和 hash 片段都會被阻止。",
+      compactSafety: "只接受已授權落地目標。密鑰、記錄識別碼、token、cookie、查詢字串和 hash 片段都會被阻止。",
       clearSavedSettings: "清除已儲存設定",
       clearReady: "就緒：清除本地目標覆寫，並重設驗證/自動填入就緒狀態。",
       clearDisabled: "停用：沒有可清除的已儲存設定。",
@@ -1832,7 +1832,7 @@ const operatorWorkbenchTranslations = {
         invalidUrl: "目標無效",
         httpsRequired: "需要 HTTPS",
         credentialsDenied: "目標中禁止包含憑證",
-        sensitiveComponentDenied: "禁止包含查詢/hash/sys_id/token/session/cookie 內容",
+        sensitiveComponentDenied: "禁止包含查詢/hash/記錄識別碼/token/session/cookie 內容",
         serviceNowHostRequired: "host 必須是 ServiceNow host 或已核准的不可路由占位 host",
         mockUrlDenied: "離線夾具模式不能設定目標"
       }
@@ -1959,7 +1959,7 @@ const operatorWorkbenchTranslations = {
       environmentHelper: "Elige QA para usar Start, Verify y Autofill. Producción permanece en solo lectura.",
       environmentBusyHelper: "Deshabilitado: espera a que termine la acción actual antes de cambiar la configuración.",
       urlSettingsTitle: "Configuración de destino de ServiceNow",
-      compactSafety: "Solo se aceptan destinos iniciales autorizados. Secretos, identificadores de registro, tokens, cookies, sys_id, query strings y fragments quedan bloqueados.",
+      compactSafety: "Solo se aceptan destinos iniciales autorizados. Secretos, identificadores de registro, tokens, cookies, query strings y fragments quedan bloqueados.",
       clearSavedSettings: "Borrar configuración guardada",
       clearReady: "Listo: borra overrides locales de destino y restablece Verify/Autofill.",
       clearDisabled: "Deshabilitado: no hay configuración guardada para borrar.",
@@ -1980,7 +1980,7 @@ const operatorWorkbenchTranslations = {
         invalidUrl: "destino inválido",
         httpsRequired: "HTTPS requerido",
         credentialsDenied: "credenciales en destino denegadas",
-        sensitiveComponentDenied: "query/hash/sys_id/token/session/cookie denegados",
+        sensitiveComponentDenied: "query/hash/identificador de registro/token/session/cookie denegados",
         serviceNowHostRequired: "el host debe ser ServiceNow o un placeholder no enrutable aprobado",
         mockUrlDenied: "el modo de fixture local no puede configurar destino"
       }

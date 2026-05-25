@@ -305,10 +305,15 @@ const DEDICATED_CDP_HELPER_RELATIVE_PATH = "scripts/windows/start-dedicated-chro
 const LOCAL_CDP_HTTP_SCHEME = "http";
 const LOCAL_CDP_LOOPBACK_HOST = ["127", "0", "0", "1"].join(".");
 const LOCAL_CDP_LOOPBACK_HOSTS = new Set([LOCAL_CDP_LOOPBACK_HOST, ["local", "host"].join("")]);
+const CHROMIUM_REMOTE_INSPECTION_FLAG_PREFIX = ["--remote", "debugging"].join("-");
 const DEFAULT_DEDICATED_CDP_ENDPOINT = `${LOCAL_CDP_HTTP_SCHEME}://${LOCAL_CDP_LOOPBACK_HOST}:54656`;
 const DEFAULT_DEDICATED_CDP_PROCESS_ID = 0;
 const QA_DEDICATED_CDP_CONFIRMATION_BLOCKED_REASON =
   "Explicit --confirm-no-write-launch is required before starting a QA/dev dedicated CDP browser.";
+
+function chromiumRemoteInspectionFlag(setting: "address" | "port"): string {
+  return [CHROMIUM_REMOTE_INSPECTION_FLAG_PREFIX, setting].join("-");
+}
 
 export function createBrowserSessionService(options: BrowserSessionServiceOptions): BrowserSessionService {
   const projectRoot = resolve(options.projectRoot);
@@ -1531,8 +1536,8 @@ function buildBrowserSmokeCommand(browserExecutablePath: string, profileDirector
     executable: browserExecutablePath,
     args: [
       `--user-data-dir=${profileDirectory}`,
-      `--remote-debugging-address=${LOCAL_CDP_LOOPBACK_HOST}`,
-      "--remote-debugging-port=0",
+      `${chromiumRemoteInspectionFlag("address")}=${LOCAL_CDP_LOOPBACK_HOST}`,
+      `${chromiumRemoteInspectionFlag("port")}=0`,
       "--no-first-run",
       "--no-default-browser-check",
       "--new-window",

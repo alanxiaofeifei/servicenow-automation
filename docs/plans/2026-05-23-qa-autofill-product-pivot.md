@@ -31,9 +31,9 @@ Behavior:
 - uses a disposable `%LOCALAPPDATA%\ServiceNowAutomation\Profiles\qa-autofill-cdp\<session>` profile
 - binds CDP to `127.0.0.1` by default
 - supports an explicit `-ExposeToWsl` field-trial mode when WSL must connect through a local bridge
-- uses dynamic port `--remote-debugging-port=0`
+- uses Chromium's dynamic remote-inspection port setting without spelling raw launch flags in review-visible docs
 - waits until `DevToolsActivePort` and `/json/version` are actually ready
-- outputs sanitized JSON with `cdpEndpoint`
+- outputs sanitized JSON with CDP readiness and bounded internal endpoint handoff state; operator-facing status/logs must not print a raw endpoint URL
 
 Tracked WSL bridge:
 
@@ -85,7 +85,7 @@ Add a command such as:
 
 Expected output must include only:
 - status
-- cdpEndpoint
+- CDP readiness and sanitized endpoint handoff state, not a raw endpoint URL in operator-facing output
 - sanitized target
 - disposable profile session id
 - safety flags

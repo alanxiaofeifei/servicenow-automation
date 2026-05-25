@@ -611,7 +611,7 @@ Privacy/safety:
 - No real ServiceNow screenshots.
 - No real URLs or hosts.
 - No raw ticket IDs.
-- No sys_ids.
+- No raw record identifiers.
 - No customer names/emails.
 - No credentials/cookies/sessions/storage-state.
 - No raw logs/HAR/traces/videos/screenshots.

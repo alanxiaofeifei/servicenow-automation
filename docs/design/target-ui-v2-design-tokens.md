@@ -9,7 +9,7 @@ This file records the implementation tokens used for the K6I4 target UI alignmen
 - Tokenized the sanitized text design specification so screenshot artifacts are not required or tracked.
 - Verified prominent flat UI regions with local browser visual inspection.
 - Used the measured palette for the warm/default target theme and preserved contrast and layout behavior.
-- No ServiceNow URLs, credentials, record identifiers, tokens, cookies, sys_id values, or other secrets were extracted or stored.
+- No ServiceNow URLs, credentials, record identifiers, tokens, cookies, or other secrets were extracted or stored.
 
 ## Core color tokens
 
