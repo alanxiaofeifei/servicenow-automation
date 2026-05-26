@@ -46,7 +46,7 @@ Example safe values:
 Caller: Alex Chen <alex.demo@example.com>
 Assignment Group: DEMO-SD-WINDOWS
 CI: DEMO-LAPTOP-001
-ServiceNow URL: https://demo.service-now.local
+ServiceNow URL: https://qa.service-now.example.invalid/
 ```
 
 ## Public portfolio policy
