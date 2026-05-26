@@ -17,6 +17,7 @@ import { getServiceNowEnvironmentConfig } from "@servicenow-automation/profiles"
 
 import {
   inspectQaIncidentDefaultFieldsRuntime,
+  QaCdpRuntimeBlockedError,
   qaAutofillRuntimeTestHooks,
   runQaIncidentDefaultFieldAutofillRuntime,
   runQaTextFieldAutofillRuntime,
@@ -250,6 +251,26 @@ describe("QA text-field autofill runtime", () => {
 });
 
 describe("QA incident default field read-only runtime", () => {
+  it("returns a specific page-selection block when the current browser target cannot be selected", async () => {
+    let inspectCalls = 0;
+    const driver: QaIncidentFieldRuntimePageDriver = {
+      async inspectIncidentFormFields() {
+        inspectCalls += 1;
+        throw new QaCdpRuntimeBlockedError("cdp-page-selection-denied");
+      }
+    };
+
+    const result = await inspectQaIncidentDefaultFieldsRuntime({
+      environment: qaEnvironment,
+      driver
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(result.blockedReason).toBe("cdp-page-selection-denied");
+    expect(result.safety.browserAutomationCalled).toBe(true);
+    expect(inspectCalls).toBe(1);
+  });
+
   it("selects the configured-host Incident page when CDP exposes multiple page targets", async () => {
     const sensitiveQueryKey = "sys" + "_id";
     const restoreFetch = installFakeCdpTargetList([
@@ -303,7 +324,7 @@ describe("QA incident default field read-only runtime", () => {
           localCdpHttpEndpoint(),
           "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
         )
-      ).rejects.toThrow("Unable to select a single current browser page target for QA verify-only inspection.");
+      ).rejects.toThrow("cdp-page-selection-denied");
     } finally {
       restoreFetch();
     }
@@ -329,7 +350,7 @@ describe("QA incident default field read-only runtime", () => {
           localCdpHttpEndpoint(),
           "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
         )
-      ).rejects.toThrow("Unable to select a single current browser page target for QA verify-only inspection.");
+      ).rejects.toThrow("cdp-page-selection-denied");
     } finally {
       restoreFetch();
     }
@@ -350,7 +371,7 @@ describe("QA incident default field read-only runtime", () => {
           localCdpHttpEndpoint(),
           "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
         )
-      ).rejects.toThrow("Unable to select a single current browser page target for QA verify-only inspection.");
+      ).rejects.toThrow("cdp-page-selection-denied");
     } finally {
       restoreFetch();
     }
@@ -367,8 +388,23 @@ describe("QA incident default field read-only runtime", () => {
 
     try {
       await expect(qaAutofillRuntimeTestHooks.resolveCdpPageWebSocketUrl(localCdpHttpEndpoint())).rejects.toThrow(
-        "Unable to select a single current browser page target for QA verify-only inspection."
+        "cdp-page-selection-denied"
       );
+    } finally {
+      restoreFetch();
+    }
+  });
+
+  it("maps an unreachable local CDP target-list endpoint to a browser connection block", async () => {
+    const restoreFetch = installFailingCdpTargetListFetch();
+
+    try {
+      await expect(
+        qaAutofillRuntimeTestHooks.resolveCdpPageWebSocketUrl(
+          localCdpHttpEndpoint(),
+          "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
+        )
+      ).rejects.toThrow("cdp-endpoint-denied");
     } finally {
       restoreFetch();
     }
@@ -1034,6 +1070,18 @@ function installFakeCdpTargetList(targets: FakeCdpPageTarget[]): () => void {
     ok: true,
     json: async () => targets
   });
+
+  return () => {
+    globals.fetch = previousFetch;
+  };
+}
+
+function installFailingCdpTargetListFetch(): () => void {
+  const globals = globalThis as unknown as { fetch?: unknown };
+  const previousFetch = globals.fetch;
+  globals.fetch = async () => {
+    throw new Error("simulated-local-cdp-target-list-unreachable");
+  };
 
   return () => {
     globals.fetch = previousFetch;

@@ -370,6 +370,59 @@ describe("App", () => {
     expect(output).not.toContain(rawEndpoint);
   });
 
+  it("shows page-check pass or block feedback directly on the action card", () => {
+    const rawEndpoint = localRuntimeEndpoint(9222, "raw-session-id");
+    const blockedOutput = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "qa",
+      initialRuntimeRailExpanded: true,
+      initialOperatorCdpEndpoint: rawEndpoint,
+      initialOperatorLastResponse: {
+        ok: false,
+        fieldInspection: { status: "blocked", blockedReason: "cdp-page-selection-denied" }
+      }
+    });
+    const successOutput = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "qa",
+      initialRuntimeRailExpanded: true,
+      initialOperatorCdpEndpoint: rawEndpoint,
+      initialOperatorVerifiedPageFingerprint: prefixedFingerprintSentinel("do-not-render-page-check-feedback"),
+      initialOperatorLastResponse: {
+        ok: true,
+        fieldInspection: { status: "verified", pageFingerprint: prefixedFingerprintSentinel("do-not-render-page-check-feedback") },
+        defaultPlan: { status: "ready-for-local-review", plannedFields: [] }
+      }
+    });
+
+    expect(blockedOutput).toContain('class="runtime-action-feedback blocked"');
+    expect(blockedOutput).toContain("Blocked: Could not find one unique approved Incident tab in the test browser.");
+    expect(successOutput).toContain('class="runtime-action-feedback success"');
+    expect(successOutput).toContain("Current ticket page checked; Autofill can fill allowed text fields only.");
+    expect(successOutput).not.toContain("do-not-render-page-check-feedback");
+  });
+
+  it("shows localized Autofill completion feedback with the no-write safety boundary", () => {
+    const output = renderAppMarkup("zh-CN", {
+      initialEnvironmentMode: "qa",
+      initialRuntimeRailExpanded: true,
+      initialOperatorCdpEndpoint: localRuntimeEndpoint(9222, "raw-session-id"),
+      initialOperatorLastResponse: {
+        ok: true,
+        runtime: {
+          status: "completed",
+          filledFields: [
+            { key: "shortDescription", label: "Short description", valueLength: 10 },
+            { key: "description", label: "Description", valueLength: 20 },
+            { key: "workNotes", label: "Work notes", valueLength: 30 }
+          ]
+        }
+      }
+    });
+
+    expect(output).toContain('class="runtime-action-feedback success"');
+    expect(output).toContain("自动填充已完成：已填写 3 个文本字段。");
+    expect(output).toContain("没有执行 Save、Submit、Update、Resolve、Close、上传、邮件或 ServiceNow API。");
+  });
+
   it("enables Autofill immediately after a successful page check fingerprint and hides the raw fingerprint", () => {
     const rawFingerprint = prefixedFingerprintSentinel("do-not-render-raw-fingerprint");
     const output = renderAppMarkup("en-US", {

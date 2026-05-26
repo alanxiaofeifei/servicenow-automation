@@ -1,3 +1,6 @@
+import { spawn } from "node:child_process";
+import { Buffer } from "node:buffer";
+
 import {
   buildQaAutofillSelectorVerificationFromEvidence,
   buildQaTextFieldAutofillPlan,
@@ -72,8 +75,24 @@ export type QaAutofillRuntimePageDriver = {
 export type QaIncidentFieldRuntimeBlockedReason =
   | "qa-dev-only"
   | "cdp-endpoint-denied"
+  | "cdp-page-selection-denied"
   | "browser-runtime-error"
   | "current-page-target-denied";
+
+export type QaCdpRuntimeBlockedReason = Extract<
+  QaIncidentFieldRuntimeBlockedReason,
+  "cdp-endpoint-denied" | "cdp-page-selection-denied" | "browser-runtime-error"
+>;
+
+export class QaCdpRuntimeBlockedError extends Error {
+  readonly blockedReason: QaCdpRuntimeBlockedReason;
+
+  constructor(blockedReason: QaCdpRuntimeBlockedReason) {
+    super(blockedReason);
+    this.name = "QaCdpRuntimeBlockedError";
+    this.blockedReason = blockedReason;
+  }
+}
 
 export type QaIncidentFieldRuntimeInspection = {
   currentUrl: string;
@@ -227,6 +246,20 @@ export type CdpQaAutofillRuntimePageDriverOptions = {
   targetUrl?: string;
 };
 
+export type WindowsLocalCdpRuntimePageDriverOptions = CdpQaAutofillRuntimePageDriverOptions & {
+  helperScriptPath: string;
+  powershellExecutable?: string;
+  timeoutMs?: number;
+};
+
+type WindowsLocalCdpEvaluationPayload<T> = {
+  status?: string;
+  value?: T;
+  blockedReason?: string;
+};
+
+const DEFAULT_WINDOWS_LOCAL_CDP_EVALUATION_TIMEOUT_MS = 30_000;
+
 const QA_INCIDENT_DEFAULT_RUNTIME_TEXT_FIELD_KEYS = new Set<QaIncidentDefaultFieldKey>([
   "shortDescription",
   "description",
@@ -248,8 +281,8 @@ export async function runQaTextFieldAutofillRuntime(
   let inspection: QaAutofillRuntimeInspection;
   try {
     inspection = await request.driver.inspectAllowedTextFields(descriptors);
-  } catch {
-    return blockedRuntimeResult("browser-runtime-error", true);
+  } catch (error) {
+    return blockedRuntimeResult(cdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error", true);
   }
 
   const targetValidation = validateRuntimeCurrentPageTarget(request.environment, inspection.currentUrl);
@@ -310,10 +343,10 @@ export async function runQaTextFieldAutofillRuntime(
   let beforeFillInspection: QaAutofillRuntimeInspection;
   try {
     beforeFillInspection = await request.driver.inspectAllowedTextFields(descriptors);
-  } catch {
+  } catch (error) {
     return {
       status: "blocked",
-      blockedReason: "browser-runtime-error",
+      blockedReason: cdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error",
       selectorVerification,
       pageFingerprint: undefined,
       pageFingerprintMatched,
@@ -351,8 +384,8 @@ export async function runQaTextFieldAutofillRuntime(
       expectedPageFingerprint: beforeFillInspection.pageFingerprint,
       allowedHost: beforeFillTargetValidation.allowedHost ?? ""
     });
-  } catch {
-    execution = blockedFillResult("browser-runtime-error");
+  } catch (error) {
+    execution = blockedFillResult(cdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error");
   }
   return {
     status: execution.status,
@@ -422,6 +455,26 @@ export function createCdpQaIncidentDefaultFieldAutofillRuntimePageDriver(
   };
 }
 
+export function createWindowsLocalCdpQaIncidentDefaultFieldAutofillRuntimePageDriver(
+  options: WindowsLocalCdpRuntimePageDriverOptions
+): QaIncidentDefaultFieldAutofillRuntimePageDriver {
+  validateLocalCdpEndpoint(options.endpoint);
+  return {
+    async inspectIncidentFormFields() {
+      return evaluateWithWindowsLocalCdp<QaIncidentFieldRuntimeInspection>(
+        options,
+        buildIncidentFieldInspectionExpression(hostFromTargetUrl(options.targetUrl) ?? "")
+      );
+    },
+    async fillIncidentDefaultFields(request) {
+      return evaluateWithWindowsLocalCdp<QaIncidentDefaultFieldRuntimeFillResult>(
+        options,
+        buildIncidentDefaultFieldFillExpression(request)
+      );
+    }
+  };
+}
+
 export async function runQaIncidentDefaultFieldAutofillRuntime(
   request: RunQaIncidentDefaultFieldAutofillRuntimeRequest
 ): Promise<QaIncidentDefaultFieldAutofillRuntimeResult> {
@@ -442,8 +495,8 @@ export async function runQaIncidentDefaultFieldAutofillRuntime(
   let inspection: QaIncidentFieldRuntimeInspection;
   try {
     inspection = await request.driver.inspectIncidentFormFields();
-  } catch {
-    return blockedDefaultFieldAutofillRuntimeResult("browser-runtime-error", true);
+  } catch (error) {
+    return blockedDefaultFieldAutofillRuntimeResult(cdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error", true);
   }
 
   const targetValidation = validateRuntimeCurrentPageTarget(request.environment, inspection.currentUrl);
@@ -490,8 +543,8 @@ export async function runQaIncidentDefaultFieldAutofillRuntime(
       expectedPageFingerprint,
       allowedHost: targetValidation.allowedHost
     });
-  } catch {
-    execution = blockedDefaultFieldFillResult("browser-runtime-error");
+  } catch (error) {
+    execution = blockedDefaultFieldFillResult(cdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error");
   }
 
   return {
@@ -519,8 +572,8 @@ export async function inspectQaIncidentDefaultFieldsRuntime(
   let inspection: QaIncidentFieldRuntimeInspection;
   try {
     inspection = await request.driver.inspectIncidentFormFields();
-  } catch {
-    return blockedIncidentFieldRuntimeResult("browser-runtime-error", true);
+  } catch (error) {
+    return blockedIncidentFieldRuntimeResult(cdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error", true);
   }
 
   const targetValidation = validateRuntimeCurrentPageTarget(request.environment, inspection.currentUrl);
@@ -534,6 +587,10 @@ export async function inspectQaIncidentDefaultFieldsRuntime(
     fields: inspection.fields,
     safety: incidentFieldRuntimeSafety(true)
   };
+}
+
+function cdpRuntimeBlockedReasonFromError(error: unknown): QaCdpRuntimeBlockedReason | undefined {
+  return error instanceof QaCdpRuntimeBlockedError ? error.blockedReason : undefined;
 }
 
 function incidentFieldRuntimePreflightBlockedReason(
@@ -832,9 +889,110 @@ function blockedFillResult(blockedReason: QaAutofillRuntimeBlockedReason): QaAut
   };
 }
 
+async function evaluateWithWindowsLocalCdp<T>(options: WindowsLocalCdpRuntimePageDriverOptions, expression: string): Promise<T> {
+  const timeoutMs = normalizeWindowsLocalCdpTimeoutMs(options.timeoutMs);
+  const input = JSON.stringify({
+    endpoint: options.endpoint,
+    targetUrl: options.targetUrl,
+    expressionBase64: Buffer.from(expression, "utf8").toString("base64")
+  });
+
+  const payload = await runWindowsLocalCdpEvaluationHelper<T>({
+    powershellExecutable: options.powershellExecutable ?? "powershell.exe",
+    helperScriptPath: options.helperScriptPath,
+    input,
+    timeoutMs
+  });
+
+  if (payload.status !== "completed" || payload.value === undefined) {
+    throw new QaCdpRuntimeBlockedError(safeCdpRuntimeBlockedReason(payload.blockedReason));
+  }
+
+  return payload.value;
+}
+
+function safeCdpRuntimeBlockedReason(blockedReason: string | undefined): QaCdpRuntimeBlockedReason {
+  return blockedReason === "cdp-endpoint-denied" ||
+    blockedReason === "cdp-page-selection-denied" ||
+    blockedReason === "browser-runtime-error"
+    ? blockedReason
+    : "browser-runtime-error";
+}
+
+function normalizeWindowsLocalCdpTimeoutMs(timeoutMs: number | undefined): number {
+  if (!Number.isFinite(timeoutMs) || timeoutMs === undefined) {
+    return DEFAULT_WINDOWS_LOCAL_CDP_EVALUATION_TIMEOUT_MS;
+  }
+  return Math.min(120_000, Math.max(1, Math.round(timeoutMs)));
+}
+
+function runWindowsLocalCdpEvaluationHelper<T>(input: {
+  powershellExecutable: string;
+  helperScriptPath: string;
+  input: string;
+  timeoutMs: number;
+}): Promise<WindowsLocalCdpEvaluationPayload<T>> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(input.powershellExecutable, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", input.helperScriptPath], {
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const timeout = globalThis.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill();
+      reject(new Error("Windows local browser debugging evaluation timed out."));
+    }, input.timeoutMs);
+
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+      if (stdout.length > 1_000_000) {
+        stdout = stdout.slice(-1_000_000);
+      }
+    });
+
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+      if (stderr.length > 100_000) {
+        stderr = stderr.slice(-100_000);
+      }
+    });
+
+    child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
+      globalThis.clearTimeout(timeout);
+      reject(error);
+    });
+
+    child.on("close", () => {
+      if (settled) return;
+      settled = true;
+      globalThis.clearTimeout(timeout);
+      try {
+        const parsed = JSON.parse(stdout.trim()) as WindowsLocalCdpEvaluationPayload<T>;
+        resolve(parsed);
+      } catch {
+        reject(new Error("Windows local browser debugging helper returned invalid JSON."));
+      }
+    });
+
+    child.stdin.end(input.input, "utf8");
+  });
+}
+
 async function withCdpClient<T>(endpoint: string, targetUrl: string | undefined, callback: (client: CdpClient) => Promise<T>): Promise<T> {
   const webSocketUrl = await resolveCdpPageWebSocketUrl(endpoint, targetUrl);
-  const client = await CdpClient.connect(webSocketUrl);
+  let client: CdpClient;
+  try {
+    client = await CdpClient.connect(webSocketUrl);
+  } catch {
+    throw new QaCdpRuntimeBlockedError("cdp-endpoint-denied");
+  }
   try {
     return await callback(client);
   } finally {
@@ -852,15 +1010,20 @@ async function resolveCdpPageWebSocketUrl(endpoint: string, targetUrl?: string):
   }
 
   const listUrl = new URL("/json/list", url);
-  const response = await fetch(listUrl);
+  let response: Response;
+  try {
+    response = await fetch(listUrl);
+  } catch {
+    throw new QaCdpRuntimeBlockedError("cdp-endpoint-denied");
+  }
   if (!response.ok) {
-    throw new Error("Unable to inspect the local browser debugging endpoint.");
+    throw new QaCdpRuntimeBlockedError("cdp-endpoint-denied");
   }
   const pages = (await response.json()) as CdpPageTarget[];
   const pageTargets = pages.filter((page) => page.type === "page" && page.webSocketDebuggerUrl);
   const selectedTarget = selectCdpPageTarget(pageTargets, targetUrl);
   if (!selectedTarget?.webSocketDebuggerUrl) {
-    throw new Error("Unable to select a single current browser page target for QA verify-only inspection.");
+    throw new QaCdpRuntimeBlockedError("cdp-page-selection-denied");
   }
   const webSocketUrl = selectedTarget.webSocketDebuggerUrl;
   validateLocalCdpEndpoint(webSocketUrl);

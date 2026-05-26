@@ -1507,6 +1507,8 @@ const englishOperatorWorkbenchCopy = {
     verifyReadyReason: "Ready: browser connection is ready; check the visible ticket page.",
     autofillVerifyReason: "Disabled: check the current ticket page first.",
     autofillReadyReason: "Ready: Autofill can fill allowed text fields only; you still review manually.",
+    autofillCompletedFeedback: (filledCount: number) =>
+      `Autofill completed: ${filledCount} text fields filled. No Save, Submit, Update, Resolve, Close, upload, email, or ServiceNow API was used.`,
     runtimeStatus: "Browser status",
     resetRuntimeState: "Reset browser readiness",
     resetRuntimeStateHelper: "Safe to retry: clears only local browser connection/page-check readiness; no ServiceNow action is taken.",
@@ -1660,6 +1662,8 @@ const operatorWorkbenchTranslations = {
       verifyReadyReason: "就绪：浏览器连接已准备好，可以检查当前工单页面。",
       autofillVerifyReason: "禁用：请先检查当前工单页面。",
       autofillReadyReason: "就绪：自动填充只能填写允许的文本字段；仍需人工审核。",
+      autofillCompletedFeedback: (filledCount: number) =>
+        `自动填充已完成：已填写 ${filledCount} 个文本字段。没有执行 Save、Submit、Update、Resolve、Close、上传、邮件或 ServiceNow API。`,
       runtimeStatus: "浏览器状态",
       resetRuntimeState: "重置浏览器就绪状态",
       resetRuntimeStateHelper: "可安全重试：仅清除本地浏览器连接/检查状态；不会执行 ServiceNow 操作。",
@@ -1810,6 +1814,8 @@ const operatorWorkbenchTranslations = {
       verifyReadyReason: "就緒：瀏覽器連線已準備好，可以檢查目前工單頁面。",
       autofillVerifyReason: "停用：請先檢查目前工單頁面。",
       autofillReadyReason: "就緒：自動填入只能填寫允許的文字欄位；仍需人工審核。",
+      autofillCompletedFeedback: (filledCount: number) =>
+        `自動填入已完成：已填寫 ${filledCount} 個文字欄位。沒有執行 Save、Submit、Update、Resolve、Close、上傳、郵件或 ServiceNow API。`,
       runtimeStatus: "瀏覽器狀態",
       resetRuntimeState: "重設瀏覽器就緒狀態",
       resetRuntimeStateHelper: "可安全重試：僅清除本地瀏覽器連線/頁面檢查狀態；不會執行 ServiceNow 操作。",
@@ -1960,6 +1966,8 @@ const operatorWorkbenchTranslations = {
       verifyReadyReason: "Listo: conexión del navegador preparada; revisa la página de ticket visible.",
       autofillVerifyReason: "Deshabilitado: primero revisa la página de ticket actual.",
       autofillReadyReason: "Listo: Autofill puede rellenar solo campos de texto permitidos; aún revisas manualmente.",
+      autofillCompletedFeedback: (filledCount: number) =>
+        `Autofill completado: ${filledCount} campos de texto rellenados. No se usó Save, Submit, Update, Resolve, Close, carga, correo ni ServiceNow API.`,
       runtimeStatus: "Estado del navegador",
       resetRuntimeState: "Restablecer preparación del navegador",
       resetRuntimeStateHelper: "Reintento seguro: solo limpia el estado local de conexión del navegador/revisión de página; no realiza acciones en ServiceNow.",
@@ -3017,11 +3025,18 @@ export function App({
       setOperatorVerifiedPageFingerprint("");
     }
     if (finalState.action === "verify") {
+      if (response?.fieldInspection?.blockedReason === "cdp-endpoint-denied") {
+        setOperatorCdpEndpoint("");
+      }
       setOperatorVerifiedPageFingerprint(
         response?.ok === true && response.fieldInspection?.status === "verified" && response.fieldInspection.pageFingerprint
           ? response.fieldInspection.pageFingerprint
           : ""
       );
+    }
+    if (finalState.action === "autofill" && response?.runtime?.blockedReason === "cdp-endpoint-denied") {
+      setOperatorCdpEndpoint("");
+      setOperatorVerifiedPageFingerprint("");
     }
     if (finalState.action === "autofill" && response?.runtime?.blockedReason === "approval-stale-after-page-change") {
       setOperatorVerifiedPageFingerprint("");
@@ -5774,6 +5789,17 @@ function sanitizeOperatorDiagnosticText(value: string | undefined, fallback: str
     .replace(/\/(?:[^\s<>"')/]+\/)*[^\s<>"')]+/g, "[REDACTED_PATH]");
 }
 
+function operatorRuntimeBlockedReasonDetails(value: string | undefined, fallback: string): string {
+  switch (value) {
+    case "cdp-endpoint-denied":
+      return "Browser connection is no longer reachable. Click Start test browser again, then open the current Incident form in that test browser. No ServiceNow action was taken.";
+    case "cdp-page-selection-denied":
+      return "Could not find one unique approved Incident tab in the test browser. Keep exactly one current Incident form tab open, then retry Check current ticket page. No ServiceNow action was taken.";
+    default:
+      return sanitizeOperatorDiagnosticText(value, fallback);
+  }
+}
+
 function operatorLaunchDetails(response: OperatorRuntimeResponse, fallbackStatus: string): string {
   const baseDetails = response.ok
     ? "A separate QA test browser is open. Log in and open an Incident form, then click Check current ticket page."
@@ -5795,12 +5821,66 @@ function operatorStatusFromResponse(
     const plannedCount = response.defaultPlan?.plannedFields?.length ?? 0;
     return response.ok
       ? { label: "Current ticket page checked", tone: "success", details: `${plannedCount} fields are ready for local review. Autofill remains text-only; click Autofill allowed fields only after reviewing the preview.` }
-      : { label: "Page check blocked", tone: "blocked", details: sanitizeOperatorDiagnosticText(response.fieldInspection?.blockedReason ?? response.defaultPlan?.blockedReason, "Current page is not a verified QA Incident form.") };
+      : { label: "Page check blocked", tone: "blocked", details: operatorRuntimeBlockedReasonDetails(response.fieldInspection?.blockedReason ?? response.defaultPlan?.blockedReason, "Current page is not a verified QA Incident form.") };
   }
   const filledCount = response.runtime?.filledFields?.length ?? 0;
   return response.ok
     ? { label: "Autofill completed", tone: "success", details: `${filledCount} text fields were filled. Review manually in ServiceNow. This tool did not Save, Submit, Update, Resolve, Close, upload, email, or call ServiceNow API.` }
-    : { label: "Autofill blocked", tone: "blocked", details: sanitizeOperatorDiagnosticText(response.runtime?.blockedReason ?? response.defaultPlan?.blockedReason, "No field was changed.") };
+    : { label: "Autofill blocked", tone: "blocked", details: operatorRuntimeBlockedReasonDetails(response.runtime?.blockedReason ?? response.defaultPlan?.blockedReason, "No field was changed.") };
+}
+
+type OperatorActionFeedback = { tone: "success" | "blocked"; text: string };
+
+function operatorActionCardFeedback(
+  action: OperatorAction,
+  response: OperatorRuntimeResponse | null,
+  workbenchCopy: OperatorWorkbenchCopy
+): OperatorActionFeedback | null {
+  if (!response) {
+    return null;
+  }
+
+  if (action === "launch" && response.launch) {
+    return response.ok
+      ? { tone: "success", text: workbenchCopy.runtime.statusCdpReady }
+      : {
+          tone: "blocked",
+          text: `${workbenchCopy.runtime.statusBlocked}: ${sanitizeOperatorDiagnosticText(
+            response.launch.blockedReason,
+            "Browser connection blocked."
+          )}${operatorRuntimeLogDetails(response)}`
+        };
+  }
+
+  if (action === "verify" && response.fieldInspection && !response.runtime) {
+    return response.ok
+      ? { tone: "success", text: workbenchCopy.runtime.statusVerified }
+      : {
+          tone: "blocked",
+          text: `${workbenchCopy.runtime.statusBlocked}: ${operatorRuntimeBlockedReasonDetails(
+            response.fieldInspection.blockedReason ?? response.defaultPlan?.blockedReason,
+            "Current page is not a verified QA Incident form."
+          )}`
+        };
+  }
+
+  if (action === "autofill" && response.runtime) {
+    const filledCount = response.runtime.filledFields?.length ?? 0;
+    return response.ok
+      ? {
+          tone: "success",
+          text: workbenchCopy.runtime.autofillCompletedFeedback(filledCount)
+        }
+      : {
+          tone: "blocked",
+          text: `${workbenchCopy.runtime.statusBlocked}: ${operatorRuntimeBlockedReasonDetails(
+            response.runtime.blockedReason ?? response.defaultPlan?.blockedReason,
+            "No field was changed."
+          )}`
+        };
+  }
+
+  return null;
 }
 
 function QaOperatorRuntimePanel({
@@ -5893,6 +5973,7 @@ function QaOperatorRuntimePanel({
       buttonText: busyAction === "launch" ? workbenchCopy.runtime.starting : workbenchCopy.runtime.startTitle,
       disabled: launchDisabled,
       reason: launchDisabledReason,
+      feedback: operatorActionCardFeedback("launch", lastResponse, workbenchCopy),
       onClick: onLaunchBrowser,
       busy: busyAction === "launch",
       ready: !launchDisabled
@@ -5904,6 +5985,7 @@ function QaOperatorRuntimePanel({
       buttonText: busyAction === "verify" ? workbenchCopy.runtime.verifying : workbenchCopy.runtime.verifyTitle,
       disabled: verifyDisabled,
       reason: verifyDisabledReason,
+      feedback: operatorActionCardFeedback("verify", lastResponse, workbenchCopy),
       onClick: onVerify,
       busy: busyAction === "verify",
       ready: !verifyDisabled
@@ -5915,6 +5997,7 @@ function QaOperatorRuntimePanel({
       buttonText: busyAction === "autofill" ? workbenchCopy.runtime.autofilling : workbenchCopy.runtime.autofillTitle,
       disabled: autofillDisabled,
       reason: autofillDisabledReason,
+      feedback: operatorActionCardFeedback("autofill", lastResponse, workbenchCopy),
       onClick: onAutofill,
       busy: busyAction === "autofill",
       ready: !autofillDisabled
@@ -5964,6 +6047,11 @@ function QaOperatorRuntimePanel({
               <WorkbenchIcon name="chevron" />
             </button>
             <small>{action.reason}</small>
+            {action.feedback ? (
+              <small className={`runtime-action-feedback ${action.feedback.tone}`} role="status">
+                {action.feedback.text}
+              </small>
+            ) : null}
           </article>
         ))}
       </div>

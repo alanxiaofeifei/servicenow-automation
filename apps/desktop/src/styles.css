@@ -3770,6 +3770,24 @@ body {
   cursor: not-allowed;
 }
 
+.runtime-action-feedback {
+  border-radius: 10px;
+  display: block;
+  font-weight: 760;
+  line-height: 1.35;
+  padding: 7px 8px;
+}
+
+.runtime-action-feedback.success {
+  background: var(--sna-green-soft);
+  color: var(--sna-green-dark);
+}
+
+.runtime-action-feedback.blocked {
+  background: var(--sna-amber-soft);
+  color: #7c561d;
+}
+
 .runtime-status-card,
 .runtime-safety-note {
   background: #fffaf2;
