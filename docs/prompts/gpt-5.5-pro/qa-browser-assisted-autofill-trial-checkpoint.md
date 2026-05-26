@@ -77,7 +77,7 @@ GPT-5.5 Pro should propose the final phrase, but the phrase should bind:
 
 Candidate:
 
-`I APPROVE QA AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE`
+`PRIVATE_APPROVAL_PHRASE - NO SAVE SUBMIT UPDATE OR CLOSE`
 
 ## Questions for GPT-5.5 Pro
 

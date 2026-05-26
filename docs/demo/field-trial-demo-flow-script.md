@@ -122,10 +122,10 @@ Show:
 - Controlled QA single-ticket smoke panel.
 - Required approval phrase.
 - Action-specific approval phrases:
-  - `I APPROVE QA SAVE ONLY`
-  - `I APPROVE QA SUBMIT ONLY`
-  - `I APPROVE QA UPDATE ONLY`
-  - `I APPROVE QA CLOSE ONLY`
+  - `PRIVATE_APPROVAL_PHRASE`
+  - `PRIVATE_APPROVAL_PHRASE`
+  - `PRIVATE_APPROVAL_PHRASE`
+  - `PRIVATE_APPROVAL_PHRASE`
 - Stop rules.
 - `productionWriteAllowed=false`.
 
@@ -156,7 +156,7 @@ Close with:
 
 ## Short version (90 seconds)
 
-"This cockpit models a real Service Desk workflow using fake/sanitized data. Intake comes from multiple channels, then Source Review cleans it up, the Ticket Draft maps ServiceNow fields, and the Workflow Preview shows confirmation, routing, work notes, and Excel dry-run evidence. The QA smoke gate is manual-fill only: no ServiceNow API, no DOM autofill, no bulk create, and no production writes. Each write action has its own phrase, such as `I APPROVE QA SAVE ONLY` or `I APPROVE QA SUBMIT ONLY`. The business goal is to reduce ticket preparation time while keeping human accountability and privacy controls."
+"This cockpit models a real Service Desk workflow using fake/sanitized data. Intake comes from multiple channels, then Source Review cleans it up, the Ticket Draft maps ServiceNow fields, and the Workflow Preview shows confirmation, routing, work notes, and Excel dry-run evidence. The QA smoke gate is manual-fill only: no ServiceNow API, no DOM autofill, no bulk create, and no production writes. Each write action has its own phrase, such as `PRIVATE_APPROVAL_PHRASE` or `PRIVATE_APPROVAL_PHRASE`. The business goal is to reduce ticket preparation time while keeping human accountability and privacy controls."
 
 ## Demo checklist
 

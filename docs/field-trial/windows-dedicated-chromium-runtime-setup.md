@@ -70,7 +70,7 @@ Default output path:
 Open **Windows PowerShell**, then enter the repo path:
 
 ```powershell
-cd "\\wsl.localhost\<Distro>\path\to\servicenow-automation"
+cd "PASTE_REPO_UNC_PATH_HERE"
 ```
 
 For Alan's current WSL setup, Hermes can provide the exact UNC path when needed; do not guess it.
@@ -99,7 +99,7 @@ The script should print something like:
 
 ```text
 Status: installed
-Runtime: C:\Users\<you>\AppData\Local\ServiceNowAutomation\Runtime\Chromium\chrome.exe
+Runtime: %LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Chromium\\chrome.exe
 Runtime exists: True
 Chrome for Testing version: <version>
 
@@ -126,8 +126,8 @@ Expected:
 
 ```text
 True
-C:\Users\<you>\AppData\Local\ServiceNowAutomation\Runtime\Chromium\chrome.exe
-C:\Users\<you>\AppData\Local\ServiceNowAutomation\Profiles\smoke\session-smoke-001
+%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Chromium\\chrome.exe
+%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\smoke\\session-smoke-001
 ```
 
 ## Important PowerShell path note

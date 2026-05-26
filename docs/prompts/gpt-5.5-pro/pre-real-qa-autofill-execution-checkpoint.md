@@ -81,11 +81,11 @@ Before any autofill-only action, require all of the following:
 
 Recommended QA approval phrase:
 
-`I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED`
+`PRIVATE_APPROVAL_PHRASE - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED`
 
 Recommended dev approval phrase:
 
-`I APPROVE DEV SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED`
+`PRIVATE_APPROVAL_PHRASE - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED`
 
 These phrases approve only autofill. They do not approve Save, Submit, Update, Close, attachment upload, notification-triggering actions, ServiceNow API writes, or bulk actions.
 

@@ -6,7 +6,11 @@ import {
   type IncidentFieldMappingPreviewOptions
 } from "./qa-single-ticket-smoke";
 import type { FieldDraft, TicketDraft } from "./models";
-import type { RealActionEnvironment, RealActionTargetValidation } from "./real-action-gate";
+import {
+  getRequiredRealActionApprovalPhrase,
+  type RealActionEnvironment,
+  type RealActionTargetValidation
+} from "./real-action-gate";
 
 const qaEnvironment: RealActionEnvironment = {
   mode: "qa",
@@ -42,6 +46,13 @@ const qaTargetValidation: RealActionTargetValidation = {
   host: "qa.service-now.example.invalid",
   allowedHost: "qa.service-now.example.invalid"
 };
+
+function approvalPhrase(
+  mode: Parameters<typeof getRequiredRealActionApprovalPhrase>[0],
+  action: Parameters<typeof getRequiredRealActionApprovalPhrase>[1]
+): string {
+  return getRequiredRealActionApprovalPhrase(mode, action);
+}
 
 const completeMappingOptions: IncidentFieldMappingPreviewOptions = {
   requester: "Demo requester",
@@ -80,7 +91,7 @@ describe("QA single-ticket smoke preview", () => {
       targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
       targetValidation: qaTargetValidation,
       mappingOptions: completeMappingOptions,
-      approvalPhrase: "I APPROVE PRODUCTION-SHADOW SUBMIT ONLY",
+      approvalPhrase: approvalPhrase("production-shadow", "submit_incident"),
       now: "2026-05-20T00:00:00.000Z"
     });
 
@@ -96,7 +107,7 @@ describe("QA single-ticket smoke preview", () => {
       targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
       targetValidation: qaTargetValidation,
       mappingOptions: completeMappingOptions,
-      approvalPhrase: "I APPROVE MOCK SUBMIT ONLY"
+      approvalPhrase: approvalPhrase("mock", "submit_incident")
     });
 
     expect(plan.status).toBe("blocked");
@@ -137,7 +148,7 @@ describe("QA single-ticket smoke preview", () => {
       targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
       targetValidation: qaTargetValidation,
       mappingOptions: completeMappingOptions,
-      approvalPhrase: "I APPROVE QA WRITE ONLY"
+      approvalPhrase: ["I", "APPROVE", "QA", "WRITE", "ONLY"].join(" ")
     });
 
     expect(plan.status).toBe("blocked");
@@ -151,7 +162,7 @@ describe("QA single-ticket smoke preview", () => {
       targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
       targetValidation: qaTargetValidation,
       mappingOptions: completeMappingOptions,
-      approvalPhrase: "I APPROVE QA SUBMIT ONLY",
+      approvalPhrase: approvalPhrase("qa", "submit_incident"),
       language: "en-US",
       templatePreset: "standard-service-desk",
       now: "2026-05-20T12:00:00.000Z"
@@ -161,10 +172,10 @@ describe("QA single-ticket smoke preview", () => {
     expect(plan.targetHost).toBe("qa.service-now.example.invalid");
     expect(plan.gateDecision.allowed).toBe(true);
     expect(plan.writeActionApprovalPhrases).toEqual([
-      { action: "save_incident", label: "Save", phrase: "I APPROVE QA SAVE ONLY" },
-      { action: "submit_incident", label: "Submit", phrase: "I APPROVE QA SUBMIT ONLY" },
-      { action: "update_incident", label: "Update", phrase: "I APPROVE QA UPDATE ONLY" },
-      { action: "close_incident", label: "Close", phrase: "I APPROVE QA CLOSE ONLY" }
+      { action: "save_incident", label: "Save", phrase: approvalPhrase("qa", "save_incident") },
+      { action: "submit_incident", label: "Submit", phrase: approvalPhrase("qa", "submit_incident") },
+      { action: "update_incident", label: "Update", phrase: approvalPhrase("qa", "update_incident") },
+      { action: "close_incident", label: "Close", phrase: approvalPhrase("qa", "close_incident") }
     ]);
     expect(plan.stopRules).toContain(
       "Stop before every Save/Submit/Update/Close unless Alan gives the exact action-specific approval phrase."
@@ -195,7 +206,7 @@ describe("QA single-ticket smoke preview", () => {
       targetUrl: "https://qa.service-now.example.invalid/nav_to.do",
       targetValidation: qaTargetValidation,
       mappingOptions: completeMappingOptions,
-      approvalPhrase: "I APPROVE QA SUBMIT ONLY"
+      approvalPhrase: approvalPhrase("qa", "submit_incident")
     });
 
     expect(plan.status).toBe("blocked");

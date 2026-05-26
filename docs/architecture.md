@@ -32,7 +32,7 @@ servicenow-automation/
 │   │   ├── providers/
 │   │   └── evaluators/
 │   ├── profiles/
-│   │   ├── demo-yageo/
+│   │   ├── demo-service-desk/
 │   │   └── demo-generic/
 │   ├── kb/
 │   │   ├── demo-articles/

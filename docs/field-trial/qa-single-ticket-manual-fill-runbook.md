@@ -84,10 +84,10 @@ If a required field cannot be filled using fake/sanitized values, stop.
 Each write action has its own approval phrase. One phrase never covers another action.
 
 ```text
-Save:   I APPROVE QA SAVE ONLY
-Submit: I APPROVE QA SUBMIT ONLY
-Update: I APPROVE QA UPDATE ONLY
-Close:  I APPROVE QA CLOSE ONLY
+Save:   PRIVATE_APPROVAL_PHRASE
+Submit: PRIVATE_APPROVAL_PHRASE
+Update: PRIVATE_APPROVAL_PHRASE
+Close:  PRIVATE_APPROVAL_PHRASE
 ```
 
 Rules:
@@ -204,10 +204,10 @@ Before Save, Submit, Update, or Close:
 2. Confirm QA isolation.
 3. Confirm no real user/customer/production routing is involved.
 4. Ask Alan for the exact matching phrase:
-   - Save requires `I APPROVE QA SAVE ONLY`.
-   - Submit requires `I APPROVE QA SUBMIT ONLY`.
-   - Update requires `I APPROVE QA UPDATE ONLY`.
-   - Close requires `I APPROVE QA CLOSE ONLY`.
+   - Save requires `PRIVATE_APPROVAL_PHRASE`.
+   - Submit requires `PRIVATE_APPROVAL_PHRASE`.
+   - Update requires `PRIVATE_APPROVAL_PHRASE`.
+   - Close requires `PRIVATE_APPROVAL_PHRASE`.
 5. If the phrase is missing, wrong, stale, or for a different action, do not click.
 6. For the first single-ticket trial, prefer Save or Submit only; Update and Close remain blocked unless a separate reviewed scenario explicitly needs them.
 

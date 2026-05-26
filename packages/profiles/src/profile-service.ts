@@ -3,16 +3,16 @@ import {
   type ProjectProfile
 } from "@servicenow-automation/core";
 
-import assignmentMappings from "../demo-yageo/mappings/assignment-mappings.json";
-import categoryMappings from "../demo-yageo/mappings/category-mappings.json";
-import profileData from "../demo-yageo/profile.json";
+import assignmentMappings from "../demo-service-desk/mappings/assignment-mappings.json";
+import categoryMappings from "../demo-service-desk/mappings/category-mappings.json";
+import profileData from "../demo-service-desk/profile.json";
 
 export class ProfileService {
   loadProjectProfile(input: unknown): ProjectProfile {
     return ProjectProfileSchema.parse(input);
   }
 
-  loadDemoYageoProfile(): ProjectProfile {
+  loadDemoServiceDeskProfile(): ProjectProfile {
     return this.loadProjectProfile({
       ...profileData,
       categoryMappings,
@@ -21,6 +21,6 @@ export class ProfileService {
   }
 }
 
-export function loadDemoYageoProfile(): ProjectProfile {
-  return new ProfileService().loadDemoYageoProfile();
+export function loadDemoServiceDeskProfile(): ProjectProfile {
+  return new ProfileService().loadDemoServiceDeskProfile();
 }

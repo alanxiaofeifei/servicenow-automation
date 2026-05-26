@@ -12,6 +12,10 @@ import {
   validateWindowsToolOwnedProfileRoot
 } from "./browser-session";
 
+function windowsPath(...parts: string[]): string {
+  return parts.join("\\");
+}
+
 describe("BrowserSessionService", () => {
   it("builds a QA controlled-browser launch plan with manual login and ignored runtime storage", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "sda-browser-session-"));

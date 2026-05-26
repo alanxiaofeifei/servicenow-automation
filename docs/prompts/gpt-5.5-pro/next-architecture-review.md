@@ -51,7 +51,7 @@ The project is no longer just an empty scaffold. These GitHub issues are complet
 - #3 Electron + React + TypeScript + pnpm workspace scaffold
 - #4 Core models
 - #5 Zod validation schemas
-- #6 Demo YAGEO profile
+- #6 Demo demo customer profile
 - #7 Demo KB articles
 - #8 Simple KB search
 
@@ -80,9 +80,9 @@ Please inspect these files if available:
 - `docs/product-plan.en-US.md`
 - `packages/core/src/models/index.ts`
 - `packages/core/src/schemas/index.ts`
-- `packages/profiles/demo-yageo/profile.json`
-- `packages/profiles/demo-yageo/mappings/category-mappings.json`
-- `packages/profiles/demo-yageo/mappings/assignment-mappings.json`
+- `packages/profiles/demo-service-desk/profile.json`
+- `packages/profiles/demo-service-desk/mappings/category-mappings.json`
+- `packages/profiles/demo-service-desk/mappings/assignment-mappings.json`
 - `packages/profiles/src/profile-service.ts`
 - `packages/kb/demo-articles/vpn.md`
 - `packages/kb/demo-articles/windows.md`
@@ -111,13 +111,13 @@ Schemas already exist:
 - `KnowledgeMatchSchema`
 
 Demo data already exists:
-- A portfolio-safe YAGEO demo profile
+- A portfolio-safe demo customer demo profile
 - VPN / Windows / Account-login demo KB articles
 - Simple keyword KB search
 - Optional local Markdown KB directory loader
 
 There is an intended local KB test source:
-- `G:\My Drive\90_Archive_历史归档\NoteBookLLM_Yageo_CN`
+- `G:\My Drive\90_Archive_历史归档\NoteBookLLM_demo customer_CN`
 
 However, this is only for local/private testing and should not be pushed wholesale to GitHub or exposed publicly.
 

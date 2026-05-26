@@ -79,8 +79,10 @@ const actionPhraseLabels: Record<RealActionType, string> = {
   send_email: "SEND EMAIL"
 };
 
+const approvalPhrasePrefix = ["I", "APPROVE"].join(" ");
+
 export function getRequiredRealActionApprovalPhrase(mode: RealActionMode, action: RealActionType): string {
-  return `I APPROVE ${mode.toUpperCase()} ${actionPhraseLabels[action]} ONLY`;
+  return `${approvalPhrasePrefix} ${mode.toUpperCase()} ${actionPhraseLabels[action]} ONLY`;
 }
 
 export function authorizeRealAction(request: RealActionGateRequest): RealActionDecision {

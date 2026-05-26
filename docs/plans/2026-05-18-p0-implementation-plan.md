@@ -106,9 +106,9 @@ pnpm typecheck
 **Objective:** Add fake demo profile values for VPN, Windows, account/login scenarios.
 
 **Files:**
-- Create: `packages/profiles/demo-yageo/profile.json`
-- Create: `packages/profiles/demo-yageo/mappings/categories.json`
-- Create: `packages/profiles/demo-yageo/mappings/assignment-groups.json`
+- Create: `packages/profiles/demo-service-desk/profile.json`
+- Create: `packages/profiles/demo-service-desk/mappings/categories.json`
+- Create: `packages/profiles/demo-service-desk/mappings/assignment-groups.json`
 
 **Verification:**
 

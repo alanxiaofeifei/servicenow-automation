@@ -31,7 +31,7 @@ Review the local cockpit output:
 - Mock ServiceNow Incident Preview is clearly marked as mock/demo.
 - Controlled QA single-ticket smoke panel is visible.
 - Requested write action defaults to `save_incident` for conservative Save-only readiness.
-- Required approval phrase shown for Save is `I APPROVE MOCK SAVE ONLY` in mock mode or `I APPROVE QA SAVE ONLY` in QA mode.
+- Required approval phrase shown for Save is `PRIVATE_APPROVAL_PHRASE` in mock mode or `PRIVATE_APPROVAL_PHRASE` in QA mode.
 - Submit, Update, and Close remain deferred to a later checkpoint.
 
 Stop if any real enterprise/customer/ticket/session content appears.
@@ -95,7 +95,7 @@ Save-only readiness does not click Save. A later real QA Save would still requir
 2. confirmed QA isolation;
 3. one fake/sanitized ticket only;
 4. manual copy/manual typing only;
-5. exact phrase immediately before Save: `I APPROVE QA SAVE ONLY`;
+5. exact phrase immediately before Save: `PRIVATE_APPROVAL_PHRASE`;
 6. no Submit, Update, or Close.
 
 ## Sanitized outcome note template

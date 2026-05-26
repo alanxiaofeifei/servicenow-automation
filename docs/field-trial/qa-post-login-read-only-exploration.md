@@ -4,7 +4,7 @@
 
 This runbook is the final manual script for the field trial approved by GPT-5.5 Pro checkpoint #30 as **READY WITH CONDITIONS**.
 
-The goal is only to verify that Alan can manually log in to the QA/dev ServiceNow environment through the controlled isolated browser and observe a safe landing/home/navigator shell.
+The goal is only to verify that Alan can manually log in to the QA/dev ServiceNow environment through the controlled isolated browser and observe a safe landing page or navigator shell.
 
 This runbook does **not** approve any ServiceNow write action.
 
@@ -14,7 +14,7 @@ Allowed:
 
 - Open controlled isolated browser.
 - Alan manually logs in.
-- Observe only landing/home/navigator shell.
+- Observe only landing page or navigator shell.
 - Record only non-sensitive yes/no observations.
 - Close browser.
 - Optionally reset only the verified project/tool-owned disposable profile.
@@ -76,7 +76,7 @@ If stopped, record only a non-sensitive stop reason such as `redirected to recor
 Run from the repository root in WSL:
 
 ```bash
-cd /home/alanxwsl/projects/servicenow-automation
+cd $HOME/projects/servicenow-automation
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
@@ -128,7 +128,7 @@ Inspect with a redacted validation summary instead of pasting raw JSON:
 ```bash
 python3 - <<'PY'
 import json, pathlib, re, subprocess, sys
-repo = pathlib.Path('/home/alanxwsl/projects/servicenow-automation').resolve()
+repo = pathlib.Path.cwd().resolve()
 raw = pathlib.Path('/tmp/sda-qa-post-login-dry-run.json').read_text()
 data = json.loads(raw)
 launch = data.get('launch') or {}
@@ -211,7 +211,7 @@ Then:
 1. Confirm the browser window opened.
 2. Confirm it is a new/blank isolated profile, not Alan's daily work Chrome/Edge profile.
 3. Alan manually logs in.
-4. Observe only landing/home/navigator shell.
+4. Observe only landing page or navigator shell.
 5. Do not open real ticket/customer/user records.
 6. Do not type into any ServiceNow field.
 7. Do not click Save/Submit/Update/Close.
@@ -246,7 +246,7 @@ Default work profile reused: yes/no
 Manual login succeeded: yes/no
 
 ## Observation
-Landing/home/navigator shell reachable: yes/no
+Landing page or navigator shell reachable: yes/no
 Real ticket/customer/user record opened: no
 
 ## Safety confirmation
@@ -302,7 +302,7 @@ The trial is complete only if Alan can report, without sensitive details:
 Linux Chrome window opened: yes/no
 New blank isolated profile: yes/no
 Manual login succeeded: yes/no
-Landing/home/navigator shell reachable: yes/no
+Landing page or navigator shell reachable: yes/no
 Real ticket/customer/user record opened: no
 Any field typed: no
 Any Save/Submit/Update/Close: no

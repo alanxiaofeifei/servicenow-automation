@@ -104,10 +104,10 @@ Expected priority: 4 - Low
 Each real write action has its own approval phrase. One phrase never covers another action.
 
 ```text
-Save:   I APPROVE QA SAVE ONLY
-Submit: I APPROVE QA SUBMIT ONLY
-Update: I APPROVE QA UPDATE ONLY
-Close:  I APPROVE QA CLOSE ONLY
+Save:   PRIVATE_APPROVAL_PHRASE
+Submit: PRIVATE_APPROVAL_PHRASE
+Update: PRIVATE_APPROVAL_PHRASE
+Close:  PRIVATE_APPROVAL_PHRASE
 ```
 
 Rules:

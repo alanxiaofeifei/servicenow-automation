@@ -6,7 +6,7 @@ import { demoKnowledgeArticles, searchKnowledgeArticles } from "@servicenow-auto
 import {
   getDefaultServiceNowEnvironmentMode,
   getServiceNowEnvironmentConfig,
-  loadDemoYageoProfile,
+  loadDemoServiceDeskProfile,
   serviceNowEnvironmentConfigs,
   validateServiceNowEnvironmentUrlSetting,
   validateServiceNowTargetUrl,
@@ -33,7 +33,7 @@ import {
   type TicketDraft
 } from "@servicenow-automation/core";
 
-const profile = loadDemoYageoProfile();
+const profile = loadDemoServiceDeskProfile();
 
 type DemoQueueStatus = "New" | "Reviewed" | "Drafted" | "Done" | "Skipped";
 

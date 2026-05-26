@@ -15,7 +15,7 @@ import { generateMockTicketDraft } from "@servicenow-automation/ai";
 import { demoKnowledgeArticles, searchKnowledgeArticles } from "@servicenow-automation/kb/browser";
 import {
   getServiceNowEnvironmentConfig,
-  loadDemoYageoProfile,
+  loadDemoServiceDeskProfile,
   validateServiceNowTargetUrl,
   type ServiceNowEnvironmentMode,
   type ServiceNowEnvironmentUrlOverrides
@@ -63,7 +63,7 @@ type CaseInput = {
   template?: string;
 };
 
-const profile = loadDemoYageoProfile();
+const profile = loadDemoServiceDeskProfile();
 const manualPasteAdapter = new ManualPasteAdapter({
   idFactory: () => "cli-demo-context",
   now: () => new Date("2026-05-18T12:00:00.000Z")

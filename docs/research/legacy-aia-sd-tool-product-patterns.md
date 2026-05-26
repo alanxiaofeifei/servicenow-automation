@@ -336,7 +336,7 @@ The old AIA SD Tool proves that Alan's strongest story is not “AI writes code.
 
 > Alan understands real Service Desk operations deeply enough to turn repetitive queue handling, ticket drafting, high-severity monitoring, and change workflows into a human-controlled automation product.
 
-The new YAGEO/portable tool should therefore be framed as:
+The new demo customer/portable tool should therefore be framed as:
 
 ```text
 Service Desk workflow cockpit

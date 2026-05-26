@@ -27,7 +27,7 @@ Issue #25 reviewed the first QA/dev no-write controlled browser session and retu
 Issue #26 tracked the first QA no-write field trial. Alan confirmed QA landing/home page reachability, but a serious safety finding occurred:
 
 - Launching Windows Chrome from WSL opened Alan's existing/default Windows Chrome profile.
-- Chrome reused Alan's current Yageo login state.
+- Chrome reused Alan's current demo customer login state.
 - Alan did not type credentials.
 - This means the intended isolated browser profile was **not proven** for the Windows Chrome launch path.
 - Alan must **not** run `sda browser reset --mode qa` for that session because it might affect his normal work browser/profile.

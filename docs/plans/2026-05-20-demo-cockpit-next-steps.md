@@ -57,7 +57,7 @@ Demo data must stay fake/sanitized and visibly labeled.
 1. From WSL, run:
 
    ```bash
-   cd /home/alanxwsl/projects/servicenow-automation
+   cd $HOME/projects/servicenow-automation
    export NVM_DIR="$HOME/.nvm"
    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
    nvm use 24.15.0

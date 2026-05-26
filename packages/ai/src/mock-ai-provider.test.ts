@@ -4,9 +4,9 @@ import { describe, expect, it } from "vitest";
 import { MockAIProvider, type AIProvider } from "./index";
 
 const profile: ProjectProfile = {
-  id: "yageo-demo",
-  displayName: "YAGEO Demo Service Desk",
-  companyLabel: "YAGEO Demo",
+  id: "service-desk-demo",
+  displayName: "Service Desk Demo",
+  companyLabel: "Service Desk Demo",
   defaultAssignmentGroup: "Demo Service Desk",
   categoryMappings: [
     { keywords: ["vpn"], category: "Network", subcategory: "VPN" },

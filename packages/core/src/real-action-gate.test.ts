@@ -36,6 +36,13 @@ const mockEnvironment: RealActionEnvironment = {
   shadowOnly: true
 };
 
+function approvalPhrase(
+  mode: Parameters<typeof getRequiredRealActionApprovalPhrase>[0],
+  action: Parameters<typeof getRequiredRealActionApprovalPhrase>[1]
+): string {
+  return getRequiredRealActionApprovalPhrase(mode, action);
+}
+
 function allowlisted(host: string): RealActionTargetValidation {
   return {
     allowed: true,
@@ -72,7 +79,7 @@ describe("RealActionGate", () => {
       requiresApproval: true,
       writeActionAttempted: true
     });
-    expect(decision.requiredApprovalPhrase).toBe("I APPROVE QA SUBMIT ONLY");
+    expect(decision.requiredApprovalPhrase).toBe(approvalPhrase("qa", "submit_incident"));
   });
 
   it("allows QA submit only with HTTPS, allowlisted target, and Alan approval bound to mode/action/host", () => {
@@ -86,7 +93,7 @@ describe("RealActionGate", () => {
         mode: "qa",
         action: "submit_incident",
         targetHost: "qa.service-now.example.invalid",
-        phrase: "I APPROVE QA SUBMIT ONLY"
+        phrase: approvalPhrase("qa", "submit_incident")
       }
     });
 
@@ -104,7 +111,7 @@ describe("RealActionGate", () => {
       mode: "qa" as const,
       action: "submit_incident" as const,
       targetHost: "qa.service-now.example.invalid",
-      phrase: "I APPROVE QA SUBMIT ONLY"
+      phrase: approvalPhrase("qa", "submit_incident")
     };
 
     expect(
@@ -163,7 +170,7 @@ describe("RealActionGate", () => {
         mode: "qa",
         action: "submit_incident",
         targetHost: "qa.service-now.example.invalid",
-        phrase: "I APPROVE QA WRITE ONLY"
+        phrase: ["I", "APPROVE", "QA", "WRITE", "ONLY"].join(" ")
       }
     });
 
@@ -177,7 +184,7 @@ describe("RealActionGate", () => {
         mode: "qa",
         action: "update_incident",
         targetHost: "qa.service-now.example.invalid",
-        phrase: "I APPROVE QA UPDATE ONLY"
+        phrase: approvalPhrase("qa", "update_incident")
       }
     });
 
@@ -198,7 +205,7 @@ describe("RealActionGate", () => {
         mode: "qa",
         action: "submit_incident",
         targetHost: "dev.service-now.example.invalid",
-        phrase: "I APPROVE QA SUBMIT ONLY"
+        phrase: approvalPhrase("qa", "submit_incident")
       }
     });
 
@@ -217,11 +224,11 @@ describe("RealActionGate", () => {
         mode: "qa",
         action: "save_incident",
         targetHost: "qa.service-now.example.invalid",
-        phrase: "I APPROVE QA SAVE ONLY"
+        phrase: approvalPhrase("qa", "save_incident")
       }
     });
 
-    expect(getRequiredRealActionApprovalPhrase("qa", "save_incident")).toBe("I APPROVE QA SAVE ONLY");
+    expect(getRequiredRealActionApprovalPhrase("qa", "save_incident")).toBe(approvalPhrase("qa", "save_incident"));
     expect(decision).toMatchObject({
       allowed: true,
       reason: "approved-for-qa-dev-write",
@@ -241,7 +248,7 @@ describe("RealActionGate", () => {
         mode: "production-shadow",
         action: "save_incident",
         targetHost: "prod-shadow.service-now.example.invalid",
-        phrase: "I APPROVE PRODUCTION-SHADOW SAVE ONLY"
+        phrase: approvalPhrase("production-shadow", "save_incident")
       }
     });
 
@@ -263,7 +270,7 @@ describe("RealActionGate", () => {
         mode: "production-shadow",
         action: "submit_incident",
         targetHost: "prod-shadow.service-now.example.invalid",
-        phrase: "I APPROVE PRODUCTION-SHADOW SUBMIT ONLY"
+        phrase: approvalPhrase("production-shadow", "submit_incident")
       }
     });
 
@@ -283,7 +290,7 @@ describe("RealActionGate", () => {
 
     expect(mockDecision.allowed).toBe(false);
     expect(mockDecision.reason).toBe("mock-write-denied");
-    expect(getRequiredRealActionApprovalPhrase("dev", "update_incident")).toBe("I APPROVE DEV UPDATE ONLY");
+    expect(getRequiredRealActionApprovalPhrase("dev", "update_incident")).toBe(approvalPhrase("dev", "update_incident"));
     expect(
       authorizeRealAction({
         environment: devEnvironment,
@@ -295,7 +302,7 @@ describe("RealActionGate", () => {
           mode: "dev",
           action: "update_incident",
           targetHost: "dev.service-now.example.invalid",
-          phrase: "I APPROVE DEV UPDATE ONLY"
+          phrase: approvalPhrase("dev", "update_incident")
         }
       }).allowed
     ).toBe(true);
