@@ -94,6 +94,18 @@ Reset/cleanup must never target:
 %APPDATA%\Mozilla\Firefox\Profiles\
 ```
 
+## Optional CloakBrowser runtime channel
+
+CloakBrowser can be used as an optional dedicated Chromium runtime, but only as a binary downloaded on the operator machine from official CloakHQ/GitHub release URLs. The compiled binary license allows internal use but does not allow redistributing, repackaging, or embedding the binary into third-party artifacts without a separate OEM/SaaS license.
+
+The project therefore supports this non-vendored runtime root in addition to the generic Chromium root:
+
+```text
+%LOCALAPPDATA%\ServiceNowAutomation\Runtime\CloakBrowser\chrome.exe
+```
+
+The helper still uses tool-owned disposable profiles and no-write/manual-login boundaries. CloakBrowser's Playwright/Puppeteer wrapper is not part of the current runtime path because the current safety model avoids browser-owned DOM automation. See `docs/field-trial/cloakbrowser-runtime-assessment.md` for the installer command and license notes.
+
 ## Session policy options
 
 ### Option A — per-launch disposable profile

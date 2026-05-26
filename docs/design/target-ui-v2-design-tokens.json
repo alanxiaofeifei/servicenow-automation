@@ -1,0 +1,145 @@
+{
+  "name": "ServiceNow Automation target-ui-v2 tokens",
+  "sourceReference": "docs/design/operator-workbench-v2-target-image-spec.md",
+  "extractionMethod": "Tokenized from the sanitized text design specification and measured against local browser smoke; screenshot artifacts are not required or tracked.",
+  "themeKey": "target",
+  "tokens": {
+    "color": {
+      "background": {
+        "value": "#f8f7f3",
+        "cssVariable": "--sna-bg",
+        "usage": "warm app background"
+      },
+      "surface": {
+        "value": "#fefefd",
+        "cssVariable": "--sna-surface",
+        "usage": "cards, top bar, side panels"
+      },
+      "surfaceSoft": {
+        "value": "#fbf8f1",
+        "cssVariable": "--sna-surface-soft",
+        "usage": "nested rows and quiet controls"
+      },
+      "border": {
+        "value": "#e8e2d8",
+        "cssVariable": "--sna-border",
+        "usage": "card and control borders"
+      },
+      "divider": {
+        "value": "#e3ddd2",
+        "cssVariable": "--sna-divider",
+        "usage": "panel dividers and stronger borders"
+      },
+      "textPrimary": {
+        "value": "#1c1c1c",
+        "cssVariable": "--sna-text",
+        "usage": "primary text"
+      },
+      "textSecondary": {
+        "value": "#55534e",
+        "cssVariable": "--sna-text-secondary",
+        "usage": "secondary labels and helper copy"
+      },
+      "textMuted": {
+        "value": "#8c877e",
+        "cssVariable": "--sna-text-muted",
+        "usage": "disabled and low-emphasis text"
+      },
+      "brandGreen": {
+        "value": "#3e8f4f",
+        "cssVariable": "--sna-brand",
+        "usage": "active accents and selected states"
+      },
+      "successGreen": {
+        "value": "#2e703b",
+        "cssVariable": "--sna-success",
+        "usage": "primary safe action buttons and success text"
+      },
+      "successSoft": {
+        "value": "#e7f3e9",
+        "cssVariable": "--sna-success-soft",
+        "usage": "success chips and selected backgrounds"
+      },
+      "amber": {
+        "value": "#da871c",
+        "cssVariable": "--sna-amber",
+        "usage": "environment/status accent"
+      },
+      "amberSoft": {
+        "value": "#f7e8ce",
+        "cssVariable": "--sna-amber-soft",
+        "usage": "environment/status chip background"
+      },
+      "danger": {
+        "value": "#b9574d",
+        "cssVariable": "--sna-danger",
+        "usage": "destructive or blocked text when needed"
+      },
+      "warningSoft": {
+        "value": "#fff7e8",
+        "cssVariable": "--sna-warning-soft",
+        "usage": "blocked/warning chip background"
+      },
+      "buttonBorder": {
+        "value": "#e8e2d8",
+        "cssVariable": "--sna-button-border",
+        "usage": "button and pill border color"
+      }
+    },
+    "radius": {
+      "card": {
+        "value": "14px",
+        "cssVariable": "--sna-radius-card",
+        "usage": "cards and nested rows"
+      },
+      "panel": {
+        "value": "18px",
+        "cssVariable": "--sna-radius-panel",
+        "usage": "outer shell panels"
+      },
+      "chip": {
+        "value": "999px",
+        "cssVariable": "--sna-radius-chip",
+        "usage": "pills, chips, compact buttons"
+      }
+    },
+    "shadow": {
+      "soft": {
+        "value": "0 12px 28px rgba(41, 33, 22, 0.08)",
+        "cssVariable": "--sna-shadow-soft",
+        "usage": "cards and quiet raised panels"
+      },
+      "float": {
+        "value": "0 22px 54px rgba(41, 33, 22, 0.14)",
+        "cssVariable": "--sna-shadow-float",
+        "usage": "settings overlay"
+      }
+    },
+    "layout": {
+      "desktopBreakpoint": {
+        "value": "1281px",
+        "usage": "full left-center-right rail proportions"
+      },
+      "collapseBreakpoint": {
+        "value": "980px",
+        "usage": "stacked responsive mode"
+      },
+      "iconRailWidth": {
+        "value": "72px desktop / 52px collapsed compact",
+        "cssVariable": "--sna-icon-rail-width"
+      },
+      "sidebarWidth": {
+        "value": "292px desktop / 246px compact",
+        "cssVariable": "--sna-sidebar-width"
+      },
+      "runtimeRailWidth": {
+        "value": "328px expanded / 58px collapsed",
+        "cssVariable": "--sna-runtime-rail-width"
+      },
+      "gap": {
+        "value": "12px",
+        "cssVariable": "--sna-layout-gap"
+      }
+    }
+  }
+}

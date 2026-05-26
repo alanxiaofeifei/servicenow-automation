@@ -1,12 +1,10 @@
-import { type CSSProperties, type WheelEvent, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type PointerEvent as ReactPointerEvent, type WheelEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { demoManualPasteScenarios, type ManualPasteScenario } from "@servicenow-automation/adapters/browser";
 import { generateMockTicketDraft } from "@servicenow-automation/ai";
 import { demoKnowledgeArticles, searchKnowledgeArticles } from "@servicenow-automation/kb/browser";
 import {
-  getDefaultServiceNowEnvironmentMode,
   getServiceNowEnvironmentConfig,
-  loadDemoServiceDeskProfile,
   serviceNowEnvironmentConfigs,
   validateServiceNowEnvironmentUrlSetting,
   validateServiceNowTargetUrl,
@@ -25,7 +23,9 @@ import {
   type CapturedContext,
   type ExcelDryRunWorkbookArtifact,
   type FieldDraft,
+  type ProjectProfile,
   type QaAutofillPlan,
+  type QaIncidentDefaultScenario,
   type QaManualFillWriteAction,
   type QaSingleTicketSmokePlan,
   type ServiceDeskWorkflowPreview,
@@ -33,7 +33,26 @@ import {
   type TicketDraft
 } from "@servicenow-automation/core";
 
-const profile = loadDemoServiceDeskProfile();
+const serviceDeskOwnerTeam = "Service Desk team";
+
+const profile: ProjectProfile = {
+  id: "service-desk-demo",
+  displayName: "Service Desk QA workspace",
+  companyLabel: "Service Desk",
+  defaultAssignmentGroup: serviceDeskOwnerTeam,
+  categoryMappings: [
+    { keywords: ["vpn", "remote access", "mfa prompt"], category: "Network", subcategory: "VPN" },
+    { keywords: ["windows", "laptop", "blue screen", "slow"], category: "Hardware", subcategory: "Endpoint" },
+    { keywords: ["login", "password", "mfa", "account"], category: "Access", subcategory: "Account access" }
+  ],
+  assignmentMappings: [
+    { keywords: ["vpn", "remote access"], assignmentGroup: "Service Desk Network" },
+    { keywords: ["windows", "laptop"], assignmentGroup: "Service Desk Endpoint" },
+    { keywords: ["login", "password", "mfa", "account"], assignmentGroup: "Service Desk Access" }
+  ],
+  kbSources: [],
+  demoMode: true
+};
 
 type DemoQueueStatus = "New" | "Reviewed" | "Drafted" | "Done" | "Skipped";
 
@@ -113,6 +132,61 @@ type FieldReviewChecklistItem = {
 type PreparedCopyDraft = {
   confirmation: string;
   text: string;
+};
+
+type OperatorAction = "launch" | "verify" | "autofill";
+
+export const OPERATOR_RUNTIME_ACTION_TIMEOUT_MS = 90_000;
+
+type OperatorRuntimeRequest = {
+  mode: ServiceNowEnvironmentMode;
+  targetUrl?: string;
+  cdpEndpoint?: string;
+  approvalPageFingerprint?: string;
+  draft?: TicketDraft;
+  scenario?: QaIncidentDefaultScenario;
+  routeOutAssignmentGroup?: string;
+};
+
+type OperatorRuntimeResponse = {
+  ok?: boolean;
+  launch?: {
+    status?: string;
+    blockedReason?: string;
+    cdpEndpoint?: string;
+    runtimeLogPath?: string;
+    safety?: { browserProcessLaunched?: boolean; cdpEndpointReady?: boolean; noWriteMode?: boolean };
+  };
+  fieldInspection?: {
+    status?: string;
+    blockedReason?: string;
+    pageFingerprint?: string;
+    fields?: Array<{ name?: string; label?: string; type?: string; required?: boolean; writable?: boolean }>;
+  };
+  defaultPlan?: {
+    status?: string;
+    blockedReason?: string;
+    plannedFields?: Array<{ key?: string; label?: string; value?: string; valueLength?: number }>;
+  };
+  runtime?: {
+    status?: string;
+    blockedReason?: string;
+    pageFingerprint?: string;
+    pageFingerprintMatched?: boolean;
+    filledFields?: Array<{ key?: string; label?: string; valueLength?: number }>;
+  };
+};
+
+type SdaOperatorApi = {
+  launchQaBrowser(request: OperatorRuntimeRequest): Promise<OperatorRuntimeResponse>;
+  verifyCurrentIncident(request: OperatorRuntimeRequest): Promise<OperatorRuntimeResponse>;
+  autofillCurrentIncidentDefaults(request: OperatorRuntimeRequest): Promise<OperatorRuntimeResponse>;
+};
+
+type OperatorActionStatus = {
+  label: string;
+  tone: "idle" | "working" | "success" | "blocked";
+  details: string;
 };
 
 type DraftTemplatePresetId = "standard-service-desk" | "escalation-ready-notes";
@@ -207,12 +281,12 @@ type UiTranslations = {
 export const languageOptions: { code: LanguageCode; label: string }[] = [
   { code: "en-US", label: "English" },
   { code: "zh-CN", label: "简体中文" },
-  { code: "zh-TW", label: "繁中（台灣）" },
+  { code: "zh-TW", label: "繁體中文" },
   { code: "es-ES", label: "Español" }
 ];
 
 const englishFieldReviewChecklistTranslations = {
-  checklistSummaryLabel: "⚙ Optional field checklist / Team rules",
+  checklistSummaryLabel: "Optional field checklist / Team rules",
   checklistProgressAria: "Field review progress",
   checklistReviewedLocally: "reviewed locally",
   checklistIntroRequired:
@@ -248,7 +322,7 @@ const englishFieldReviewChecklistTranslations = {
 };
 
 const zhCnFieldReviewChecklistTranslations = {
-  checklistSummaryLabel: "⚙ 可选字段检查清单 / 团队规则",
+  checklistSummaryLabel: "可选字段检查清单 / 团队规则",
   checklistProgressAria: "字段审核进度",
   checklistReviewedLocally: "已本地审核",
   checklistIntroRequired:
@@ -284,7 +358,7 @@ const zhCnFieldReviewChecklistTranslations = {
 };
 
 const zhTwFieldReviewChecklistTranslations = {
-  checklistSummaryLabel: "⚙ 可選欄位檢查清單 / 團隊規則",
+  checklistSummaryLabel: "可選欄位檢查清單 / 團隊規則",
   checklistProgressAria: "欄位審核進度",
   checklistReviewedLocally: "已本地審核",
   checklistIntroRequired:
@@ -320,7 +394,7 @@ const zhTwFieldReviewChecklistTranslations = {
 };
 
 const esFieldReviewChecklistTranslations = {
-  checklistSummaryLabel: "⚙ Lista opcional de campos / reglas del equipo",
+  checklistSummaryLabel: "Lista opcional de campos / reglas del equipo",
   checklistProgressAria: "Progreso de revisión de campos",
   checklistReviewedLocally: "revisados localmente",
   checklistIntroRequired:
@@ -374,7 +448,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     workspaceTitle: "工单草稿工作台",
     workspaceSubtitle:
       "演示模式是确定性的。仅使用假脱敏数据；不连接 Teams、邮箱、ServiceNow Chat/API 或自助服务轮询。",
-    runtimeEyebrow: "运行时 / 安全",
+    runtimeEyebrow: "浏览器 / 安全",
     runtimeTitle: "静态演示姿态",
     highSeverityMonitor: {
       title: "High Severity Monitor Simulator",
@@ -438,7 +512,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     workspaceTitle: "Ticket Draft Workspace",
     workspaceSubtitle:
       "Demo mode is deterministic. Fake sanitized intake only; no Teams, mailbox, ServiceNow Chat/API, or self-service polling connection is used.",
-    runtimeEyebrow: "Runtime / Safety",
+    runtimeEyebrow: "Browser / Safety",
     runtimeTitle: "Static demo posture",
     highSeverityMonitor: {
       title: "High Severity Monitor Simulator",
@@ -621,7 +695,7 @@ const runtimeSafetyStatuses = [
   { label: "External AI with real data", value: "disabled" },
   {
     label: "Browser/runtime",
-    value: "dedicated Chromium prepared/planned; not launched by this panel"
+    value: "dedicated test browser prepared/planned; not launched by this panel"
   },
   { label: "Profile", value: "disposable/tool-owned model" },
   { label: "Data", value: "fake sanitized demo data only" }
@@ -822,11 +896,34 @@ export function getHighSeverityVoiceReminder(
 }
 
 const displayThemes: { id: DisplayTheme }[] = [{ id: "warm" }, { id: "cool" }];
-const serviceNowEnvironmentUrlSettingModes: Exclude<ServiceNowEnvironmentMode, "mock">[] = [
-  "qa",
-  "dev",
-  "production-shadow"
-];
+type WorkbenchEnvironmentMode = Extract<ServiceNowEnvironmentMode, "qa" | "production-shadow">;
+const visibleServiceNowEnvironmentModes: WorkbenchEnvironmentMode[] = ["qa", "production-shadow"];
+const serviceNowEnvironmentUrlSettingModes: WorkbenchEnvironmentMode[] = visibleServiceNowEnvironmentModes;
+
+function toWorkbenchEnvironmentMode(mode: ServiceNowEnvironmentMode): WorkbenchEnvironmentMode {
+  return mode === "qa" ? "qa" : "production-shadow";
+}
+
+function isQaWorkbenchMode(mode: WorkbenchEnvironmentMode): boolean {
+  return mode === "qa";
+}
+
+type WorkbenchIconName =
+  | "app"
+  | "inbox"
+  | "workbench"
+  | "knowledge"
+  | "history"
+  | "search"
+  | "settings"
+  | "source"
+  | "summary"
+  | "draft"
+  | "shield"
+  | "globe"
+  | "chevron";
+
+export type OperatorWorkbenchPageKey = "inbox" | "workbench" | "knowledge" | "history" | "search";
 
 type EnvironmentLocalizedCopy = {
   label: string;
@@ -930,7 +1027,7 @@ type UiChromeTranslations = {
 };
 
 const englishChromeTranslations: UiChromeTranslations = {
-  settingsButton: "⚙ Settings",
+  settingsButton: "Settings",
   noAttachmentsCopy:
     "No attachments, .msg/.eml parsing, live channel content, or external AI with real content is used.",
   settingsSidebar: {
@@ -938,10 +1035,10 @@ const englishChromeTranslations: UiChromeTranslations = {
     eyebrow: "Centralized settings",
     title: "Settings",
     closeAriaLabel: "Close settings panel",
-    closeButton: "✕ Close"
+    closeButton: "Close"
   },
   displaySettings: {
-    title: "⚙ Display Settings",
+    title: "Display Settings",
     appZoom: "App zoom",
     zoomControlsAria: "App zoom controls",
     currentZoomAria: "Current app zoom",
@@ -959,8 +1056,8 @@ const englishChromeTranslations: UiChromeTranslations = {
       "Auto-fit gives long content more room. Compact mode keeps fields shorter and shows a stronger bottom-right resize affordance."
   },
   templateSettings: {
-    title: "⚙ Templates / Settings",
-    safetyCopy: "Local demo templates only — no external storage or ServiceNow write.",
+    title: "Templates / Settings",
+    safetyCopy: "Local templates only — no external storage or ServiceNow write.",
     presetLabel: "Template preset",
     presetAria: "Template presets",
     switchCopy: "Switching presets replaces both local template text areas.",
@@ -971,71 +1068,71 @@ const englishChromeTranslations: UiChromeTranslations = {
   },
   environment: {
     panelCopy:
-      "Start in mock mode, move to QA/dev only after review, and keep production validation shadow-only by default unless a separate safety review changes that boundary.",
+      "Start in QA for controlled testing. Production is visible for read-only target review; other internal modes stay hidden until a separate safety review changes that boundary.",
     currentMode: "Current mode",
     selectorAria: "ServiceNow environment modes",
     selected: "Selected",
-    noTargetUrl: "No target URL configured",
-    urlHidden: "Full ServiceNow URL hidden for privacy",
-    noRawClickableLink: "No raw clickable QA/dev link. Controlled browser launch requires URL allowlist and #22 RealActionGate.",
+    noTargetUrl: "No target configured",
+    urlHidden: "Target value hidden for privacy",
+    noRawClickableLink: "No raw clickable target link. Controlled browser launch requires allowlist and safety checks.",
     credentialPolicy: "Credential policy",
     manualLoginRequired: "Manual login required",
     noCredentialsRequired: "No credentials required",
     ignoredLocalRuntimePath: "Ignored local runtime path",
-    submitPolicy: "Submit policy",
-    explicitApprovalRequired: "Explicit approval required before real QA/dev submit",
+    submitPolicy: "Write policy",
+    explicitApprovalRequired: "Explicit approval required before any real QA write",
     noRealSubmit: "No real submit from this mode",
-    urlSettingsTitle: "ServiceNow Environment URL settings",
+    urlSettingsTitle: "ServiceNow target settings",
     urlSettingsSafetyCopy:
-      "Local state only. Paste only authorized QA/dev/production-shadow landing URLs; do not include credentials, record identifier, tokens, cookies, or ticket-specific deep links.",
-    customUrlLabel: "Custom URL",
-    customUrlPlaceholder: "https://<instance>.service-now.com/now/nav/ui/classic/params/target/home_splash.do",
-    localOnlyNoSecrets: "URL setting is local UI state only; no Graph, ServiceNow API, browser write, or credential storage is performed.",
-    validationAccepted: "Accepted ServiceNow host",
-    validationBlocked: "Blocked URL setting",
-    activeCustomTarget: "Custom target active for this session",
-    builtInTargetHidden: "Built-in/default target active; raw target URL stays hidden until a safe custom URL is accepted.",
-    writeGateUnchanged: "Write gate unchanged: each Save/Submit/Update/Close still requires the exact action approval phrase.",
+      "Local state only. Paste only authorized QA landing targets; do not include credentials, record identifiers, tokens, cookies, or ticket-specific deep links.",
+    customUrlLabel: "Paste replacement target",
+    customUrlPlaceholder: "Paste authorized QA landing target; hidden after validation",
+    localOnlyNoSecrets: "No credentials are stored. Target settings are local UI state only; no Graph, ServiceNow API, browser write, or credential storage is performed.",
+    validationAccepted: "Accepted target stored hidden",
+    validationBlocked: "Blocked target setting",
+    activeCustomTarget: "Custom target active for this session; raw value hidden",
+    builtInTargetHidden: "Built-in/default target active; raw target value stays hidden.",
+    writeGateUnchanged: "Write-safety rules unchanged: Autofill never clicks state-changing ServiceNow controls; human review remains required.",
     configs: {
       mock: {
-        label: "Mock Demo",
-        description: "Offline deterministic demo using ManualPasteAdapter, MockAIProvider, demo KB, and mock form fill.",
-        safetyLabel: "MOCK — Safe demo",
+        label: "QA workspace",
+        description: "Hidden local fixture target; not shown in the operator workbench selector.",
+        safetyLabel: "Local fixture",
         safetyNotes: [
           "No ServiceNow login is required.",
-          "Submit remains disabled in demo mode.",
-          "Use this mode for portfolio walkthroughs and quick regression checks."
+          "State-changing controls remain disabled.",
+          "Use this only for internal regression checks."
         ]
       },
       qa: {
-        label: "QA Test Environment",
-        description: "Authorized ServiceNow QA target for controlled test-ticket rehearsal after mock workflow is stable.",
+        label: "QA workspace",
+        description: "Authorized ServiceNow QA target for controlled test-ticket rehearsal.",
         safetyLabel: "QA — No write until #22",
         safetyNotes: [
           "Manual login required. Credentials are never stored in source code.",
           "Browser sessions stay in ignored local runtime folders.",
-          "Any real QA/dev submit requires explicit Alan approval."
+          "Any real QA submit requires explicit operator approval."
         ]
       },
       dev: {
-        label: "Development Test Environment",
-        description: "Reserved for an authorized ServiceNow dev instance if one is provided.",
-        safetyLabel: "DEV — No write until #22",
+        label: "QA workspace",
+        description: "Reserved internal test target; hidden from the operator workbench selector.",
+        safetyLabel: "QA — No write until #22",
         safetyNotes: [
           "Manual login required. Credentials are never stored in source code.",
           "Browser sessions stay in ignored local runtime folders.",
-          "Any real QA/dev submit requires explicit Alan approval."
+          "Any real QA submit requires explicit operator approval."
         ]
       },
       "production-shadow": {
-        label: "Production Shadow Mode",
-        description: "Strictly monitored production comparison mode for personally controlled validation only.",
-        safetyLabel: "NO SUBMIT · NO UPDATE · NO CLOSE",
+        label: "Production",
+        description: "Production comparison/read-only target; browser actions stay disabled outside QA unless a separate safety review approves them.",
+        safetyLabel: "No write path",
         safetyNotes: [
-          "Production remains shadow-only by default.",
-          "No production submit, close, or update path is implemented.",
-          "Compare generated drafts with manual handling; do not auto-write production records.",
-          "Escalate to a separate safety review before any production write capability is considered."
+          "Production is visible for selection and target review, but browser actions remain disabled outside QA.",
+          "No state-changing production path is implemented.",
+          "Use QA-only browser controls for Start, Check Page, and Autofill.",
+          "Upgrade to a separate safety review before considering any production write capability."
         ]
       }
     }
@@ -1074,18 +1171,18 @@ const uiChromeTranslations: Record<LanguageCode, UiChromeTranslations> = {
   "en-US": englishChromeTranslations,
   "zh-CN": {
     ...englishChromeTranslations,
-    settingsButton: "⚙ 设置",
+    settingsButton: "设置",
     noAttachmentsCopy: "不会使用附件、.msg/.eml 解析、实时渠道内容，也不会使用带真实内容的外部 AI。",
     settingsSidebar: {
       ariaLabel: "集中设置",
       eyebrow: "集中设置",
       title: "设置",
       closeAriaLabel: "关闭设置面板",
-      closeButton: "✕ 关闭"
+      closeButton: "关闭"
     },
     displaySettings: {
       ...englishChromeTranslations.displaySettings,
-      title: "⚙ 显示设置",
+      title: "显示设置",
       appZoom: "应用缩放",
       zoomControlsAria: "应用缩放控制",
       currentZoomAria: "当前应用缩放",
@@ -1103,8 +1200,8 @@ const uiChromeTranslations: Record<LanguageCode, UiChromeTranslations> = {
     },
     templateSettings: {
       ...englishChromeTranslations.templateSettings,
-      title: "⚙ 模板 / 设置",
-      safetyCopy: "本地演示模板，仅本地保存；不会写入外部存储或 ServiceNow。",
+      title: "模板 / 设置",
+      safetyCopy: "本地模板，仅本地保存；不会写入外部存储或 ServiceNow。",
       presetLabel: "模板预设",
       presetAria: "模板预设",
       switchCopy: "切换预设会替换两个本地模板文本框。",
@@ -1115,31 +1212,31 @@ const uiChromeTranslations: Record<LanguageCode, UiChromeTranslations> = {
     },
     environment: {
       ...englishChromeTranslations.environment,
-      panelCopy: "先从 mock 模式开始；通过审核后再进入 QA/dev；生产验证默认保持影子模式，除非单独安全评审改变边界。",
+      panelCopy: "从 QA 开始受控测试；生产环境可见但仅用于只读目标检查；其他内部环境保持隐藏，除非单独安全评审改变边界。",
       currentMode: "当前模式",
       selectorAria: "ServiceNow 环境模式",
       selected: "已选择",
       noTargetUrl: "未配置目标 URL",
       urlHidden: "完整 ServiceNow URL 已为隐私隐藏",
-      noRawClickableLink: "不显示原始可点击 QA/dev 链接。受控浏览器启动需要 URL allowlist 和 #22 RealActionGate。",
+      noRawClickableLink: "不显示原始可点击目标链接。受控浏览器启动需要 URL allowlist 和安全检查。",
       credentialPolicy: "凭据策略",
       manualLoginRequired: "必须手动登录",
       noCredentialsRequired: "无需凭据",
-      ignoredLocalRuntimePath: "已忽略的本地运行目录",
+      ignoredLocalRuntimePath: "已忽略的本地浏览器目录",
       submitPolicy: "提交策略",
-      explicitApprovalRequired: "真实 QA/dev 提交前必须明确批准",
+      explicitApprovalRequired: "任何真实 QA 提交前必须明确批准",
       noRealSubmit: "此模式不会真实提交",
       urlSettingsTitle: "ServiceNow 环境 URL 设置",
       urlSettingsSafetyCopy:
-        "仅本地状态。只粘贴已授权的 QA/dev/production-shadow 落地页 URL；不要包含凭据、记录标识符、token、cookie 或具体工单深链。",
+        "仅本地状态。只粘贴已授权的 QA 落地目标；不要包含凭据、记录标识符、token、cookie 或具体工单深链。",
       customUrlLabel: "自定义 URL",
-      customUrlPlaceholder: "https://<instance>.service-now.com/now/nav/ui/classic/params/target/home_splash.do",
+      customUrlPlaceholder: "粘贴已授权的 ServiceNow 落地页 URL",
       localOnlyNoSecrets: "URL 设置只是本地 UI 状态；不会执行 Graph、ServiceNow API、浏览器写入或凭据保存。",
       validationAccepted: "已接受的 ServiceNow host",
       validationBlocked: "已阻止的 URL 设置",
       activeCustomTarget: "本会话正在使用自定义目标",
       builtInTargetHidden: "内置/默认目标处于活动状态；原始目标 URL 保持隐藏，直到安全自定义 URL 通过校验。",
-      writeGateUnchanged: "写操作门禁不变：每次 Save/Submit/Update/Close 仍需要精确动作批准短语。",
+      writeGateUnchanged: "写入安全规则不变：自动填充不会点击会改变 ServiceNow 状态的控件，仍需要人工审核。",
       configs: {
         mock: {
           label: "Mock 演示",
@@ -1148,22 +1245,22 @@ const uiChromeTranslations: Record<LanguageCode, UiChromeTranslations> = {
           safetyNotes: ["不需要 ServiceNow 登录。", "演示模式下 Submit 保持禁用。", "用于作品集演示和快速回归检查。"]
         },
         qa: {
-          label: "QA 测试环境",
-          description: "授权的 ServiceNow QA 目标，用于 mock 工作流稳定后的受控测试工单预演。",
+          label: "QA 工作区",
+          description: "授权的 ServiceNow QA 目标，用于受控测试工单预演。",
           safetyLabel: "QA — #22 前不写入",
-          safetyNotes: ["必须手动登录。凭据绝不写入源码。", "浏览器会话保留在已忽略的本地运行目录。", "任何真实 QA/dev 提交都需要 Alan 明确批准。"]
+          safetyNotes: ["必须手动登录。凭据绝不写入源码。", "浏览器会话保留在已忽略的本地运行目录。", "任何真实 QA 提交都需要操作员明确批准。"]
         },
         dev: {
-          label: "开发测试环境",
-          description: "如果提供了授权的 ServiceNow dev 实例，则预留给该实例。",
-          safetyLabel: "DEV — #22 前不写入",
-          safetyNotes: ["必须手动登录。凭据绝不写入源码。", "浏览器会话保留在已忽略的本地运行目录。", "任何真实 QA/dev 提交都需要 Alan 明确批准。"]
+          label: "QA 工作区",
+          description: "内部测试目标；不会显示在操作工作台选择器中。",
+          safetyLabel: "QA — #22 前不写入",
+          safetyNotes: ["必须手动登录。凭据绝不写入源码。", "浏览器会话保留在已忽略的本地运行目录。", "任何真实 QA 提交都需要操作员明确批准。"]
         },
         "production-shadow": {
-          label: "生产影子模式",
-          description: "严格监控的生产对比模式，仅用于个人受控验证。",
-          safetyLabel: "不提交 · 不更新 · 不关闭",
-          safetyNotes: ["生产默认保持仅影子模式。", "没有实现生产提交、关闭或更新路径。", "只对比生成草稿与人工处理；不要自动写入生产记录。", "考虑任何生产写入能力前必须升级到单独安全评审。"]
+          label: "生产",
+          description: "生产只读/对照目标；除非通过单独安全评审，否则 QA 以外的浏览器操作保持禁用。",
+          safetyLabel: "无写入路径",
+          safetyNotes: ["隐藏的非 QA 工作区在这里不可用。", "没有实现会改变状态的路径。", "此工作台仅使用 QA 浏览器控件。", "考虑任何非 QA 写入能力前必须升级到单独安全评审。"]
         }
       }
     },
@@ -1196,12 +1293,739 @@ const uiChromeTranslations: Record<LanguageCode, UiChromeTranslations> = {
       notSet: "未设置"
     }
   },
-  "zh-TW": englishChromeTranslations,
-  "es-ES": englishChromeTranslations
+  "zh-TW": {
+    ...englishChromeTranslations,
+    settingsButton: "設定",
+    noAttachmentsCopy: "不會使用附件、.msg/.eml 解析、即時渠道內容，也不會把真實內容交給外部 AI。",
+    settingsSidebar: {
+      ariaLabel: "集中設定",
+      eyebrow: "集中設定",
+      title: "設定",
+      closeAriaLabel: "關閉設定面板",
+      closeButton: "關閉"
+    },
+    displaySettings: {
+      ...englishChromeTranslations.displaySettings,
+      title: "顯示設定",
+      appZoom: "應用縮放",
+      zoomControlsAria: "應用縮放控制",
+      currentZoomAria: "目前應用縮放",
+      reset: "重設",
+      ctrlWheelCopy: "Ctrl + 滑鼠滾輪也會調整本地應用縮放。",
+      theme: "主題",
+      themeOptionsAria: "顯示主題選項",
+      themeLabels: { warm: "暖色", cool: "冷色" },
+      localStateCopy: "顯示設定只是本地 React 狀態，不會持久化。",
+      textFields: "文字欄位",
+      textFieldModeAria: "文字欄位顯示模式",
+      autoFit: "自動適應文字區",
+      compactResize: "緊湊 + 顯示縮放把手",
+      textModeHelper: "自動適應會給長內容更多空間；緊湊模式會保持欄位較短，並顯示更明顯的右下角縮放提示。"
+    },
+    templateSettings: {
+      ...englishChromeTranslations.templateSettings,
+      title: "模板 / 設定",
+      safetyCopy: "本地模板，僅本地保存；不會寫入外部儲存或 ServiceNow。",
+      presetLabel: "模板預設",
+      presetAria: "模板預設",
+      switchCopy: "切換預設會替換兩個本地模板文字區。",
+      descriptionTemplate: "描述模板",
+      workNotesTemplate: "工作備註模板",
+      descriptionHelper: "使用 {{draft_content}} 放置按語言生成的描述內容。",
+      workNotesHelper: "使用 {{draft_content}} 放置按語言生成的工作備註。"
+    },
+    environment: {
+      ...englishChromeTranslations.environment,
+      urlSettingsSafetyCopy:
+        "僅本地狀態。只貼上已授權的 QA 落地目標；不要包含憑證、記錄識別碼、token、cookie 或具體工單深連結。",
+      customUrlLabel: "自訂 URL",
+      customUrlPlaceholder: "貼上已授權的 ServiceNow 落地頁 URL",
+      localOnlyNoSecrets: "不會保存憑證。URL 設定只是本地 UI 狀態；不會執行 Graph、ServiceNow API、瀏覽器寫入或憑證保存。",
+      validationAccepted: "已接受的 ServiceNow host",
+      validationBlocked: "已阻止的 URL 設定",
+      explicitApprovalRequired: "任何真實 QA 提交前必須明確批准",
+      writeGateUnchanged: "寫入安全規則不變：自動填入不會點擊會改變 ServiceNow 狀態的控制項，仍需要人工審核。"
+    }
+  },
+  "es-ES": {
+    ...englishChromeTranslations,
+    settingsButton: "Configuración",
+    noAttachmentsCopy: "No se usan adjuntos, parsing .msg/.eml, contenido vivo de canales ni IA externa con contenido real.",
+    settingsSidebar: {
+      ariaLabel: "Configuración centralizada",
+      eyebrow: "Configuración centralizada",
+      title: "Configuración",
+      closeAriaLabel: "Cerrar panel de configuración",
+      closeButton: "Cerrar"
+    },
+    displaySettings: {
+      ...englishChromeTranslations.displaySettings,
+      title: "Configuración de visualización",
+      appZoom: "Zoom de la app",
+      zoomControlsAria: "Controles de zoom de la app",
+      currentZoomAria: "Zoom actual de la app",
+      reset: "Restablecer",
+      ctrlWheelCopy: "Ctrl + rueda del mouse también cambia el zoom local de la app.",
+      theme: "Tema",
+      themeOptionsAria: "Opciones de tema de visualización",
+      themeLabels: { warm: "Cálido", cool: "Frío" },
+      localStateCopy: "La configuración de visualización es solo estado React local y no se persiste.",
+      textFields: "Campos de texto",
+      textFieldModeAria: "Modo de visualización de campos de texto",
+      autoFit: "Áreas de texto autoajustables",
+      compactResize: "Compacto + tirador visible de redimensionado",
+      textModeHelper: "Autoajuste da más espacio al contenido largo. Compacto mantiene campos más bajos y muestra mejor el tirador inferior derecho."
+    },
+    templateSettings: {
+      ...englishChromeTranslations.templateSettings,
+      title: "Plantillas / Configuración",
+      safetyCopy: "Plantillas locales solamente — sin almacenamiento externo ni escritura en ServiceNow.",
+      presetLabel: "Preset de plantilla",
+      presetAria: "Presets de plantilla",
+      switchCopy: "Cambiar preset reemplaza ambas áreas de texto locales.",
+      descriptionTemplate: "Plantilla de descripción",
+      workNotesTemplate: "Plantilla de notas de trabajo",
+      descriptionHelper: "Usa {{draft_content}} para colocar la descripción generada con idioma local.",
+      workNotesHelper: "Usa {{draft_content}} para colocar las notas de trabajo generadas con idioma local."
+    },
+    environment: {
+      ...englishChromeTranslations.environment,
+      urlSettingsSafetyCopy:
+        "Estado local solamente. Pega solo destinos QA autorizados; no incluyas credenciales, identificadores de registro, tokens, cookies ni enlaces profundos de tickets.",
+      customUrlLabel: "URL personalizada",
+      customUrlPlaceholder: "Pega una URL inicial autorizada de ServiceNow",
+      localOnlyNoSecrets: "No se almacenan credenciales. La URL es solo estado UI local; no hay Graph, API de ServiceNow, escritura del navegador ni almacenamiento de credenciales.",
+      validationAccepted: "Host ServiceNow aceptado",
+      validationBlocked: "Configuración de URL bloqueada",
+      explicitApprovalRequired: "Aprobación explícita requerida antes de cualquier envío QA real",
+      writeGateUnchanged: "Las reglas de seguridad de escritura no cambian: Autofill nunca pulsa controles que cambian estado en ServiceNow; la revisión humana sigue siendo obligatoria."
+    }
+  }
 };
 
+
+const englishOperatorWorkbenchCopy = {
+  productSubtitle: "Operator Workbench",
+  statusAria: "Workbench status controls",
+  layoutAria: "Operator workbench columns",
+  languageAria: "Display language",
+  languageChip: "EN / 中文",
+  nav: {
+    primaryAria: "Primary workbench navigation",
+    workbenchSections: "Workbench sections",
+    inbox: "Inbox",
+    workbench: "Workbench",
+    knowledge: "Knowledgebase",
+    history: "History",
+    search: "Search",
+    settings: "Settings",
+    collapseSidebar: "Collapse left sidebar",
+    expandSidebar: "Expand left sidebar",
+    collapseSidebarShort: "Collapse",
+    expandSidebarShort: "Expand"
+  },
+  environment: {
+    qa: "QA workspace",
+    production: "Production"
+  },
+  target: {
+    configured: "Target configured",
+    missing: "Target missing"
+  },
+  search: {
+    label: "Search",
+    aria: "Search local tickets",
+    placeholder: "Search tickets...",
+    shortcut: "Ctrl K"
+  },
+  list: {
+    today: "Today",
+    yesterday: "Yesterday",
+    recent: "Recent",
+    active: "active",
+    archived: "archived",
+    new: "New",
+    inReview: "In Review",
+    waiting: "Waiting",
+    drafted: "Drafted",
+    done: "Done",
+    skipped: "Skipped",
+    noHistory: "No recent reviewed copies yet."
+  },
+  cards: {
+    selectedSource: "Selected source",
+    cleanedSummary: "Cleaned summary",
+    incidentDraft: "Incident draft",
+    source: "Source",
+    received: "Received",
+    language: "Language",
+    sourcePreview: "Sanitized source preview",
+    sanitized: "Sanitized",
+    draft: "Draft",
+    issue: "Issue",
+    impact: "Impact",
+    context: "Context",
+    contextValue: (removedLineCount: number) =>
+      removedLineCount > 0 ? `${removedLineCount} sensitive source lines removed locally.` : "No sensitive source lines detected locally.",
+    shortDescription: "Short description",
+    description: "Description",
+    workNotes: "Work notes",
+    saveDraft: "Hold for review",
+    createLocalDraft: "Copy draft text",
+    localOnly: "Manual review only. ServiceNow Save/Submit/Update/Close stays manual."
+  },
+  runtime: {
+    eyebrow: "Browser rail",
+    title: "Browser actions",
+    collapseRuntime: "Collapse browser action rail",
+    expandRuntime: "Expand browser action rail",
+    collapsedTitle: "Browser actions",
+    collapsedHint: "Collapsed. Expand to access Start test browser, Check current ticket page, and Autofill allowed fields.",
+    statusReady: "Ready",
+    statusBusy: "Working",
+    statusBlocked: "Blocked",
+    statusSuccess: "Verified",
+    statusVerified: "Current ticket page checked; Autofill can fill allowed text fields only.",
+    statusCdpReady: "Browser connection ready; Check Page enabled.",
+    statusWaiting: "Waiting for browser connection from the separate test browser.",
+    startTitle: "Start test browser",
+    startDescription: "Opens a separate test browser for the QA workspace; manual login remains required.",
+    starting: "Starting test browser",
+    verifyTitle: "Check current ticket page",
+    verifyDescription: "Confirms the visible Incident form is safe and current before any fill.",
+    verifying: "Checking current ticket page",
+    autofillTitle: "Autofill allowed fields",
+    autofillDescription: "Fills allowed fields only after page check. It never saves or submits.",
+    autofilling: "Autofilling allowed fields",
+    readyChip: "Ready",
+    waitingChip: "Waiting",
+    disabledProductionReason: "Disabled: Production is read-only in this workbench; choose the QA workspace for Start, Check Page, and Autofill.",
+    disabledTargetReason: "Disabled: configure an allowed QA target in Settings first.",
+    disabledBusyReason: "Disabled: another browser/test step is still working.",
+    startReadyReason: "Ready: opens a separate test browser for the QA workspace; manual login only.",
+    verifyCdpReason: "Disabled: start the test browser and wait until the browser connection is ready.",
+    verifyReadyReason: "Ready: browser connection is ready; check the visible ticket page.",
+    autofillVerifyReason: "Disabled: check the current ticket page first.",
+    autofillReadyReason: "Ready: Autofill can fill allowed text fields only; you still review manually.",
+    runtimeStatus: "Browser status",
+    resetRuntimeState: "Reset browser readiness",
+    resetRuntimeStateHelper: "Safe to retry: clears only local browser connection/page-check readiness; no ServiceNow action is taken.",
+    sanitizedMode: "Sanitized mode",
+    cdpLabel: "Browser connection",
+    cdpReady: "Ready",
+    cdpWaiting: "Waiting",
+    sanitizedEvidence: "Sanitized browser status evidence available.",
+    noEvidence: "No browser status evidence yet; only sanitized status is shown.",
+    safetyTitle: "Safety note",
+    safetyNote: "AI drafts and fills allowed text fields only. Human reviews and handles the record in ServiceNow. No Save, Submit, Update, Resolve, Close, upload, email, or ServiceNow API is automated."
+  },
+  settings: {
+    ariaLabel: "Workbench settings",
+    eyebrow: "Settings",
+    title: "Settings",
+    close: "Close",
+    saveSettings: "Save settings",
+    resetDisplay: "Reset display",
+    footerNote: "Settings apply locally in this window. Browser safety rules are unchanged.",
+    languageTitle: "Language",
+    languageLabel: "Display language",
+    languageHelper: "Switches app labels only; it does not change ticket content or ServiceNow data.",
+    defaultEnvironment: "Default environment",
+    defaultEnvironmentSelector: "Default environment selector",
+    qaTestEnvironment: "QA workspace",
+    productionEnvironment: "Production",
+    environmentHelper: "Choose this workspace to use Start, Check Page, and Autofill. Production remains read-only.",
+    environmentBusyHelper: "Disabled: wait for the current browser step to finish before changing settings.",
+    urlSettingsTitle: "ServiceNow target settings",
+    compactSafety: "Only authorized landing targets are accepted. Secrets, record identifiers, tokens, cookies, query strings, and hash fragments stay blocked.",
+    clearSavedSettings: "Clear saved settings",
+    clearReady: "Ready: clears local target overrides and resets page-check/Autofill readiness.",
+    clearDisabled: "Disabled: no saved settings to clear.",
+    qaUrl: "QA target",
+    productionUrl: "Production target",
+    urlDescriptionQa: "Authorized QA landing page for controlled testing; the value is hidden after validation.",
+    urlDescriptionProduction: "Production target remains read-only; Start, Check Page, and Autofill stay unavailable outside QA.",
+    qaSubmitPolicy: "QA fill requires Start, current-page check, and approved text-only autofill checks.",
+    productionPolicy: "Production is read-only in this workbench; no automated write path is enabled.",
+    activeCustomTarget: "Custom target active; raw value hidden",
+    builtInTargetHidden: "Target value hidden",
+    customUrlLabel: "Paste replacement target",
+    acceptedTarget: "Accepted: target stored hidden for this session.",
+    blockedTarget: "Blocked target setting",
+    submitPolicy: "Write policy",
+    validationReasons: {
+      noUrl: "no target set",
+      invalidUrl: "invalid target",
+      httpsRequired: "HTTPS required",
+      credentialsDenied: "credentials in target denied",
+      sensitiveComponentDenied: "query/hash/record identifier/token/session/cookie payload denied",
+      serviceNowHostRequired: "host must be a ServiceNow host or approved non-routable placeholder",
+      mockUrlDenied: "offline fixture mode cannot set a target"
+    }
+  }
+};
+
+const operatorWorkbenchTranslations = {
+  "en-US": englishOperatorWorkbenchCopy,
+  "zh-CN": {
+    ...englishOperatorWorkbenchCopy,
+    productSubtitle: "操作工作台",
+    statusAria: "工作台状态控件",
+    layoutAria: "操作工作台列布局",
+    languageAria: "显示语言",
+    languageChip: "EN / 中文",
+    nav: {
+      primaryAria: "主要工作台导航",
+      workbenchSections: "工作台区域",
+      inbox: "收件箱",
+      workbench: "工作台",
+      knowledge: "知识库",
+      history: "历史",
+      search: "搜索",
+      settings: "设置",
+      collapseSidebar: "折叠左侧栏",
+      expandSidebar: "展开左侧栏",
+      collapseSidebarShort: "折叠",
+      expandSidebarShort: "展开"
+    },
+    environment: { qa: "QA 工作区", production: "生产" },
+    target: { configured: "目标已配置", missing: "目标缺失" },
+    search: { label: "搜索", aria: "搜索本地工单", placeholder: "搜索工单...", shortcut: "Ctrl K" },
+    list: {
+      today: "今天",
+      yesterday: "昨天",
+      recent: "最近",
+      active: "活跃",
+      archived: "已归档",
+      new: "新建",
+      inReview: "审核中",
+      waiting: "等待",
+      drafted: "已起草",
+      done: "完成",
+      skipped: "已跳过",
+      noHistory: "还没有审核副本。"
+    },
+    cards: {
+      selectedSource: "已选来源",
+      cleanedSummary: "清理摘要",
+      incidentDraft: "Incident 草稿",
+      source: "来源",
+      received: "收到时间",
+      language: "语言",
+      sourcePreview: "已清理来源预览",
+      sanitized: "已清理",
+      draft: "草稿",
+      issue: "问题",
+      impact: "影响",
+      context: "上下文",
+      contextValue: (removedLineCount: number) =>
+        removedLineCount > 0 ? `已在本地移除 ${removedLineCount} 行敏感来源内容。` : "本地未检测到敏感来源行。",
+      shortDescription: "短描述",
+      description: "描述",
+      workNotes: "工作备注",
+      saveDraft: "等待审核",
+      createLocalDraft: "复制草稿文本",
+      localOnly: "仅供人工审核。ServiceNow 的 Save/Submit/Update/Close 仍由人工执行。"
+    },
+    runtime: {
+      eyebrow: "浏览器操作栏",
+      title: "浏览器操作",
+      collapseRuntime: "折叠浏览器操作栏",
+      expandRuntime: "展开浏览器操作栏",
+      collapsedTitle: "浏览器操作",
+      collapsedHint: "已折叠。展开后可使用启动测试浏览器、检查当前工单页面、自动填充允许字段。",
+      statusReady: "就绪",
+      statusBusy: "处理中",
+      statusBlocked: "已阻止",
+      statusSuccess: "已验证",
+      statusVerified: "当前工单页面已检查；自动填充只能填写允许的文本字段。",
+      statusCdpReady: "浏览器连接已准备好；可以检查当前工单页面。",
+      statusWaiting: "等待单独的测试浏览器连接。",
+      startTitle: "启动测试浏览器",
+      startDescription: "打开单独的 QA 工作区测试浏览器；仍需手动登录。",
+      starting: "正在启动测试浏览器",
+      verifyTitle: "检查当前工单页面",
+      verifyDescription: "在任何填充前确认可见 Incident 表单安全且仍是当前页面。",
+      verifying: "正在检查当前工单页面",
+      autofillTitle: "自动填充允许字段",
+      autofillDescription: "页面检查后只填写允许字段。它不会保存或提交。",
+      autofilling: "正在自动填充允许字段",
+      readyChip: "就绪",
+      waitingChip: "等待",
+      disabledProductionReason: "禁用：生产环境在此工作台中保持只读；如需启动、检查页面、自动填充，请选择 QA 工作区。",
+      disabledTargetReason: "禁用：请先在设置中配置允许的 QA 目标。",
+      disabledBusyReason: "禁用：另一个浏览器/测试步骤仍在处理中。",
+      startReadyReason: "就绪：打开单独的 QA 工作区测试浏览器；仅手动登录。",
+      verifyCdpReason: "禁用：请先启动测试浏览器，并等待浏览器连接就绪。",
+      verifyReadyReason: "就绪：浏览器连接已准备好，可以检查当前工单页面。",
+      autofillVerifyReason: "禁用：请先检查当前工单页面。",
+      autofillReadyReason: "就绪：自动填充只能填写允许的文本字段；仍需人工审核。",
+      runtimeStatus: "浏览器状态",
+      resetRuntimeState: "重置浏览器就绪状态",
+      resetRuntimeStateHelper: "可安全重试：仅清除本地浏览器连接/检查状态；不会执行 ServiceNow 操作。",
+      sanitizedMode: "已清理模式",
+      cdpLabel: "浏览器连接",
+      cdpReady: "就绪",
+      cdpWaiting: "等待中",
+      sanitizedEvidence: "仅显示已清理的浏览器状态证据。",
+      noEvidence: "暂无浏览器状态证据；仅显示已清理状态。",
+      safetyTitle: "安全说明",
+      safetyNote: "AI 仅起草并填入允许的文本字段。人工审核并在 ServiceNow 中处理记录。"
+    },
+    settings: {
+      ariaLabel: "工作台设置",
+      eyebrow: "设置",
+      title: "设置",
+      close: "关闭",
+      saveSettings: "保存设置",
+      resetDisplay: "重置显示",
+      footerNote: "设置仅应用于当前窗口。浏览器安全规则保持不变。",
+      languageTitle: "语言",
+      languageLabel: "显示语言",
+      languageHelper: "只切换应用标签，不改变工单内容或 ServiceNow 数据。",
+      defaultEnvironment: "默认环境",
+      defaultEnvironmentSelector: "默认环境选择器",
+      qaTestEnvironment: "QA 工作区",
+      productionEnvironment: "生产环境",
+      environmentHelper: "选择此工作区可使用启动、检查页面、自动填充。生产保持只读。",
+      environmentBusyHelper: "禁用：请等待当前浏览器步骤完成后再更改设置。",
+      urlSettingsTitle: "ServiceNow 目标设置",
+      compactSafety: "只接受已授权落地目标。密钥、记录标识符、token、cookie、查询字符串和 hash 片段都会被阻止。",
+      clearSavedSettings: "清除已保存设置",
+      clearReady: "就绪：清除本地目标覆盖，并重置页面检查/自动填充就绪状态。",
+      clearDisabled: "禁用：没有可清除的已保存设置。",
+      qaUrl: "QA 目标",
+      productionUrl: "生产目标",
+      urlDescriptionQa: "用于受控测试的授权 QA 落地页；检查后会隐藏该值。",
+      urlDescriptionProduction: "生产目标保持只读；启动、检查页面、自动填充仅在 QA 中可用。",
+      qaSubmitPolicy: "QA 填入需要先启动、检查当前工单页面，并限制为已批准文本字段。",
+      productionPolicy: "此工作台中的生产环境保持只读；未启用任何自动写入路径。",
+      activeCustomTarget: "自定义目标已启用；原始值已隐藏",
+      builtInTargetHidden: "目标值已隐藏",
+      customUrlLabel: "粘贴替换目标",
+      acceptedTarget: "已接受：目标已隐藏保存用于本次会话。",
+      blockedTarget: "已阻止的目标设置",
+      submitPolicy: "写入策略",
+      validationReasons: {
+        noUrl: "未设置目标",
+        invalidUrl: "目标无效",
+        httpsRequired: "需要 HTTPS",
+        credentialsDenied: "目标中禁止包含凭据",
+        sensitiveComponentDenied: "禁止包含查询/hash/记录标识符/token/session/cookie 内容",
+        serviceNowHostRequired: "host 必须是 ServiceNow host 或已批准的不可路由占位 host",
+        mockUrlDenied: "离线夹具模式不能设置目标"
+      }
+    }
+  },
+  "zh-TW": {
+    ...englishOperatorWorkbenchCopy,
+    productSubtitle: "操作工作臺",
+    statusAria: "工作臺狀態控制",
+    layoutAria: "操作工作臺欄位布局",
+    languageAria: "顯示語言",
+    languageChip: "EN / 中文",
+    nav: {
+      primaryAria: "主要工作臺導覽",
+      workbenchSections: "工作臺區域",
+      inbox: "收件匣",
+      workbench: "工作臺",
+      knowledge: "知識庫",
+      history: "歷史",
+      search: "搜尋",
+      settings: "設定",
+      collapseSidebar: "收合左側欄",
+      expandSidebar: "展開左側欄",
+      collapseSidebarShort: "收合",
+      expandSidebarShort: "展開"
+    },
+    environment: { qa: "QA 工作區", production: "生產" },
+    target: { configured: "目標已設定", missing: "目標缺失" },
+    search: { label: "搜尋", aria: "搜尋本地工單", placeholder: "搜尋工單...", shortcut: "Ctrl K" },
+    list: {
+      today: "今天",
+      yesterday: "昨天",
+      recent: "最近",
+      active: "進行中",
+      archived: "已封存",
+      new: "新建",
+      inReview: "審核中",
+      waiting: "等待",
+      drafted: "已起草",
+      done: "完成",
+      skipped: "已略過",
+      noHistory: "尚無審核副本。"
+    },
+    cards: {
+      selectedSource: "已選來源",
+      cleanedSummary: "清理後摘要",
+      incidentDraft: "Incident 草稿",
+      source: "來源",
+      received: "收到時間",
+      language: "語言",
+      sourcePreview: "已清理來源預覽",
+      sanitized: "已清理",
+      draft: "草稿",
+      issue: "問題",
+      impact: "影響",
+      context: "上下文",
+      contextValue: (removedLineCount: number) =>
+        removedLineCount > 0 ? `已在本地移除 ${removedLineCount} 行敏感來源內容。` : "本地未偵測到敏感來源行。",
+      shortDescription: "簡短描述",
+      description: "描述",
+      workNotes: "工作備註",
+      saveDraft: "等待審核",
+      createLocalDraft: "複製草稿文字",
+      localOnly: "僅供人工審核。ServiceNow 的 Save/Submit/Update/Close 仍由人工執行。"
+    },
+    runtime: {
+      eyebrow: "瀏覽器操作欄",
+      title: "瀏覽器操作",
+      collapseRuntime: "收合瀏覽器操作欄",
+      expandRuntime: "展開瀏覽器操作欄",
+      collapsedTitle: "瀏覽器操作",
+      collapsedHint: "已收合。展開後可使用啟動測試瀏覽器、檢查目前工單頁面、自動填入允許欄位。",
+      statusReady: "就緒",
+      statusBusy: "處理中",
+      statusBlocked: "已阻止",
+      statusSuccess: "已驗證",
+      statusVerified: "目前工單頁面已檢查；自動填入只能填寫允許的文字欄位。",
+      statusCdpReady: "瀏覽器連線已準備好；可以檢查目前工單頁面。",
+      statusWaiting: "等待單獨的測試瀏覽器連線。",
+      startTitle: "啟動測試瀏覽器",
+      startDescription: "開啟單獨的 QA 工作區測試瀏覽器；仍需手動登入。",
+      starting: "正在啟動測試瀏覽器",
+      verifyTitle: "檢查目前工單頁面",
+      verifyDescription: "在任何填入前確認可見 Incident 表單安全且仍是目前頁面。",
+      verifying: "正在檢查目前工單頁面",
+      autofillTitle: "自動填入允許欄位",
+      autofillDescription: "頁面檢查後只填入允許欄位。不會儲存或提交。",
+      autofilling: "正在自動填入允許欄位",
+      readyChip: "就緒",
+      waitingChip: "等待",
+      disabledProductionReason: "停用：生產環境在此工作臺中保持唯讀；如需啟動、檢查、自動填入，請選擇 QA 工作區。",
+      disabledTargetReason: "停用：請先在設定中設定允許的 QA 目標。",
+      disabledBusyReason: "停用：另一個瀏覽器/測試步驟仍在處理中。",
+      startReadyReason: "就緒：開啟單獨的 QA 工作區測試瀏覽器；僅手動登入。",
+      verifyCdpReason: "停用：請先啟動測試瀏覽器，並等待瀏覽器連線就緒。",
+      verifyReadyReason: "就緒：瀏覽器連線已準備好，可以檢查目前工單頁面。",
+      autofillVerifyReason: "停用：請先檢查目前工單頁面。",
+      autofillReadyReason: "就緒：自動填入只能填寫允許的文字欄位；仍需人工審核。",
+      runtimeStatus: "瀏覽器狀態",
+      resetRuntimeState: "重設瀏覽器就緒狀態",
+      resetRuntimeStateHelper: "可安全重試：僅清除本地瀏覽器連線/頁面檢查狀態；不會執行 ServiceNow 操作。",
+      sanitizedMode: "已清理模式",
+      cdpLabel: "瀏覽器連線",
+      cdpReady: "就緒",
+      cdpWaiting: "等待中",
+      sanitizedEvidence: "僅顯示已清理的瀏覽器狀態證據。",
+      noEvidence: "尚無瀏覽器狀態證據；僅顯示已清理狀態。",
+      safetyTitle: "安全說明",
+      safetyNote: "AI 僅起草並填入允許的文字欄位。人工審核並在 ServiceNow 中處理記錄。"
+    },
+    settings: {
+      ariaLabel: "工作臺設定",
+      eyebrow: "設定",
+      title: "設定",
+      close: "關閉",
+      saveSettings: "儲存設定",
+      resetDisplay: "重設顯示",
+            footerNote: "設定僅套用於目前視窗。瀏覽器安全規則保持不變。",
+      languageTitle: "語言",
+      languageLabel: "顯示語言",
+      languageHelper: "只切換應用標籤，不改變工單內容或 ServiceNow 資料。",
+      defaultEnvironment: "預設環境",
+      defaultEnvironmentSelector: "預設環境選擇器",
+      qaTestEnvironment: "QA 工作區",
+      productionEnvironment: "生產環境",
+      environmentHelper: "選擇此工作區可使用啟動、檢查頁面、自動填入。生產保持唯讀。",
+      environmentBusyHelper: "停用：請等待目前瀏覽器步驟完成後再變更設定。",
+      urlSettingsTitle: "ServiceNow 目標設定",
+      compactSafety: "只接受已授權落地目標。密鑰、記錄識別碼、token、cookie、查詢字串和 hash 片段都會被阻止。",
+      clearSavedSettings: "清除已儲存設定",
+            clearReady: "就緒：清除本地目標覆寫，並重設頁面檢查/自動填入就緒狀態。",
+      clearDisabled: "停用：沒有可清除的已儲存設定。",
+      qaUrl: "QA 目標",
+      productionUrl: "生產目標",
+      urlDescriptionQa: "用於受控測試的授權 QA 落地頁；檢查後會隱藏該值。",
+      urlDescriptionProduction: "生產目標保持唯讀；啟動、檢查、自動填入僅在 QA 中可用。",
+      qaSubmitPolicy: "QA 填入需要先啟動、檢查目前工單頁面，並限制為已核准文字欄位。",
+      productionPolicy: "此工作臺中的生產環境保持唯讀；未啟用任何自動寫入路徑。",
+      activeCustomTarget: "自訂目標已啟用；原始值已隱藏",
+      builtInTargetHidden: "目標值已隱藏",
+      customUrlLabel: "貼上替換目標",
+      acceptedTarget: "已接受：目標已隱藏儲存用於本次工作階段。",
+      blockedTarget: "已阻止的目標設定",
+      submitPolicy: "寫入策略",
+      validationReasons: {
+        noUrl: "未設定目標",
+        invalidUrl: "目標無效",
+        httpsRequired: "需要 HTTPS",
+        credentialsDenied: "目標中禁止包含憑證",
+        sensitiveComponentDenied: "禁止包含查詢/hash/記錄識別碼/token/session/cookie 內容",
+        serviceNowHostRequired: "host 必須是 ServiceNow host 或已核准的不可路由占位 host",
+        mockUrlDenied: "離線夾具模式不能設定目標"
+      }
+    }
+  },
+  "es-ES": {
+    ...englishOperatorWorkbenchCopy,
+    productSubtitle: "Banco de trabajo del operador",
+    statusAria: "Controles de estado del banco de trabajo",
+    layoutAria: "Columnas del banco de trabajo del operador",
+    languageAria: "Idioma de visualización",
+    languageChip: "ES / 中文",
+    nav: {
+      primaryAria: "Navegación principal del banco de trabajo",
+      workbenchSections: "Secciones del banco de trabajo",
+      inbox: "Bandeja",
+      workbench: "Banco",
+      knowledge: "Conocimiento",
+      history: "Historial",
+      search: "Buscar",
+      settings: "Configuración",
+      collapseSidebar: "Contraer barra izquierda",
+      expandSidebar: "Expandir barra izquierda",
+      collapseSidebarShort: "Contraer",
+      expandSidebarShort: "Expandir"
+    },
+    environment: { qa: "Entorno QA", production: "Producción" },
+    target: { configured: "Destino configurado", missing: "Destino faltante" },
+    search: { label: "Buscar", aria: "Buscar tickets locales", placeholder: "Buscar tickets...", shortcut: "Ctrl K" },
+    list: {
+      today: "Hoy",
+      yesterday: "Ayer",
+      recent: "Reciente",
+      active: "activos",
+      archived: "archivados",
+      new: "Nuevo",
+      inReview: "En revisión",
+      waiting: "En espera",
+      drafted: "Borrador",
+      done: "Hecho",
+      skipped: "Omitido",
+      noHistory: "Aún no hay copias revisadas recientes."
+    },
+    cards: {
+      selectedSource: "Origen seleccionado",
+      cleanedSummary: "Resumen depurado",
+      incidentDraft: "Borrador de Incident",
+      source: "Origen",
+      received: "Recibido",
+      language: "Idioma",
+      sourcePreview: "Vista previa depurada",
+      sanitized: "Depurado",
+      draft: "Borrador",
+      issue: "Problema",
+      impact: "Impacto",
+      context: "Contexto",
+      contextValue: (removedLineCount: number) =>
+        removedLineCount > 0 ? `${removedLineCount} líneas sensibles eliminadas localmente.` : "No se detectaron líneas sensibles localmente.",
+      shortDescription: "Descripción breve",
+      description: "Descripción",
+      workNotes: "Notas de trabajo",
+      saveDraft: "Mantener en revisión",
+      createLocalDraft: "Copiar texto del borrador",
+      localOnly: "Solo revisión manual. Save/Submit/Update/Close en ServiceNow sigue siendo manual."
+    },
+    runtime: {
+      eyebrow: "Panel del navegador",
+      title: "Acciones del navegador",
+      collapseRuntime: "Contraer panel de acciones del navegador",
+      expandRuntime: "Expandir panel de acciones del navegador",
+      collapsedTitle: "Acciones del navegador",
+      collapsedHint: "Contraído. Expande para acceder a Start test browser, Check current ticket page y Autofill allowed fields.",
+      statusReady: "Listo",
+      statusBusy: "Trabajando",
+      statusBlocked: "Bloqueado",
+      statusSuccess: "Verificado",
+      statusVerified: "Página de ticket actual revisada; Autofill solo puede rellenar campos de texto permitidos.",
+      statusCdpReady: "Navegador conectado; se habilita revisar la página actual del ticket.",
+      statusWaiting: "Esperando la conexión del navegador de prueba separado.",
+      startTitle: "Start test browser",
+      startDescription: "Abre un navegador de prueba separado para el espacio QA; el inicio de sesión sigue siendo manual.",
+      starting: "Iniciando navegador de prueba",
+      verifyTitle: "Check current ticket page",
+      verifyDescription: "Confirma que el formulario Incident visible sea seguro y actual antes de rellenar.",
+      verifying: "Revisando la página de ticket actual",
+      autofillTitle: "Autofill allowed fields",
+      autofillDescription: "Rellena solo campos permitidos después de revisar la página. Nunca guarda ni envía.",
+      autofilling: "Autorrellenando campos permitidos",
+      readyChip: "Listo",
+      waitingChip: "Espera",
+      disabledProductionReason: "Deshabilitado: Producción es de solo lectura en este workbench; elige QA workspace para Start, Check y Autofill.",
+      disabledTargetReason: "Deshabilitado: configura primero un destino QA permitido en Settings.",
+      disabledBusyReason: "Deshabilitado: otro paso de navegador/prueba sigue en curso.",
+      startReadyReason: "Listo: abre un navegador de prueba separado para el espacio QA; inicio de sesión manual solamente.",
+      verifyCdpReason: "Deshabilitado: inicia el navegador de prueba y espera a que la conexión del navegador esté lista.",
+      verifyReadyReason: "Listo: conexión del navegador preparada; revisa la página de ticket visible.",
+      autofillVerifyReason: "Deshabilitado: primero revisa la página de ticket actual.",
+      autofillReadyReason: "Listo: Autofill puede rellenar solo campos de texto permitidos; aún revisas manualmente.",
+      runtimeStatus: "Estado del navegador",
+      resetRuntimeState: "Restablecer preparación del navegador",
+      resetRuntimeStateHelper: "Reintento seguro: solo limpia el estado local de conexión del navegador/revisión de página; no realiza acciones en ServiceNow.",
+      sanitizedMode: "Modo depurado",
+      cdpLabel: "Conexión del navegador",
+      cdpReady: "Listo",
+      cdpWaiting: "Esperando",
+      sanitizedEvidence: "Solo evidencia depurada del estado del navegador.",
+      noEvidence: "Sin evidencia del estado del navegador; solo se muestra estado depurado.",
+      safetyTitle: "Nota de seguridad",
+      safetyNote: "La IA redacta y rellena solo campos de texto permitidos. El humano revisa y maneja el registro en ServiceNow."
+    },
+    settings: {
+      ariaLabel: "Configuración del banco de trabajo",
+      eyebrow: "Configuración",
+      title: "Configuración",
+      close: "Cerrar",
+      saveSettings: "Guardar configuración",
+      resetDisplay: "Restablecer visualización",
+      footerNote: "La configuración se aplica localmente en esta ventana. Las reglas de seguridad del navegador no cambian.",
+      languageTitle: "Idioma",
+      languageLabel: "Idioma de visualización",
+      languageHelper: "Cambia solo las etiquetas de la app; no cambia tickets ni datos de ServiceNow.",
+      defaultEnvironment: "Entorno predeterminado",
+      defaultEnvironmentSelector: "Selector de entorno predeterminado",
+      qaTestEnvironment: "QA workspace",
+      productionEnvironment: "Producción",
+      environmentHelper: "Elige este espacio para usar Start, Check Page y Autofill. Producción permanece en solo lectura.",
+      environmentBusyHelper: "Deshabilitado: espera a que termine la acción actual antes de cambiar la configuración.",
+      urlSettingsTitle: "Configuración de destino de ServiceNow",
+      compactSafety: "Solo se aceptan destinos iniciales autorizados. Secretos, identificadores de registro, tokens, cookies, query strings y fragments quedan bloqueados.",
+      clearSavedSettings: "Borrar configuración guardada",
+      clearReady: "Listo: borra overrides locales de destino y restablece revisión de página/Autofill.",
+      clearDisabled: "Deshabilitado: no hay configuración guardada para borrar.",
+      qaUrl: "Destino QA",
+      productionUrl: "Destino de producción",
+      urlDescriptionQa: "Página inicial QA autorizada para pruebas controladas; el valor se oculta tras validar.",
+      urlDescriptionProduction: "El destino de producción sigue siendo de solo lectura; Start, Check y Autofill solo están disponibles en QA.",
+      qaSubmitPolicy: "El rellenado QA requiere Start, Check y reglas de seguridad para autofill de texto aprobado.",
+      productionPolicy: "Producción es de solo lectura en este banco; no hay ruta de escritura automática habilitada.",
+      activeCustomTarget: "Destino personalizado activo; valor sin procesar oculto",
+      builtInTargetHidden: "Valor de destino oculto",
+      customUrlLabel: "Pegar destino de reemplazo",
+      acceptedTarget: "Aceptado: destino guardado oculto para esta sesión.",
+      blockedTarget: "Configuración de destino bloqueada",
+      submitPolicy: "Política de escritura",
+      validationReasons: {
+        noUrl: "sin destino configurado",
+        invalidUrl: "destino inválido",
+        httpsRequired: "HTTPS requerido",
+        credentialsDenied: "credenciales en destino denegadas",
+        sensitiveComponentDenied: "query/hash/identificador de registro/token/session/cookie denegados",
+        serviceNowHostRequired: "el host debe ser ServiceNow o un placeholder no enrutable aprobado",
+        mockUrlDenied: "el modo de fixture local no puede configurar destino"
+      }
+    }
+  }
+};
+
+function getOperatorWorkbenchCopy(language: LanguageCode) {
+  return operatorWorkbenchTranslations[language];
+}
+type OperatorWorkbenchCopy = ReturnType<typeof getOperatorWorkbenchCopy>;
+
 const minAppZoomPercent = 80;
-const maxAppZoomPercent = 130;
+const maxAppZoomPercent = 150;
 const appZoomStepPercent = 10;
 
 export function clampAppZoomPercent(percent: number): number {
@@ -1730,6 +2554,15 @@ export type AppProps = {
   initialQaAutofillQaIsolationConfirmed?: boolean;
   initialQaAutofillDedicatedProfileConfirmed?: boolean;
   initialEnvironmentUrlSettings?: ServiceNowEnvironmentUrlOverrides;
+  initialOperatorCdpEndpoint?: string;
+  initialOperatorVerifiedPageFingerprint?: string;
+  initialOperatorLastResponse?: OperatorRuntimeResponse | null;
+  initialOperatorBusyAction?: OperatorAction | null;
+  initialOperatorStatus?: OperatorActionStatus;
+  initialDisplayTheme?: DisplayTheme;
+  initialLeftSidebarExpanded?: boolean;
+  initialRuntimeRailExpanded?: boolean;
+  initialActivePage?: OperatorWorkbenchPageKey;
 };
 
 export function updateQaSmokeWriteActionSelection(nextAction: QaManualFillWriteAction) {
@@ -1746,7 +2579,7 @@ export function getNextEnvironmentUrlOverrideFromDraft(mode: Exclude<ServiceNowE
 
 export function App({
   initialLanguage = "en-US",
-  initialEnvironmentMode = getDefaultServiceNowEnvironmentMode(),
+  initialEnvironmentMode = "qa",
   initialHighSeverityState = "normal",
   initialHighSeverityMonitoredGroups = defaultHighSeverityMonitoredGroups,
   initialQaSmokeWriteAction = "save_incident",
@@ -1754,13 +2587,29 @@ export function App({
   initialQaAutofillApprovalPhrase = "",
   initialQaAutofillQaIsolationConfirmed = false,
   initialQaAutofillDedicatedProfileConfirmed = false,
-  initialEnvironmentUrlSettings = {}
+  initialEnvironmentUrlSettings = {},
+  initialOperatorCdpEndpoint = "",
+  initialOperatorVerifiedPageFingerprint = "",
+  initialOperatorLastResponse = null,
+  initialOperatorBusyAction = null,
+  initialOperatorStatus,
+  initialDisplayTheme = "warm",
+  initialLeftSidebarExpanded = true,
+  initialRuntimeRailExpanded = false,
+  initialActivePage = "workbench"
 }: AppProps = {}) {
   const [language, setLanguage] = useState<LanguageCode>(initialLanguage);
-  const [displayTheme, setDisplayTheme] = useState<DisplayTheme>("warm");
+  const [displayTheme, setDisplayTheme] = useState<DisplayTheme>(initialDisplayTheme);
   const [appZoomPercent, setAppZoomPercent] = useState(100);
   const [textFieldDisplayMode, setTextFieldDisplayMode] = useState<TextFieldDisplayMode>("auto-fit");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activePage, setActivePage] = useState<OperatorWorkbenchPageKey>(initialActivePage);
+  const [leftSidebarExpanded, setLeftSidebarExpanded] = useState(initialLeftSidebarExpanded);
+  const [leftSidebarHandleTopPercent, setLeftSidebarHandleTopPercent] = useState(50);
+  const [leftSidebarHandleDragging, setLeftSidebarHandleDragging] = useState(false);
+  const leftSidebarHandleDragRef = useRef<{ pointerId: number; startY: number; didDrag: boolean } | null>(null);
+  const leftSidebarHandleSuppressClickRef = useRef(false);
+  const [runtimeRailExpanded, setRuntimeRailExpanded] = useState(initialRuntimeRailExpanded);
   const [selectedScenarioId, setSelectedScenarioId] = useState<ManualPasteScenario["id"]>("vpn-issue");
   const [selectedQueueItemId, setSelectedQueueItemId] = useState(demoQueueDefinitions[0].id);
   const [queueStatuses, setQueueStatuses] = useState<Partial<Record<string, DemoQueueStatus>>>({});
@@ -1784,12 +2633,42 @@ export function App({
     initialQaAutofillDedicatedProfileConfirmed
   );
   const [checkedFieldReviewItems, setCheckedFieldReviewItems] = useState<string[]>([]);
-  const [selectedEnvironmentMode, setSelectedEnvironmentMode] = useState<ServiceNowEnvironmentMode>(
-    initialEnvironmentMode
+  const [selectedEnvironmentMode, setSelectedEnvironmentMode] = useState<WorkbenchEnvironmentMode>(
+    toWorkbenchEnvironmentMode(initialEnvironmentMode)
   );
   const [environmentUrlSettings, setEnvironmentUrlSettings] = useState<ServiceNowEnvironmentUrlOverrides>(
     initialEnvironmentUrlSettings
   );
+  const [operatorCdpEndpoint, setOperatorCdpEndpoint] = useState(initialOperatorCdpEndpoint);
+  const [operatorVerifiedPageFingerprint, setOperatorVerifiedPageFingerprint] = useState(
+    initialOperatorVerifiedPageFingerprint
+  );
+  const [operatorLastResponse, setOperatorLastResponse] = useState<OperatorRuntimeResponse | null>(
+    initialOperatorLastResponse
+  );
+  const [operatorBusyAction, setOperatorBusyAction] = useState<OperatorAction | null>(initialOperatorBusyAction);
+  const [operatorStatus, setOperatorStatus] = useState<OperatorActionStatus>(() =>
+    initialOperatorStatus ??
+    (initialOperatorBusyAction
+      ? {
+          label: operatorActionLabel(initialOperatorBusyAction),
+          tone: "working",
+          details: operatorActionWorkingDetails(initialOperatorBusyAction)
+        }
+      : initialOperatorStatusFromResponse(initialOperatorLastResponse))
+  );
+  const operatorActionSequenceRef = useRef(0);
+  const operatorActionTimeoutRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      operatorActionSequenceRef.current += 1;
+      if (operatorActionTimeoutRef.current) {
+        globalThis.clearTimeout(operatorActionTimeoutRef.current);
+        operatorActionTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!settingsOpen) {
@@ -1805,6 +2684,14 @@ export function App({
     window.addEventListener("keydown", closeSettingsOnEscape);
     return () => window.removeEventListener("keydown", closeSettingsOnEscape);
   }, [settingsOpen]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = displayTheme;
+
+    return () => {
+      delete document.documentElement.dataset.theme;
+    };
+  }, [displayTheme]);
   const [highSeverityState, setHighSeverityState] = useState<HighSeverityState>(initialHighSeverityState);
   const [highSeverityMonitoredGroups, setHighSeverityMonitoredGroups] = useState<HighSeverityMonitorGroup[]>(
     initialHighSeverityMonitoredGroups
@@ -1825,17 +2712,17 @@ export function App({
   const selectedEnvironment = getServiceNowEnvironmentConfig(selectedEnvironmentMode, environmentUrlSettings);
   const t = uiTranslations[language];
   const chrome = uiChromeTranslations[language];
-  const selectedEnvironmentDisplay = chrome.environment.configs[selectedEnvironmentMode];
+  const workbenchCopy = getOperatorWorkbenchCopy(language);
   const templatedDraft = applyDraftTemplates(initialDraft, draftTemplateSettings);
   const draft = applyOverrides(templatedDraft, fieldOverrides);
   const serviceDeskWorkflowPreview = buildServiceDeskWorkflowPreview({
     createdAt: selectedQueueItem.receivedAt,
     rawIntakeSource: selectedQueueItem.sourceChannel,
     requesterDisplay: selectedQueueItem.requesterLabel,
-    languageOrServiceDeskTeam: `${selectedQueueItem.sourceLanguage} / ${profile.defaultAssignmentGroup}`,
+    languageOrServiceDeskTeam: `${selectedQueueItem.sourceLanguage} / ${serviceDeskOwnerTeam}`,
     issueType: "Incident",
     draft,
-    serviceDeskOwnerTeam: profile.defaultAssignmentGroup,
+    serviceDeskOwnerTeam: serviceDeskOwnerTeam,
     finalAssignmentGroup: fieldValue(draft.assignmentGroup),
     finalAssignmentReason: `Local ${fieldValue(draft.category)} / ${fieldValue(draft.subcategory)} mapping from sanitized draft fields.`,
     handlingStatus: selectedQueueItem.status,
@@ -1886,10 +2773,75 @@ export function App({
     sourceType: context.sourceType,
     rawText: context.rawText
   });
+  const zoomScale = appZoomPercent / 100;
   const appShellStyle = {
-    "--app-font-scale": appZoomPercent / 100,
-    zoom: appZoomPercent / 100
+    "--app-zoom-scale": zoomScale,
+    "--app-zoom-width": `${100 / zoomScale}%`,
+    "--app-zoom-height": `${100 / zoomScale}vh`
   } as CSSProperties;
+  const leftSidebarHandleStyle = {
+    "--left-sidebar-handle-top": `${leftSidebarHandleTopPercent}%`
+  } as CSSProperties;
+
+  function updateLeftSidebarHandleTop(clientY: number) {
+    const viewportHeight = Math.max(window.innerHeight || 1, 1);
+    const nextTopPercent = Math.min(88, Math.max(12, (clientY / viewportHeight) * 100));
+    setLeftSidebarHandleTopPercent(Math.round(nextTopPercent * 10) / 10);
+  }
+
+  function handleLeftSidebarHandlePointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
+    leftSidebarHandleDragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      didDrag: false
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setLeftSidebarHandleDragging(true);
+  }
+
+  function handleLeftSidebarHandlePointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    const dragState = leftSidebarHandleDragRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (Math.abs(event.clientY - dragState.startY) > 4) {
+      dragState.didDrag = true;
+    }
+
+    if (!dragState.didDrag) {
+      return;
+    }
+
+    event.preventDefault();
+    updateLeftSidebarHandleTop(event.clientY);
+  }
+
+  function finishLeftSidebarHandleDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    const dragState = leftSidebarHandleDragRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (dragState.didDrag) {
+      leftSidebarHandleSuppressClickRef.current = true;
+    }
+
+    leftSidebarHandleDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setLeftSidebarHandleDragging(false);
+  }
+
+  function toggleLeftSidebarFromHandle() {
+    if (leftSidebarHandleSuppressClickRef.current) {
+      leftSidebarHandleSuppressClickRef.current = false;
+      return;
+    }
+
+    setLeftSidebarExpanded((current) => !current);
+  }
 
   function changeAppZoom(delta: number) {
     setAppZoomPercent((current) => getNextAppZoomPercent(current, delta));
@@ -2009,6 +2961,28 @@ export function App({
     });
   }
 
+  function resetOperatorBrowserReadiness(details: string) {
+    operatorActionSequenceRef.current += 1;
+    if (operatorActionTimeoutRef.current) {
+      globalThis.clearTimeout(operatorActionTimeoutRef.current);
+      operatorActionTimeoutRef.current = null;
+    }
+    setOperatorBusyAction(null);
+    setOperatorCdpEndpoint("");
+    setOperatorVerifiedPageFingerprint("");
+    setOperatorLastResponse(null);
+    setOperatorStatus({ label: "Browser connection not ready", tone: "idle", details });
+  }
+
+  function resetOperatorRuntimeState() {
+    resetOperatorBrowserReadiness("Browser/page-check readiness was reset locally. Retry Start test browser when ready; no ServiceNow action was taken.");
+  }
+
+  function changeEnvironmentMode(nextMode: ServiceNowEnvironmentMode) {
+    setSelectedEnvironmentMode(toWorkbenchEnvironmentMode(nextMode));
+    resetOperatorBrowserReadiness("Page check is disabled until Start test browser reports a safe browser connection for the selected environment.");
+  }
+
   function updateEnvironmentUrlSetting(mode: Exclude<ServiceNowEnvironmentMode, "mock">, url: string) {
     setEnvironmentUrlSettings((current) => {
       if (!url.trim()) {
@@ -2019,257 +2993,506 @@ export function App({
 
       return { ...current, [mode]: url };
     });
+    resetOperatorBrowserReadiness("Page check is disabled until Start test browser reports a safe browser connection for the updated target setting.");
+  }
+
+  function applyOperatorActionFinalState(finalState: OperatorActionFinalState) {
+    if (!finalState.shouldApplyState) {
+      return;
+    }
+
+    setOperatorBusyAction(finalState.operatorBusyAction);
+    setOperatorLastResponse(finalState.operatorLastResponse);
+
+    const response = finalState.operatorLastResponse;
+    if (finalState.action === "launch") {
+      const readyCdpEndpoint =
+        response?.ok === true &&
+        response.launch?.safety?.cdpEndpointReady === true &&
+        typeof response.launch.cdpEndpoint === "string" &&
+        response.launch.cdpEndpoint.length > 0
+          ? response.launch.cdpEndpoint
+          : "";
+      setOperatorCdpEndpoint(readyCdpEndpoint);
+      setOperatorVerifiedPageFingerprint("");
+    }
+    if (finalState.action === "verify") {
+      setOperatorVerifiedPageFingerprint(
+        response?.ok === true && response.fieldInspection?.status === "verified" && response.fieldInspection.pageFingerprint
+          ? response.fieldInspection.pageFingerprint
+          : ""
+      );
+    }
+    if (finalState.action === "autofill" && response?.runtime?.blockedReason === "approval-stale-after-page-change") {
+      setOperatorVerifiedPageFingerprint("");
+    }
+    setOperatorStatus(finalState.operatorStatus);
+  }
+
+  function finishOperatorAction(actionSequence: number, finalState: OperatorActionFinalState) {
+    if (operatorActionSequenceRef.current !== actionSequence) {
+      return;
+    }
+    if (operatorActionTimeoutRef.current) {
+      globalThis.clearTimeout(operatorActionTimeoutRef.current);
+      operatorActionTimeoutRef.current = null;
+    }
+    applyOperatorActionFinalState(finalState);
+  }
+
+  async function runOperatorAction(
+    action: OperatorAction,
+    invoke: (api: SdaOperatorApi, request: OperatorRuntimeRequest) => Promise<OperatorRuntimeResponse>
+  ) {
+    const api = getSdaOperatorApi();
+    if (!api) {
+      setOperatorStatus({
+        label: "Desktop backend unavailable",
+        tone: "blocked",
+        details: "Open this app with the Windows desktop launcher, not as a static browser page."
+      });
+      return;
+    }
+
+    if (operatorBusyAction !== null) {
+      setOperatorStatus({
+        label: operatorActionLabel(operatorBusyAction),
+        tone: "working",
+        details: operatorActionWorkingDetails(operatorBusyAction)
+      });
+      return;
+    }
+
+    const request: OperatorRuntimeRequest = {
+      mode: selectedEnvironmentMode,
+      targetUrl: qaSmokeTargetUrl,
+      cdpEndpoint: operatorCdpEndpoint,
+      approvalPageFingerprint: action === "autofill" ? operatorVerifiedPageFingerprint : undefined,
+      draft,
+      scenario: "initial-create"
+    };
+
+    const actionSequence = operatorActionSequenceRef.current + 1;
+    operatorActionSequenceRef.current = actionSequence;
+    if (operatorActionTimeoutRef.current) {
+      globalThis.clearTimeout(operatorActionTimeoutRef.current);
+    }
+    operatorActionTimeoutRef.current = globalThis.setTimeout(() => {
+      if (operatorActionSequenceRef.current !== actionSequence) {
+        return;
+      }
+      applyOperatorActionFinalState(
+        buildOperatorActionFinalState({ action, kind: "timeout", timeoutMs: OPERATOR_RUNTIME_ACTION_TIMEOUT_MS })
+      );
+      operatorActionSequenceRef.current += 1;
+      operatorActionTimeoutRef.current = null;
+    }, OPERATOR_RUNTIME_ACTION_TIMEOUT_MS);
+
+    setOperatorBusyAction(action);
+    setOperatorStatus({ label: operatorActionLabel(action), tone: "working", details: operatorActionWorkingDetails(action) });
+    try {
+      const response = await invoke(api, request);
+      finishOperatorAction(actionSequence, buildOperatorActionFinalState({ action, kind: "response", response }));
+    } catch (error) {
+      finishOperatorAction(actionSequence, buildOperatorActionFinalState({ action, error, kind: "error" }));
+    }
+  }
+
+  function launchQaOperatorBrowser() {
+    void runOperatorAction("launch", (api, request) => api.launchQaBrowser(request));
+  }
+
+  function verifyQaOperatorIncident() {
+    void runOperatorAction("verify", (api, request) => api.verifyCurrentIncident(request));
+  }
+
+  function autofillQaOperatorIncident() {
+    void runOperatorAction("autofill", (api, request) => api.autofillCurrentIncidentDefaults(request));
+  }
+
+  const targetConfigured = Boolean(selectedEnvironment.url) && qaSmokeTargetValidation.allowed;
+  const workbenchEnvironmentLabel = getWorkbenchEnvironmentChipLabel(selectedEnvironmentMode, workbenchCopy);
+  const workbenchTargetStatusLabel = targetConfigured ? workbenchCopy.target.configured : workbenchCopy.target.missing;
+  const topbarTargetChipClass = targetConfigured ? "workbench-status-pill success" : "workbench-status-pill warning";
+  const cleanedSummaryRows = [
+    { label: workbenchCopy.cards.issue, value: operatorSafeDisplayText(fieldValue(draft.shortDescription)) },
+    { label: workbenchCopy.cards.impact, value: operatorSafeDisplayText(selectedQueueItem.bodyPreview) },
+    {
+      label: workbenchCopy.cards.context,
+      value: workbenchCopy.cards.contextValue(sourceCleanup.removedLineCount)
+    }
+  ];
+  const todayQueueItems = queueItems.slice(0, 4);
+  const yesterdayQueueItems = queueItems.slice(4);
+  const hasSavedEnvironmentUrlSettings = Object.values(environmentUrlSettings).some((value) => Boolean(value));
+  const recentDraftItems = queueItems.filter((item) => item.status === "Drafted" || item.status === "Done").slice(0, 3);
+  const workbenchNavItems: { key: OperatorWorkbenchPageKey; label: string; icon: WorkbenchIconName }[] = [
+    { key: "inbox", label: workbenchCopy.nav.inbox, icon: "inbox" },
+    { key: "workbench", label: workbenchCopy.nav.workbench, icon: "workbench" },
+    { key: "knowledge", label: workbenchCopy.nav.knowledge, icon: "knowledge" },
+    { key: "history", label: workbenchCopy.nav.history, icon: "history" },
+    { key: "search", label: workbenchCopy.nav.search, icon: "search" }
+  ];
+  const activeNavLabel = workbenchNavItems.find((item) => item.key === activePage)?.label ?? workbenchCopy.nav.workbench;
+
+  function clearEnvironmentUrlSettings() {
+    setEnvironmentUrlSettings({});
+    resetOperatorBrowserReadiness("Check current ticket page is disabled until Start test browser reports a safe browser connection after settings are cleared.");
   }
 
   return (
     <main
-      className="app-shell"
+      className={`app-shell operator-workbench-v2-shell ${leftSidebarExpanded ? "left-sidebar-expanded" : "left-sidebar-collapsed"} ${runtimeRailExpanded ? "runtime-rail-expanded" : "runtime-rail-collapsed"}`}
       data-theme={displayTheme}
+      data-left-sidebar={leftSidebarExpanded ? "expanded" : "collapsed"}
+      data-right-rail={runtimeRailExpanded ? "expanded" : "collapsed"}
+      data-active-page={activePage}
       data-text-mode={textFieldDisplayMode}
       data-zoom-percent={appZoomPercent}
       onWheel={handleAppWheel}
       style={appShellStyle}
     >
-      <section className="hero" aria-labelledby="app-title">
-        <header className="app-chrome">
-          <div className="safety-banner" role="status">
-            {t.safetyTagline}
+      <header className="workbench-topbar" aria-labelledby="app-title">
+        <div className="workbench-product-lockup">
+          <span aria-hidden="true" className="workbench-app-mark">
+            <WorkbenchIcon name="app" />
+          </span>
+          <div>
+            <h1 id="app-title">ServiceNow Automation</h1>
           </div>
-          <div className="top-toolbar">
+        </div>
+        <div className="workbench-topbar-status" aria-label={workbenchCopy.statusAria}>
+          <span className="workbench-status-pill environment">{workbenchEnvironmentLabel}</span>
+          <span className={topbarTargetChipClass}>{workbenchTargetStatusLabel}</span>
+          <label className="workbench-language-selector">
+            <WorkbenchIcon name="globe" />
+            <span>{workbenchCopy.languageChip}</span>
+            <select
+              aria-label={workbenchCopy.languageAria}
+              className="workbench-language-native-select"
+              value={language}
+              onChange={(event) => changeLanguage(event.currentTarget.value as LanguageCode)}
+            >
+              {languageOptions.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <WorkbenchIcon name="chevron" />
+          </label>
+          <button
+            aria-controls="workbench-runtime-rail"
+            aria-expanded={runtimeRailExpanded}
+            aria-label={runtimeRailExpanded ? workbenchCopy.runtime.collapseRuntime : workbenchCopy.runtime.expandRuntime}
+            className="topbar-runtime-toggle"
+            type="button"
+            onClick={() => setRuntimeRailExpanded((current) => !current)}
+          >
+            <WorkbenchIcon name="chevron" />
+            <span>{runtimeRailExpanded ? workbenchCopy.runtime.collapseRuntime : workbenchCopy.runtime.expandRuntime}</span>
+          </button>
+        </div>
+      </header>
+
+      <button
+        aria-controls="left-workbench-sidebar"
+        aria-expanded={leftSidebarExpanded}
+        aria-label={leftSidebarExpanded ? workbenchCopy.nav.collapseSidebar : workbenchCopy.nav.expandSidebar}
+        className="workbench-sidebar-edge-toggle"
+        data-dragging={leftSidebarHandleDragging ? "true" : undefined}
+        style={leftSidebarHandleStyle}
+        title="Drag vertically, click to expand or collapse"
+        type="button"
+        onClick={toggleLeftSidebarFromHandle}
+        onPointerCancel={finishLeftSidebarHandleDrag}
+        onPointerDown={handleLeftSidebarHandlePointerDown}
+        onPointerMove={handleLeftSidebarHandlePointerMove}
+        onPointerUp={finishLeftSidebarHandleDrag}
+      >
+        <span className="workbench-sidebar-edge-glyph" aria-hidden="true">
+          {leftSidebarExpanded ? "«" : "»"}
+        </span>
+      </button>
+
+      <div className="workbench-layout" aria-label={workbenchCopy.layoutAria}>
+        <aside className="workbench-icon-rail" aria-label={workbenchCopy.nav.primaryAria}>
+          {workbenchNavItems.map((item) => (
+            <button
+              key={item.key}
+              aria-current={item.key === activePage ? "page" : undefined}
+              className={item.key === activePage ? "workbench-icon-button workbench-function-button selected" : "workbench-icon-button workbench-function-button"}
+              type="button"
+              onClick={() => setActivePage(item.key)}
+            >
+              <WorkbenchIcon name={item.icon} />
+              <span>{item.label}</span>
+            </button>
+          ))}
+          {!leftSidebarExpanded ? (
             <button
               aria-controls="app-settings-sidebar"
               aria-expanded={settingsOpen}
-              className="settings-toggle"
+              className="workbench-icon-button workbench-settings-rail-button"
               type="button"
-              onClick={() => setSettingsOpen((current) => !current)}
+              onClick={() => setSettingsOpen(true)}
             >
-              {chrome.settingsButton}
+              <WorkbenchIcon name="settings" />
+              <span>{workbenchCopy.nav.settings}</span>
             </button>
-            <LanguageSelector language={language} onLanguageChange={changeLanguage} t={t} />
-          </div>
-        </header>
+          ) : null}
+        </aside>
 
-        <div className="content">
-          <p className="eyebrow">{t.productEyebrow}</p>
-          <h1 id="app-title" className="hero-title">{t.heroTitle}</h1>
-          <p className="summary">{t.heroSubtitle}</p>
-        </div>
+        <aside className="workbench-sidebar" id="left-workbench-sidebar" aria-labelledby="left-workbench-title">
+          <div className="workbench-sidebar-scroll">
+            <section className="workbench-feature-switcher" aria-labelledby="left-workbench-title" data-active-section={activePage}>
+              <h2 id="left-workbench-title">{activeNavLabel}</h2>
+              <nav aria-label={workbenchCopy.nav.workbenchSections}>
+                {workbenchNavItems.map((item) => (
+                  <button
+                    key={item.key}
+                    aria-current={item.key === activePage ? "page" : undefined}
+                    className={item.key === activePage ? "selected" : undefined}
+                    type="button"
+                    onClick={() => setActivePage(item.key)}
+                  >
+                    <WorkbenchIcon name={item.icon} />
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+                <button
+                  aria-controls="app-settings-sidebar"
+                  aria-expanded={settingsOpen}
+                  className="workbench-settings-button workbench-settings-nav-button"
+                  type="button"
+                  onClick={() => setSettingsOpen(true)}
+                >
+                  <WorkbenchIcon name="settings" />
+                  <span>{workbenchCopy.nav.settings}</span>
+                </button>
+              </nav>
+            </section>
 
-        <nav className="stage-strip" aria-label={t.workflowEyebrow}>
-          <span>{t.workflowStages.queue}</span>
-          <span>{t.workflowStages.sourceReview}</span>
-          <span>{t.workflowStages.ticketDraft}</span>
-        </nav>
-      </section>
+            <label className="workbench-search-box">
+              <span>{workbenchCopy.search.label}</span>
+              <span className="workbench-search-control">
+                <WorkbenchIcon name="search" />
+                <input aria-label={workbenchCopy.search.aria} placeholder={workbenchCopy.search.placeholder} type="search" />
+                <kbd>{workbenchCopy.search.shortcut}</kbd>
+              </span>
+            </label>
 
-      <section className="workspace" aria-labelledby="workspace-title">
-        <header className="workspace-header">
-          <div>
-            <p className="eyebrow">{t.workflowEyebrow}</p>
-            <h2 id="workspace-title">{t.workspaceTitle}</h2>
-            <p>
-              {t.workspaceSubtitle} {chrome.noAttachmentsCopy}
-            </p>
-            <p className="language-simulation-note">{t.languageSimulationNotice}</p>
-          </div>
-          <div className="mode-pill">{selectedEnvironmentDisplay.label} · MockAIProvider</div>
-        </header>
-
-        <div className="workspace-with-settings">
-          <div className="workflow-column">
-            <RuntimeSafetyPanel t={t} />
-
-            <HighSeverityMonitorSimulator
-              language={language}
-              monitoredGroupIds={highSeverityMonitoredGroups}
-              acknowledged={highSeverityAcknowledged}
-              muted={highSeverityMuted}
-              selectedState={highSeverityState}
-              onAcknowledge={() => setHighSeverityAcknowledged(true)}
-              onMute={() => setHighSeverityMuted((current) => !current)}
-              onMonitoredGroupToggle={toggleHighSeverityMonitoredGroup}
-              onSelectedStateChange={(state) => {
-                setHighSeverityState(state);
-                setHighSeverityAcknowledged(false);
-              }}
-              t={t}
-            />
-
-            <EnvironmentModePanel
-              selectedMode={selectedEnvironmentMode}
-              onSelectedModeChange={setSelectedEnvironmentMode}
-              chrome={chrome}
-              t={t}
-            />
-
-            <div className="queue-review-grid">
-              <DemoQueuePanel
-                items={queueItems}
-                selectedItemId={selectedQueueItem.id}
-                onSelectItem={selectQueueItem}
-                t={t}
-              />
-              <SourceReviewPanel
-                item={selectedQueueItem}
-                onCreateIncidentDraft={createIncidentDraft}
-                onMarkDone={(itemId) => updateQueueItemStatus(itemId, "Done")}
-                onSkip={(itemId) => updateQueueItemStatus(itemId, "Skipped")}
-                t={t}
-              />
+            <div className="workbench-source-filters" aria-label={workbenchCopy.list.recent}>
+              <span>{workbenchCopy.list.new}</span>
+              <span>{workbenchCopy.list.inReview}</span>
+              <span>{workbenchCopy.list.waiting}</span>
+              <span>{workbenchCopy.list.recent}</span>
             </div>
 
-            <ServiceDeskWorkflowPanel
-              preview={serviceDeskWorkflowPreview}
-              onPrepareCopyDraft={prepareCopyDraft}
-            />
+            <section className="workbench-source-list-shell" aria-labelledby="source-list-title">
+              <div className="workbench-list-heading">
+                <h3 id="source-list-title">{workbenchCopy.list.today}</h3>
+                <span>{todayQueueItems.length} {workbenchCopy.list.active}</span>
+              </div>
+              <div className="workbench-source-list">
+                {todayQueueItems.map((item) => (
+                  <button
+                    key={item.id}
+                    aria-current={item.id === selectedQueueItem.id ? "true" : undefined}
+                    className={item.id === selectedQueueItem.id ? "workbench-source-item today-source-item selected" : "workbench-source-item today-source-item"}
+                    type="button"
+                    onClick={() => selectQueueItem(item.id)}
+                  >
+                    <span className="workbench-source-dot" aria-hidden="true" />
+                    <strong>{operatorShortSourceTitle(item.subject)}</strong>
+                    <small>{item.sourceChannel} · {formatQueueStatus(item.status, workbenchCopy)} · {formatSourceTime(item.receivedAt)} · {languageShortLabel(item.language)}</small>
+                  </button>
+                ))}
+              </div>
 
-            <div className="scenario-bar" aria-label="Demo scenarios">
-              {demoManualPasteScenarios.map((scenario) => (
-                <button
-                  key={scenario.id}
-                  className={scenario.id === selectedScenarioId ? "scenario-button active" : "scenario-button"}
-                  type="button"
-                  onClick={() => selectScenario(scenario.id)}
-                >
-                  {buttonLabelForScenario(scenario.id)}
-                </button>
+              {yesterdayQueueItems.length > 0 ? (
+                <>
+                  <div className="workbench-list-heading yesterday">
+                    <h3>{workbenchCopy.list.yesterday}</h3>
+                    <span>{yesterdayQueueItems.length} {workbenchCopy.list.archived}</span>
+                  </div>
+                  <div className="workbench-source-list compact">
+                    {yesterdayQueueItems.map((item) => (
+                      <button
+                        key={item.id}
+                        aria-current={item.id === selectedQueueItem.id ? "true" : undefined}
+                        className={item.id === selectedQueueItem.id ? "workbench-source-item selected" : "workbench-source-item"}
+                        type="button"
+                        onClick={() => selectQueueItem(item.id)}
+                      >
+                        <strong>{operatorShortSourceTitle(item.subject)}</strong>
+                        <small>{item.sourceChannel} · {formatQueueStatus(item.status, workbenchCopy)}</small>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </section>
+
+            <section className="workbench-mini-history" aria-labelledby="mini-history-title">
+              <h3 id="mini-history-title">{workbenchCopy.nav.history}</h3>
+              {recentDraftItems.length > 0 ? (
+                <ul>
+                  {recentDraftItems.map((item) => (
+                    <li key={item.id}>{operatorShortSourceTitle(item.subject)}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>{workbenchCopy.list.noHistory}</p>
+              )}
+            </section>
+          </div>
+        </aside>
+
+        <section className="workbench-center" data-active-page={activePage} aria-label={activeNavLabel}>
+          {activePage === "workbench" ? (
+            <div className="workbench-page-shell">
+              <section className="workbench-card selected-source-card" aria-labelledby="selected-source-title">
+            <div className="workbench-card-header">
+              <div>
+                <h2 id="selected-source-title">{operatorSafeDisplayText(selectedQueueItem.subject)}</h2>
+              </div>
+              <span>{formatQueueStatus(selectedQueueItem.status, workbenchCopy)}</span>
+            </div>
+            <dl className="workbench-source-meta">
+              <div>
+                <dt>{workbenchCopy.cards.source}</dt>
+                <dd>{selectedQueueItem.sourceChannel}</dd>
+              </div>
+              <div>
+                <dt>{workbenchCopy.cards.received}</dt>
+                <dd>{formatSourceTime(selectedQueueItem.receivedAt)}</dd>
+              </div>
+              <div>
+                <dt>{workbenchCopy.cards.language}</dt>
+                <dd>{languageDisplayLabel(selectedQueueItem.language)}</dd>
+              </div>
+            </dl>
+            <details className="workbench-collapsed-detail source-preview-detail">
+              <summary>{workbenchCopy.cards.sourcePreview}</summary>
+              <p>{operatorSafeDisplayText(selectedQueueItem.bodyPreview)}</p>
+            </details>
+          </section>
+
+          <section className="workbench-card cleaned-summary-card" aria-labelledby="cleaned-summary-title">
+            <div className="workbench-card-header">
+              <div>
+                <h2 id="cleaned-summary-title">{workbenchCopy.cards.cleanedSummary}</h2>
+              </div>
+            </div>
+            <div className="summary-row-list">
+              {cleanedSummaryRows.map((row) => (
+                <div key={row.label} className="summary-row">
+                  <span>{row.label}</span>
+                  <p>{row.value}</p>
+                </div>
               ))}
             </div>
+          </section>
 
-            <RiskControlGate fillConfirmed={fillConfirmed} onFillConfirmedChange={setFillConfirmed} />
-
-            <div className="workspace-grid">
-              <section className="panel input-panel" aria-labelledby="captured-context-title">
-                <h3 id="captured-context-title">{t.capturedContextTitle}</h3>
-                <dl className="meta-list">
-                  <div>
-                    <dt>Source</dt>
-                    <dd>{context.sourceType}</dd>
-                  </div>
-                  <div>
-                    <dt>Captured At</dt>
-                    <dd>{context.capturedAt}</dd>
-                  </div>
-                  <div>
-                    <dt>Profile</dt>
-                    <dd>{profile.displayName}</dd>
-                  </div>
-                  <div>
-                    <dt>Source Language</dt>
-                    <dd>{selectedQueueItem.sourceLanguage}</dd>
-                  </div>
-                  <div>
-                    <dt>Draft Language Mode</dt>
-                    <dd>{selectedQueueItem.draftLanguageMode}</dd>
-                  </div>
-                </dl>
-                <label className="field-block">
-                  <span>Raw Text</span>
-                  <textarea readOnly rows={8} value={context.rawText} />
-                </label>
-                <label className="field-block">
-                  <span>Cleaned / Normalized Text</span>
-                  <textarea readOnly rows={8} value={sourceCleanup.normalizedText} />
-                </label>
-              </section>
-
-              <section className="panel draft-panel" aria-labelledby="draft-title">
-                <h3 id="draft-title">{t.editableDraftTitle}</h3>
-                <DraftTextField label="Short Description" field={draft.shortDescription} onChange={(value) => updateField("shortDescription", value)} />
-                <DraftTextField label="Description" field={draft.description} multiline onChange={(value) => updateField("description", value)} />
-                <DraftTextField label="Work Notes" field={draft.workNotes} multiline onChange={(value) => updateField("workNotes", value)} />
-                <DraftCopyActions
-                  draft={draft}
-                  preparedCopyDraft={preparedCopyDraft}
-                  onPrepareCopyDraft={prepareCopyDraft}
-                  t={t}
-                />
-
-                <div className="field-grid">
-                  <ReadOnlyField label="Category" field={draft.category} />
-                  <ReadOnlyField label="Subcategory" field={draft.subcategory} />
-                  <ReadOnlyField label="Assignment Group" field={draft.assignmentGroup} />
-                  <ReadOnlyField label="Priority" field={draft.priority} />
-                </div>
-              </section>
-
-              <section className="panel evidence-panel" aria-labelledby="evidence-title">
-                <h3 id="evidence-title">{t.kbMatchesTitle}</h3>
-                <ul className="match-list">
-                  {draft.kbMatches.map((match) => (
-                    <li key={match.articleId}>
-                      <strong>{match.title}</strong>
-                      <span>Score {Math.round(match.score * 100)}%</span>
-                      <p>{match.excerpt}</p>
-                    </li>
-                  ))}
-                </ul>
-
-                <h3>{t.missingInfoTitle}</h3>
-                <ul className="compact-list">
-                  {draft.missingInfoQuestions.map((question) => (
-                    <li key={question}>{question}</li>
-                  ))}
-                </ul>
-
-                <h3>{t.riskFlagsTitle}</h3>
-                <ul className="compact-list risk-list">
-                  {draft.riskFlags.map((flag) => (
-                    <li key={flag}>{flag}</li>
-                  ))}
-                </ul>
-              </section>
+          <section className="workbench-card incident-draft-card" aria-labelledby="incident-draft-title">
+            <div className="workbench-card-header">
+              <div>
+                <h2 id="incident-draft-title">{workbenchCopy.cards.incidentDraft}</h2>
+              </div>
             </div>
-
-            <MockServiceNowForm draft={draft} fillConfirmed={fillConfirmed} item={selectedQueueItem} chrome={chrome} t={t} />
-            <ControlledQaSingleTicketSmokePanel
-              approvalPhrase={qaSmokeApprovalPhrase}
-              onWriteActionChange={(nextAction) => {
-                const nextSelection = updateQaSmokeWriteActionSelection(nextAction);
-                setQaSmokeWriteAction(nextSelection.writeAction);
-                setQaSmokeApprovalPhrase(nextSelection.approvalPhrase);
-              }}
-              plan={qaSmokePlan}
-              onApprovalPhraseChange={setQaSmokeApprovalPhrase}
-              writeAction={qaSmokeWriteAction}
+            <DraftTextField
+              label={workbenchCopy.cards.shortDescription}
+              fieldName="shortDescription"
+              field={draft.shortDescription}
+              onChange={(value) => updateField("shortDescription", value)}
             />
-            <QaTextFieldAutofillPanel
-              approvalPhrase={qaAutofillApprovalPhrase}
-              dedicatedProfileConfirmed={qaAutofillDedicatedProfileConfirmed}
+            <DraftTextField
+              label={workbenchCopy.cards.description}
+              fieldName="description"
+              field={draft.description}
+              onChange={(value) => updateField("description", value)}
+            />
+            <DraftTextField
+              label={workbenchCopy.cards.workNotes}
+              fieldName="workNotes"
+              field={draft.workNotes}
+              onChange={(value) => updateField("workNotes", value)}
+            />
+            <footer className="incident-draft-footer">
+              <small>{workbenchCopy.cards.localOnly}</small>
+            </footer>
+          </section>
+            </div>
+          ) : (
+            <OperatorStaticPage
+              page={activePage}
+              draft={draft}
+              queueItems={queueItems}
+              selectedQueueItem={selectedQueueItem}
+              targetConfigured={targetConfigured}
+              workbenchCopy={workbenchCopy}
+              workbenchEnvironmentLabel={workbenchEnvironmentLabel}
+            />
+          )}
+        </section>
+
+        {runtimeRailExpanded ? (
+          <aside
+            id="workbench-runtime-rail"
+            className="workbench-rail workbench-runtime-rail expanded"
+            aria-labelledby="runtime-rail-title"
+          >
+            <QaOperatorRuntimePanel
+              busyAction={operatorBusyAction}
+              cdpEndpointReady={Boolean(operatorCdpEndpoint)}
+              lastResponse={operatorLastResponse}
               mode={selectedEnvironmentMode}
-              onApprovalPhraseChange={setQaAutofillApprovalPhrase}
-              onDedicatedProfileConfirmedChange={setQaAutofillDedicatedProfileConfirmed}
-              onQaIsolationConfirmedChange={setQaAutofillQaIsolationConfirmed}
-              plan={qaAutofillPlan}
-              qaIsolationConfirmed={qaAutofillQaIsolationConfirmed}
+              targetReady={targetConfigured}
+              verifiedPageFingerprintReady={Boolean(operatorVerifiedPageFingerprint)}
+              onAutofill={autofillQaOperatorIncident}
+              onCollapse={() => setRuntimeRailExpanded(false)}
+              onLaunchBrowser={launchQaOperatorBrowser}
+              onResetRuntime={resetOperatorRuntimeState}
+              onVerify={verifyQaOperatorIncident}
+              status={operatorStatus}
+              targetLabel={workbenchEnvironmentLabel}
+              workbenchCopy={workbenchCopy}
             />
-          </div>
+          </aside>
+        ) : null}
+      </div>
 
-          <SettingsSidebar
-            appZoomPercent={appZoomPercent}
-            checkedFieldReviewItems={checkedFieldReviewItems}
-            environmentUrlSettings={environmentUrlSettings}
-            isOpen={settingsOpen}
-            onClose={() => setSettingsOpen(false)}
-            onEnvironmentUrlSettingChange={updateEnvironmentUrlSetting}
-            onPresetChange={selectTemplatePreset}
-            onResetZoom={() => setAppZoomPercent(100)}
-            onTemplateChange={updateTemplateField}
-            onTextFieldModeChange={setTextFieldDisplayMode}
-            onThemeChange={setDisplayTheme}
-            onToggleChecklistItem={toggleFieldReviewItem}
-            onZoomIn={() => changeAppZoom(appZoomStepPercent)}
-            onZoomOut={() => changeAppZoom(-appZoomStepPercent)}
-            selectedTemplatePresetId={selectedTemplatePresetId}
-            selectedTextFieldMode={textFieldDisplayMode}
-            selectedTheme={displayTheme}
-            templateSettings={draftTemplateSettings}
-            chrome={chrome}
-            language={language}
-            t={t}
-          />
-        </div>
-      </section>
+      <SettingsSidebar
+        appZoomPercent={appZoomPercent}
+        checkedFieldReviewItems={checkedFieldReviewItems}
+        environmentUrlSettings={environmentUrlSettings}
+        hasSavedEnvironmentUrlSettings={hasSavedEnvironmentUrlSettings}
+        isOpen={settingsOpen}
+        operatorBusyAction={operatorBusyAction}
+        onClearEnvironmentUrlSettings={clearEnvironmentUrlSettings}
+        onClose={() => setSettingsOpen(false)}
+        onEnvironmentModeChange={changeEnvironmentMode}
+        onEnvironmentUrlSettingChange={updateEnvironmentUrlSetting}
+        onLanguageChange={changeLanguage}
+        onPresetChange={selectTemplatePreset}
+        onResetZoom={() => setAppZoomPercent(100)}
+        onTemplateChange={updateTemplateField}
+        onTextFieldModeChange={setTextFieldDisplayMode}
+        onThemeChange={setDisplayTheme}
+        onToggleChecklistItem={toggleFieldReviewItem}
+        onZoomIn={() => changeAppZoom(appZoomStepPercent)}
+        onZoomOut={() => changeAppZoom(-appZoomStepPercent)}
+        selectedEnvironmentMode={selectedEnvironmentMode}
+        selectedTemplatePresetId={selectedTemplatePresetId}
+        selectedTextFieldMode={textFieldDisplayMode}
+        selectedTheme={displayTheme}
+        templateSettings={draftTemplateSettings}
+        chrome={chrome}
+        language={language}
+        workbenchCopy={workbenchCopy}
+        t={t}
+      />
     </main>
   );
 }
@@ -2302,9 +3525,14 @@ function SettingsSidebar({
   appZoomPercent,
   checkedFieldReviewItems,
   environmentUrlSettings,
+  hasSavedEnvironmentUrlSettings,
   isOpen,
+  operatorBusyAction,
+  onClearEnvironmentUrlSettings,
   onClose,
+  onEnvironmentModeChange,
   onEnvironmentUrlSettingChange,
+  onLanguageChange,
   onPresetChange,
   onResetZoom,
   onTemplateChange,
@@ -2313,20 +3541,27 @@ function SettingsSidebar({
   onToggleChecklistItem,
   onZoomIn,
   onZoomOut,
+  selectedEnvironmentMode,
   selectedTemplatePresetId,
   selectedTextFieldMode,
   selectedTheme,
   templateSettings,
   chrome,
   language,
+  workbenchCopy,
   t
 }: {
   appZoomPercent: number;
   checkedFieldReviewItems: string[];
   environmentUrlSettings: ServiceNowEnvironmentUrlOverrides;
+  hasSavedEnvironmentUrlSettings: boolean;
   isOpen: boolean;
+  operatorBusyAction: "launch" | "verify" | "autofill" | null;
+  onClearEnvironmentUrlSettings: () => void;
   onClose: () => void;
+  onEnvironmentModeChange: (mode: ServiceNowEnvironmentMode) => void;
   onEnvironmentUrlSettingChange: (mode: Exclude<ServiceNowEnvironmentMode, "mock">, url: string) => void;
+  onLanguageChange: (language: LanguageCode) => void;
   onPresetChange: (presetId: DraftTemplatePresetId) => void;
   onResetZoom: () => void;
   onTemplateChange: (fieldName: keyof DraftTemplateSettings, value: string) => void;
@@ -2335,71 +3570,136 @@ function SettingsSidebar({
   onToggleChecklistItem: (itemId: string) => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
+  selectedEnvironmentMode: WorkbenchEnvironmentMode;
   selectedTemplatePresetId: DraftTemplatePresetId;
   selectedTextFieldMode: TextFieldDisplayMode;
   selectedTheme: DisplayTheme;
   templateSettings: DraftTemplateSettings;
   chrome: UiChromeTranslations;
   language: LanguageCode;
+  workbenchCopy: OperatorWorkbenchCopy;
   t: UiTranslations;
 }) {
   return (
     <aside
-      aria-label={chrome.settingsSidebar.ariaLabel}
+      aria-label={workbenchCopy.settings.ariaLabel}
       className={isOpen ? "settings-sidebar" : "settings-sidebar collapsed"}
       id="app-settings-sidebar"
     >
       <div className="settings-sidebar-inner">
         <header className="settings-sidebar-header">
           <div>
-            <p className="eyebrow">{chrome.settingsSidebar.eyebrow}</p>
-            <h3>{chrome.settingsSidebar.title}</h3>
+            <p className="eyebrow">{workbenchCopy.settings.eyebrow}</p>
+            <h3>{workbenchCopy.settings.title}</h3>
           </div>
           <button
-            aria-label={chrome.settingsSidebar.closeAriaLabel}
+            aria-label={workbenchCopy.settings.close}
             className="settings-close-button"
             type="button"
             onClick={onClose}
           >
-            {chrome.settingsSidebar.closeButton}
+            {workbenchCopy.settings.close}
           </button>
         </header>
 
-        <DisplaySettingsPanel
-          appZoomPercent={appZoomPercent}
-          onResetZoom={onResetZoom}
-          onTextFieldModeChange={onTextFieldModeChange}
-          onThemeChange={onThemeChange}
-          onZoomIn={onZoomIn}
-          onZoomOut={onZoomOut}
-          selectedTextFieldMode={selectedTextFieldMode}
-          selectedTheme={selectedTheme}
-          chrome={chrome}
-        />
+        <div className="settings-sidebar-body">
+          <LanguageSettingsPanel
+            language={language}
+            onLanguageChange={onLanguageChange}
+            workbenchCopy={workbenchCopy}
+          />
 
-        <EnvironmentUrlSettingsPanel
-          environmentUrlSettings={environmentUrlSettings}
-          onEnvironmentUrlSettingChange={onEnvironmentUrlSettingChange}
-          chrome={chrome}
-        />
+          <DisplaySettingsPanel
+            appZoomPercent={appZoomPercent}
+            onResetZoom={onResetZoom}
+            onTextFieldModeChange={onTextFieldModeChange}
+            onThemeChange={onThemeChange}
+            onZoomIn={onZoomIn}
+            onZoomOut={onZoomOut}
+            selectedTextFieldMode={selectedTextFieldMode}
+            selectedTheme={selectedTheme}
+            chrome={chrome}
+          />
 
-        <TemplateSettingsPanel
-          selectedPresetId={selectedTemplatePresetId}
-          settings={templateSettings}
-          chrome={chrome}
-          language={language}
-          onPresetChange={onPresetChange}
-          onTemplateChange={onTemplateChange}
-        />
+          <DefaultEnvironmentSettingsPanel
+            busyAction={operatorBusyAction}
+            selectedMode={selectedEnvironmentMode}
+            onSelectedModeChange={onEnvironmentModeChange}
+            workbenchCopy={workbenchCopy}
+          />
 
-        <FieldReviewChecklist
-          checkedItemIds={checkedFieldReviewItems}
-          items={fieldReviewChecklistItems}
-          onToggleItem={onToggleChecklistItem}
-          t={t}
-        />
+          <EnvironmentUrlSettingsPanel
+            environmentUrlSettings={environmentUrlSettings}
+            hasSavedEnvironmentUrlSettings={hasSavedEnvironmentUrlSettings}
+            onClearEnvironmentUrlSettings={onClearEnvironmentUrlSettings}
+            onEnvironmentUrlSettingChange={onEnvironmentUrlSettingChange}
+            chrome={chrome}
+            workbenchCopy={workbenchCopy}
+          />
+
+          <TemplateSettingsPanel
+            selectedPresetId={selectedTemplatePresetId}
+            settings={templateSettings}
+            chrome={chrome}
+            language={language}
+            onPresetChange={onPresetChange}
+            onTemplateChange={onTemplateChange}
+          />
+
+          <FieldReviewChecklist
+            checkedItemIds={checkedFieldReviewItems}
+            items={fieldReviewChecklistItems}
+            onToggleItem={onToggleChecklistItem}
+            t={t}
+          />
+        </div>
+
+        <footer className="settings-sidebar-footer">
+          <small>{workbenchCopy.settings.footerNote}</small>
+          <div>
+            <button className="settings-reset-display-button" type="button" onClick={onResetZoom}>
+              {workbenchCopy.settings.resetDisplay}
+            </button>
+            <button className="settings-save-button" type="button" onClick={onClose}>
+              {workbenchCopy.settings.saveSettings}
+            </button>
+          </div>
+        </footer>
       </div>
     </aside>
+  );
+}
+
+function LanguageSettingsPanel({
+  language,
+  onLanguageChange,
+  workbenchCopy
+}: {
+  language: LanguageCode;
+  onLanguageChange: (language: LanguageCode) => void;
+  workbenchCopy: OperatorWorkbenchCopy;
+}) {
+  return (
+    <details className="language-settings-panel" open>
+      <summary>
+        <span className="summary-label">{workbenchCopy.settings.languageTitle}</span>
+        <strong>{workbenchCopy.languageChip}</strong>
+        <span aria-hidden="true" className="details-indicator">
+          <WorkbenchIcon name="chevron" />
+        </span>
+      </summary>
+      <label className="display-setting-group language-setting-group">
+        <span>{workbenchCopy.settings.languageLabel}</span>
+        <select value={language} onChange={(event) => onLanguageChange(event.currentTarget.value as LanguageCode)}>
+          {languageOptions.map((option) => (
+            <option key={option.code} value={option.code}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <small>{workbenchCopy.settings.languageHelper}</small>
+      </label>
+    </details>
   );
 }
 
@@ -2430,7 +3730,7 @@ function DisplaySettingsPanel({
         <span className="summary-label">{chrome.displaySettings.title}</span>
         <strong>{appZoomPercent}%</strong>
         <span aria-hidden="true" className="details-indicator">
-          ▾
+          <WorkbenchIcon name="chevron" />
         </span>
       </summary>
 
@@ -2499,91 +3799,151 @@ function DisplaySettingsPanel({
   );
 }
 
+function DefaultEnvironmentSettingsPanel({
+  busyAction,
+  onSelectedModeChange,
+  selectedMode,
+  workbenchCopy
+}: {
+  busyAction: "launch" | "verify" | "autofill" | null;
+  onSelectedModeChange: (mode: ServiceNowEnvironmentMode) => void;
+  selectedMode: WorkbenchEnvironmentMode;
+  workbenchCopy: OperatorWorkbenchCopy;
+}) {
+  const disabled = busyAction !== null;
+  const helperText = disabled ? workbenchCopy.settings.environmentBusyHelper : workbenchCopy.settings.environmentHelper;
+
+  return (
+    <section
+      className="environment-url-settings-panel default-environment-selector-panel"
+      aria-label={workbenchCopy.settings.defaultEnvironmentSelector}
+    >
+      <div className="environment-url-settings-body">
+        <label className="display-setting-group default-environment-selector-row">
+          <span>{workbenchCopy.settings.defaultEnvironmentSelector}</span>
+          <select
+            disabled={disabled}
+            value={toWorkbenchEnvironmentMode(selectedMode)}
+            onChange={(event) => onSelectedModeChange(event.currentTarget.value as ServiceNowEnvironmentMode)}
+          >
+            {visibleServiceNowEnvironmentModes.map((mode) => (
+              <option key={mode} value={mode}>
+                {getWorkbenchSettingsEnvironmentLabel(mode, workbenchCopy)}
+              </option>
+            ))}
+          </select>
+          <small>{helperText}</small>
+        </label>
+      </div>
+    </section>
+  );
+}
+
 function EnvironmentUrlSettingsPanel({
   environmentUrlSettings,
+  hasSavedEnvironmentUrlSettings,
+  onClearEnvironmentUrlSettings,
   onEnvironmentUrlSettingChange,
-  chrome
+  chrome,
+  workbenchCopy
 }: {
   environmentUrlSettings: ServiceNowEnvironmentUrlOverrides;
+  hasSavedEnvironmentUrlSettings: boolean;
+  onClearEnvironmentUrlSettings: () => void;
   onEnvironmentUrlSettingChange: (mode: Exclude<ServiceNowEnvironmentMode, "mock">, url: string) => void;
   chrome: UiChromeTranslations;
+  workbenchCopy: OperatorWorkbenchCopy;
 }) {
-  const [draftUrls, setDraftUrls] = useState<ServiceNowEnvironmentUrlOverrides>(environmentUrlSettings);
+  type EnvironmentUrlDraftFeedback = Partial<Record<WorkbenchEnvironmentMode, { allowed: boolean; reason: string }>>;
+  const [draftFeedback, setDraftFeedback] = useState<EnvironmentUrlDraftFeedback>({});
 
-  function updateDraftUrl(mode: Exclude<ServiceNowEnvironmentMode, "mock">, value: string) {
-    setDraftUrls((current: ServiceNowEnvironmentUrlOverrides) => ({ ...current, [mode]: value }));
-    onEnvironmentUrlSettingChange(mode, getNextEnvironmentUrlOverrideFromDraft(mode, value));
+  function updateDraftUrl(mode: WorkbenchEnvironmentMode, value: string) {
+    const validation = validateServiceNowEnvironmentUrlSetting(mode, value);
+    setDraftFeedback((current) => ({ ...current, [mode]: { allowed: validation.allowed, reason: validation.reason } }));
+    onEnvironmentUrlSettingChange(mode, validation.allowed && validation.normalizedUrl ? validation.normalizedUrl : "");
+  }
+
+  function clearSavedSettings() {
+    setDraftFeedback({});
+    onClearEnvironmentUrlSettings();
   }
 
   return (
     <details className="environment-url-settings-panel" open>
       <summary>
-        <span className="summary-label">{chrome.environment.urlSettingsTitle}</span>
+        <span className="summary-label">{workbenchCopy.settings.urlSettingsTitle}</span>
         <strong>{chrome.environment.localOnlyNoSecrets}</strong>
         <span aria-hidden="true" className="details-indicator">
-          ▾
+          <WorkbenchIcon name="chevron" />
         </span>
       </summary>
 
       <div className="environment-url-settings-body">
-        <p className="environment-url-safety-copy">{chrome.environment.urlSettingsSafetyCopy}</p>
+        <p className="environment-url-safety-copy">{workbenchCopy.settings.compactSafety}</p>
+        <div className="environment-settings-actions">
+          <button disabled={!hasSavedEnvironmentUrlSettings} type="button" onClick={clearSavedSettings}>
+            {workbenchCopy.settings.clearSavedSettings}
+          </button>
+          <small>{hasSavedEnvironmentUrlSettings ? workbenchCopy.settings.clearReady : workbenchCopy.settings.clearDisabled}</small>
+        </div>
 
         <div className="environment-url-card-grid">
           {serviceNowEnvironmentUrlSettingModes.map((mode) => {
-            const copy = chrome.environment.configs[mode];
-            const draftUrl = draftUrls[mode] ?? environmentUrlSettings[mode] ?? "";
-            const validation = validateServiceNowEnvironmentUrlSetting(mode, draftUrl);
+            const draftFeedbackForMode = draftFeedback[mode];
             const effectiveConfig = getServiceNowEnvironmentConfig(mode, environmentUrlSettings);
-            const hasActiveCustomTarget = validation.allowed && Boolean(environmentUrlSettings[mode]);
+            const hasActiveCustomTarget = Boolean(environmentUrlSettings[mode]);
+            const validationAllowed = hasActiveCustomTarget || Boolean(draftFeedbackForMode?.allowed);
+            const validationText = hasActiveCustomTarget || draftFeedbackForMode?.allowed
+              ? workbenchCopy.settings.acceptedTarget
+              : draftFeedbackForMode
+                ? `${workbenchCopy.settings.blockedTarget}: ${formatEnvironmentUrlValidationReason(draftFeedbackForMode.reason, workbenchCopy)}`
+                : workbenchCopy.settings.builtInTargetHidden;
+            const modeLabel = getWorkbenchSettingsUrlLabel(mode, workbenchCopy);
+            const modeDescription = getWorkbenchSettingsUrlDescription(mode, workbenchCopy);
+            const policyCopy = getWorkbenchSettingsSubmitPolicy(mode, workbenchCopy);
 
             return (
               <article className="environment-url-card" key={mode}>
                 <header>
                   <div>
-                    <h4>{copy.label}</h4>
-                    <p>{copy.description}</p>
+                    <h4>{modeLabel}</h4>
+                    <p>{modeDescription}</p>
                   </div>
-                  <span>{hasActiveCustomTarget ? chrome.environment.activeCustomTarget : chrome.environment.builtInTargetHidden}</span>
+                  <span>{hasActiveCustomTarget ? workbenchCopy.settings.activeCustomTarget : workbenchCopy.settings.builtInTargetHidden}</span>
                 </header>
 
                 <label className="field-block environment-url-field">
-                  <span>{chrome.environment.customUrlLabel}</span>
+                  <span>{workbenchCopy.settings.customUrlLabel}</span>
                   <input
+                    aria-label={`${modeLabel}: paste replacement target; saved value stays hidden`}
                     autoComplete="off"
                     inputMode="url"
                     placeholder={chrome.environment.customUrlPlaceholder}
-                    type="url"
-                    value={draftUrl}
+                    type="text"
+                    value=""
                     onChange={(event) => updateDraftUrl(mode, event.currentTarget.value)}
                   />
                 </label>
 
-                <p className={validation.allowed ? "environment-url-validation accepted" : "environment-url-validation blocked"}>
-                  {validation.allowed
-                    ? `${chrome.environment.validationAccepted}: ${validation.host}`
-                    : `${chrome.environment.validationBlocked}: ${formatEnvironmentUrlValidationReason(validation.reason)}`}
+                <p className={validationAllowed ? "environment-url-validation accepted" : "environment-url-validation blocked"}>
+                  {validationText}
                 </p>
 
                 <dl className="environment-url-gate-list">
                   <div>
-                    <dt>{chrome.environment.validationAccepted}</dt>
-                    <dd>{validation.allowed ? validation.host : chrome.environment.builtInTargetHidden}</dd>
+                    <dt>{workbenchCopy.settings.submitPolicy}</dt>
+                    <dd>{policyCopy}</dd>
                   </div>
                   <div>
                     <dt>{chrome.environment.submitPolicy}</dt>
-                    <dd>{effectiveConfig.requiresExplicitApprovalBeforeRealSubmit ? chrome.environment.explicitApprovalRequired : chrome.environment.noRealSubmit}</dd>
-                  </div>
-                  <div>
-                    <dt>Shadow only</dt>
-                    <dd>{effectiveConfig.shadowOnly ? "true" : "false"}</dd>
-                  </div>
-                  <div>
-                    <dt>Real submit capability</dt>
-                    <dd>{effectiveConfig.allowsRealSubmit ? "approval-gated" : "disabled"}</dd>
+                    <dd>
+                      {effectiveConfig.requiresExplicitApprovalBeforeRealSubmit
+                        ? chrome.environment.explicitApprovalRequired
+                        : chrome.environment.noRealSubmit}
+                    </dd>
                   </div>
                 </dl>
 
-                <p className="environment-url-local-copy">{chrome.environment.localOnlyNoSecrets}</p>
                 <p className="environment-url-gate-copy">{chrome.environment.writeGateUnchanged}</p>
               </article>
             );
@@ -2594,22 +3954,22 @@ function EnvironmentUrlSettingsPanel({
   );
 }
 
-function formatEnvironmentUrlValidationReason(reason: string): string {
+function formatEnvironmentUrlValidationReason(reason: string, workbenchCopy: OperatorWorkbenchCopy): string {
   switch (reason) {
     case "no-url":
-      return "no URL set";
+      return workbenchCopy.settings.validationReasons.noUrl;
     case "invalid-url":
-      return "invalid URL";
+      return workbenchCopy.settings.validationReasons.invalidUrl;
     case "https-required":
-      return "HTTPS required";
+      return workbenchCopy.settings.validationReasons.httpsRequired;
     case "credentials-in-url-denied":
-      return "credentials in URL denied";
+      return workbenchCopy.settings.validationReasons.credentialsDenied;
     case "sensitive-url-component-denied":
-      return "query/hash/record identifier/token/session/cookie payload denied";
+      return workbenchCopy.settings.validationReasons.sensitiveComponentDenied;
     case "service-now-host-required":
-      return "host must be a ServiceNow host or approved non-routable placeholder";
+      return workbenchCopy.settings.validationReasons.serviceNowHostRequired;
     case "mock-url-denied":
-      return "mock mode cannot set a URL";
+      return workbenchCopy.settings.validationReasons.mockUrlDenied;
     default:
       return reason;
   }
@@ -3371,7 +4731,7 @@ function TemplateSettingsPanel({
         <span className="summary-label">{chrome.templateSettings.title}</span>
         <strong>{selectedPreset.label}</strong>
         <span aria-hidden="true" className="details-indicator">
-          ▾
+          <WorkbenchIcon name="chevron" />
         </span>
       </summary>
 
@@ -3623,28 +4983,280 @@ function EnvironmentCard({
   );
 }
 
+export function getDraftTextAreaRows(fieldName: "shortDescription" | "description" | "workNotes", value: string): number {
+  const sanitizedValue = operatorSafeDisplayText(value);
+  const wrapColumnEstimate = fieldName === "shortDescription" ? 90 : 76;
+  const estimatedVisualLines = sanitizedValue.split(/\r?\n/).reduce((total, line) => {
+    return total + Math.max(1, Math.ceil(line.length / wrapColumnEstimate));
+  }, 0);
+
+  return fieldName === "shortDescription"
+    ? Math.max(2, estimatedVisualLines + 1)
+    : Math.max(5, estimatedVisualLines + 1);
+}
+
+type OperatorStaticPageContent = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  icon: WorkbenchIconName;
+  sidebarTitle: string;
+  sidebarItems: { title: string; meta: string }[];
+  heroTitle: string;
+  heroBody: string;
+  stats: { label: string; value: string }[];
+  detailCards: { title: string; body: string }[];
+  contextTitle: string;
+  contextItems: string[];
+  footerNote: string;
+};
+
+function buildOperatorStaticPageContent({
+  draft,
+  page,
+  queueItems,
+  selectedQueueItem,
+  targetConfigured,
+  workbenchCopy,
+  workbenchEnvironmentLabel
+}: {
+  draft: TicketDraft;
+  page: Exclude<OperatorWorkbenchPageKey, "workbench">;
+  queueItems: DemoQueueItem[];
+  selectedQueueItem: DemoQueueItem;
+  targetConfigured: boolean;
+  workbenchCopy: OperatorWorkbenchCopy;
+  workbenchEnvironmentLabel: string;
+}): OperatorStaticPageContent {
+  switch (page) {
+    case "inbox":
+      return {
+        eyebrow: workbenchCopy.nav.inbox,
+        title: "Inbox triage",
+        description: "Review sanitized intake, source channel, and next manual step before opening the workbench draft.",
+        icon: "inbox",
+        sidebarTitle: "Today",
+        sidebarItems: queueItems.slice(0, 5).map((item) => ({
+          title: operatorSafeDisplayText(item.subject),
+          meta: `${item.sourceChannel} · ${formatQueueStatus(item.status, workbenchCopy)} · ${formatSourceTime(item.receivedAt)}`
+        })),
+        heroTitle: operatorSafeDisplayText(selectedQueueItem.subject),
+        heroBody: operatorSafeDisplayText(selectedQueueItem.bodyPreview),
+        stats: [
+          { label: "Active sources", value: String(queueItems.length) },
+          { label: "Selected channel", value: selectedQueueItem.sourceChannel },
+          { label: "Target", value: targetConfigured ? "configured" : "missing" }
+        ],
+        detailCards: [
+          { title: "Selected source", body: "Sanitized preview only; no raw ServiceNow ticket text is stored here." },
+          { title: "Manual next step", body: "Use the workbench page to review Short description, Description, and Work notes before runtime verification." }
+        ],
+        contextTitle: "Triage checklist",
+        contextItems: ["Confirm requester and source channel", "Check impact and urgency before routing", "Keep customer-visible comments separate from internal Work Notes"],
+        footerNote: "Inbox is local and sanitized; it does not save or update ServiceNow."
+      };
+    case "knowledge":
+      return {
+        eyebrow: workbenchCopy.nav.knowledge,
+        title: "Knowledgebase snippets",
+        description: "Small, page-like reference cards for the operator; no external KB query is performed from this UI.",
+        icon: "knowledge",
+        sidebarTitle: "Pinned folders",
+        sidebarItems: [
+          { title: "VPN troubleshooting", meta: "3 local snippets" },
+          { title: "Password and MFA", meta: "2 local snippets" },
+          { title: "Windows endpoint", meta: "2 local snippets" },
+          { title: "Routing defaults", meta: workbenchEnvironmentLabel }
+        ],
+        heroTitle: "Suggested snippets for selected source",
+        heroBody: `Suggested context for: ${operatorSafeDisplayText(draft.shortDescription.value)}`,
+        stats: [
+          { label: "Source language", value: languageDisplayLabel(selectedQueueItem.language) },
+          { label: "Mode", value: "local preview" },
+          { label: "Runtime", value: "manual verify required" }
+        ],
+        detailCards: [
+          { title: "VPN connectivity troubleshooting", body: "Check password/MFA timing, VPN client error text, network reachability, and affected scope." },
+          { title: "Account and login troubleshooting", body: "Confirm recent password change, MFA prompt loop, lockout status, and user contact path." },
+          { title: "Windows endpoint troubleshooting", body: "Use only after confirming the issue is endpoint-specific rather than account or VPN service-wide." }
+        ],
+        contextTitle: "Suggested knowledge",
+        contextItems: ["Do not paste raw KB exports", "Keep customer-facing notes concise", "Use Work Notes for internal checks"],
+        footerNote: "Knowledgebase is local reference copy; it does not fetch ServiceNow articles."
+      };
+    case "history":
+      return {
+        eyebrow: workbenchCopy.nav.history,
+        title: "History timeline",
+        description: "A quiet local timeline for recent reviewed copies and skipped sources.",
+        icon: "history",
+        sidebarTitle: "Recent activity",
+        sidebarItems: queueItems.slice(0, 5).map((item) => ({
+          title: operatorSafeDisplayText(item.subject),
+          meta: `${formatQueueStatus(item.status, workbenchCopy)} · ${formatSourceTime(item.receivedAt)}`
+        })),
+        heroTitle: "Recent local run evidence",
+        heroBody: "Recent local actions are summarized without raw endpoints, cookies, screenshots, or ticket identifiers.",
+        stats: [
+          { label: "Reviewed", value: String(queueItems.filter((item) => item.status === "Done" || item.status === "Drafted").length) },
+          { label: "Waiting", value: String(queueItems.filter((item) => item.status === "Reviewed").length) },
+          { label: "Skipped", value: String(queueItems.filter((item) => item.status === "Skipped").length) }
+        ],
+        detailCards: [
+          { title: "Latest draft", body: operatorSafeDisplayText(draft.shortDescription.value) },
+          { title: "Browser evidence", body: "Browser rail remains the source of truth for Start, Check Page, and Autofill readiness." }
+        ],
+        contextTitle: "Recent outcomes",
+        contextItems: ["Show status labels, not raw URLs", "Keep page-check details hidden", "Do not imply Save/Submit/Update/Close approval"],
+        footerNote: "History is a local operator aid, not a ServiceNow audit log."
+      };
+    case "search":
+      return {
+        eyebrow: workbenchCopy.nav.search,
+        title: "Search workspace",
+        description: "Search-shaped layout for local sanitized sources, draft text, and page labels.",
+        icon: "search",
+        sidebarTitle: "Search scopes",
+        sidebarItems: [
+          { title: "Local sources", meta: `${queueItems.length} sanitized items` },
+          { title: "Incident draft", meta: "Short description, Description, Work notes" },
+          { title: "Knowledge snippets", meta: "Local reference only" },
+          { title: "Settings labels", meta: "No secrets or endpoints" }
+        ],
+        heroTitle: "Search current workbench content",
+        heroBody: "Use the left search control to inspect local sanitized workbench content. Browser actions stay in the right rail.",
+        stats: [
+          { label: "Draft fields", value: "3" },
+          { label: "Current source", value: selectedQueueItem.sourceChannel },
+          { label: "Environment", value: workbenchEnvironmentLabel }
+        ],
+        detailCards: [
+          { title: "Suggested query", body: operatorSafeDisplayText(draft.shortDescription.value) },
+          { title: "Search safety", body: "Search never exposes stored credentials, cookies, browser connection details, or raw ServiceNow URLs in the main workbench." }
+        ],
+        contextTitle: "Search tips",
+        contextItems: ["Use source channel names", "Search draft labels before copying", "Open Settings to replace hidden authorized targets only"],
+        footerNote: "Search is local UI only; it does not query ServiceNow."
+      };
+  }
+}
+
+function OperatorStaticPage({
+  draft,
+  page,
+  queueItems,
+  selectedQueueItem,
+  targetConfigured,
+  workbenchCopy,
+  workbenchEnvironmentLabel
+}: {
+  draft: TicketDraft;
+  page: Exclude<OperatorWorkbenchPageKey, "workbench">;
+  queueItems: DemoQueueItem[];
+  selectedQueueItem: DemoQueueItem;
+  targetConfigured: boolean;
+  workbenchCopy: OperatorWorkbenchCopy;
+  workbenchEnvironmentLabel: string;
+}) {
+  const content = buildOperatorStaticPageContent({
+    draft,
+    page,
+    queueItems,
+    selectedQueueItem,
+    targetConfigured,
+    workbenchCopy,
+    workbenchEnvironmentLabel
+  });
+  const titleId = `${page}-page-title`;
+
+  return (
+    <div className="workbench-page-shell" aria-labelledby={titleId}>
+      <aside className="workbench-page-sidepanel" aria-label={`${content.title} side panel`}>
+        <div className="workbench-page-sidepanel-header">
+          <WorkbenchIcon name={content.icon} />
+          <div>
+            <p className="eyebrow">{content.eyebrow}</p>
+            <h3>{content.sidebarTitle}</h3>
+          </div>
+        </div>
+        <div className="workbench-page-sidepanel-list">
+          {content.sidebarItems.map((item) => (
+            <article key={`${item.title}-${item.meta}`}>
+              <strong>{item.title}</strong>
+              <small>{item.meta}</small>
+            </article>
+          ))}
+        </div>
+      </aside>
+
+      <article className="workbench-page-document" aria-labelledby={titleId}>
+        <header className="workbench-page-hero">
+          <span className="workbench-page-icon"><WorkbenchIcon name={content.icon} /></span>
+          <div>
+            <p className="eyebrow">{content.eyebrow}</p>
+            <h2 id={titleId}>{content.title}</h2>
+            <p>{content.description}</p>
+          </div>
+        </header>
+        <section className="workbench-page-focus-card" aria-label={content.heroTitle}>
+          <strong>{content.heroTitle}</strong>
+          <p>{content.heroBody}</p>
+        </section>
+        <dl className="workbench-page-stat-grid">
+          {content.stats.map((stat) => (
+            <div key={stat.label}>
+              <dt>{stat.label}</dt>
+              <dd>{stat.value}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="workbench-page-card-grid">
+          {content.detailCards.map((card) => (
+            <section key={card.title}>
+              <h3>{card.title}</h3>
+              <p>{card.body}</p>
+            </section>
+          ))}
+        </div>
+      </article>
+
+      <aside className="workbench-page-context-panel" aria-label={`${content.title} context panel`}>
+        <h3>{content.contextTitle}</h3>
+        <ul>
+          {content.contextItems.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+        <p>{content.footerNote}</p>
+      </aside>
+    </div>
+  );
+}
+
 function DraftTextField({
   field,
+  fieldName,
   label,
-  multiline = false,
   onChange
 }: {
   field: FieldDraft;
+  fieldName: "shortDescription" | "description" | "workNotes";
   label: string;
-  multiline?: boolean;
   onChange: (value: string) => void;
 }) {
+  const sanitizedValue = operatorSafeDisplayText(field.value);
+  const rows = getDraftTextAreaRows(fieldName, sanitizedValue);
+
   return (
-    <label className="field-block">
+    <label className={`field-block field-block-${fieldName}`}>
       <span>{label}</span>
-      {multiline ? (
-        <textarea rows={5} value={field.value} onChange={(event) => onChange(event.currentTarget.value)} />
-      ) : (
-        <input value={field.value} onChange={(event) => onChange(event.currentTarget.value)} />
-      )}
-      <small>
-        Confidence {Math.round(field.confidence * 100)}% · {field.evidence}
-      </small>
+      <textarea
+        aria-label={label}
+        data-auto-fit-field={fieldName}
+        rows={rows}
+        spellCheck="true"
+        value={sanitizedValue}
+        wrap="soft"
+        onChange={(event) => onChange(event.currentTarget.value)}
+      />
     </label>
   );
 }
@@ -3653,8 +5265,8 @@ function ReadOnlyField({ field, label }: { field?: FieldDraft; label: string }) 
   return (
     <div className="readonly-field">
       <span>{label}</span>
-      <strong>{field?.value ?? "Not set"}</strong>
-      {field?.evidence ? <small>{field.evidence}</small> : null}
+      <strong>{operatorSafeDisplayText(field?.value ?? "Not set")}</strong>
+      {field?.evidence ? <small>{operatorSafeDisplayText(field.evidence)}</small> : null}
     </div>
   );
 }
@@ -3670,7 +5282,7 @@ function RiskControlGate({
   return (
     <section className="risk-control-gate" aria-labelledby="risk-control-title">
       <div>
-        <p className="eyebrow">Risk Control Gate</p>
+        <p className="eyebrow">Risk Control</p>
         <h3 id="risk-control-title">Automate drafting, not accountability.</h3>
         <p>The app does not submit, close, or update real tickets automatically.</p>
       </div>
@@ -3717,7 +5329,7 @@ function FieldReviewChecklist({
           <span>{t.checklistReviewedLocally}</span>
         </div>
         <span aria-hidden="true" className="details-indicator">
-          ▾
+          <WorkbenchIcon name="chevron" />
         </span>
       </summary>
 
@@ -3907,7 +5519,7 @@ function ControlledQaSingleTicketSmokePanel({
         <h3 id="qa-safe-scope-title">First smoke safe scope</h3>
         <ul>
           <li>Dry-run first: review the local field mapping and Excel row preview only.</li>
-          <li>Manual copy only: Alan copies or types values; the app never fills ServiceNow.</li>
+          <li>Manual copy only: the operator copies or types values; the app never fills ServiceNow.</li>
           <li>Save-only readiness: Submit, Update, and Close remain deferred to a later checkpoint.</li>
         </ul>
       </section>
@@ -3924,7 +5536,7 @@ function ControlledQaSingleTicketSmokePanel({
 
       <section className="qa-smoke-approval-matrix" aria-labelledby="qa-approval-phrases-title">
         <h3 id="qa-approval-phrases-title">Action-specific approval phrases</h3>
-        <p>Each real write action needs its own exact Alan phrase. One approval never covers another action.</p>
+        <p>Each real write action needs its own exact operator phrase. One approval never covers another action.</p>
         <dl>
           {plan.writeActionApprovalPhrases.map((item) => (
             <div key={item.action}>
@@ -3998,6 +5610,400 @@ function ControlledQaSingleTicketSmokePanel({
   );
 }
 
+function getSdaOperatorApi(): SdaOperatorApi | undefined {
+  return (globalThis as unknown as { sdaOperator?: SdaOperatorApi }).sdaOperator;
+}
+
+function operatorActionLabel(action: OperatorAction): string {
+  switch (action) {
+    case "launch":
+      return "Start test browser";
+    case "verify":
+      return "Check current ticket page";
+    case "autofill":
+      return "Autofill allowed fields";
+  }
+}
+
+function operatorActionWorkingDetails(action: OperatorAction): string {
+  return `${operatorActionLabel(action)} is running. If it does not finish, the app clears this local waiting state automatically. No ServiceNow action is taken.`;
+}
+
+type OperatorActionFinalStateInput =
+  | { action: OperatorAction; kind: "response"; response: OperatorRuntimeResponse }
+  | { action: OperatorAction; error: unknown; kind: "error" }
+  | { action: OperatorAction; kind: "timeout"; timeoutMs?: number }
+  | { action: OperatorAction; kind: "unmount" };
+
+type OperatorActionFinalState = {
+  action: OperatorAction;
+  shouldApplyState: boolean;
+  operatorBusyAction: OperatorAction | null;
+  operatorStatus: OperatorActionStatus;
+  operatorLastResponse: OperatorRuntimeResponse | null;
+};
+
+export function buildOperatorActionFinalState(input: OperatorActionFinalStateInput): OperatorActionFinalState {
+  if (input.kind === "unmount") {
+    return {
+      action: input.action,
+      shouldApplyState: false,
+      operatorBusyAction: null,
+      operatorStatus: defaultOperatorActionStatus(),
+      operatorLastResponse: null
+    };
+  }
+
+  if (input.kind === "response") {
+    return {
+      action: input.action,
+      shouldApplyState: true,
+      operatorBusyAction: null,
+      operatorStatus: operatorStatusFromResponse(input.action, input.response),
+      operatorLastResponse: input.response
+    };
+  }
+
+  if (input.kind === "timeout") {
+    const timeoutSeconds = Math.max(1, Math.round((input.timeoutMs ?? OPERATOR_RUNTIME_ACTION_TIMEOUT_MS) / 1000));
+    return {
+      action: input.action,
+      shouldApplyState: true,
+      operatorBusyAction: null,
+      operatorStatus: {
+        label: `${operatorActionLabel(input.action)} took too long`,
+        tone: "blocked",
+        details: `The app cleared the local waiting state after ${timeoutSeconds} seconds so you can retry Start test browser. No ServiceNow action was taken.`
+      },
+      operatorLastResponse: buildOperatorTimeoutResponse(input.action)
+    };
+  }
+
+  return {
+    action: input.action,
+    shouldApplyState: true,
+    operatorBusyAction: null,
+    operatorStatus: {
+      label: `${operatorActionLabel(input.action)} failed`,
+      tone: "blocked",
+      details: sanitizeOperatorRuntimeError(input.error)
+    },
+    operatorLastResponse: null
+  };
+}
+
+function buildOperatorTimeoutResponse(action: OperatorAction): OperatorRuntimeResponse {
+  if (action === "launch") {
+    return { ok: false, launch: { status: "timeout", blockedReason: "browser-step-timeout" } };
+  }
+  if (action === "verify") {
+    return { ok: false, fieldInspection: { status: "timeout", blockedReason: "browser-step-timeout" } };
+  }
+  return { ok: false, runtime: { status: "timeout", blockedReason: "browser-step-timeout" } };
+}
+
+function sanitizeOperatorRuntimeError(_error: unknown): string {
+  return "Desktop backend failed before returning a sanitized operator result. Check current ticket page remains disabled; retry Start test browser from the desktop app.";
+}
+
+function defaultOperatorActionStatus(): OperatorActionStatus {
+  return {
+    label: "Ready",
+    tone: "idle",
+    details: "Use the buttons below to start the separate QA test browser, check the current ticket page, then autofill allowed fields for manual review."
+  };
+}
+
+function initialOperatorStatusFromResponse(response: OperatorRuntimeResponse | null): OperatorActionStatus {
+  if (!response) {
+    return defaultOperatorActionStatus();
+  }
+  if (response.launch) {
+    return operatorStatusFromResponse("launch", response);
+  }
+  if (response.runtime) {
+    return operatorStatusFromResponse("autofill", response);
+  }
+  if (response.fieldInspection || response.defaultPlan) {
+    return operatorStatusFromResponse("verify", response);
+  }
+  return defaultOperatorActionStatus();
+}
+
+function sanitizeOperatorRuntimeLogPath(value?: string): string | undefined {
+  const normalized = value?.trim().replace(/\\/g, "/");
+  if (!normalized) {
+    return undefined;
+  }
+
+  const marker = ".local/startup-logs/";
+  const relativeCandidate = normalized.startsWith(marker)
+    ? normalized
+    : normalized.includes(`/${marker}`)
+      ? `${marker}${normalized.slice(normalized.lastIndexOf(`/${marker}`) + marker.length + 1)}`
+      : undefined;
+
+  return relativeCandidate && /^\.local\/startup-logs\/[A-Za-z0-9._-]+\.jsonl$/.test(relativeCandidate)
+    ? relativeCandidate
+    : undefined;
+}
+
+function operatorRuntimeLogDetails(response: OperatorRuntimeResponse): string {
+  const runtimeLogPath = sanitizeOperatorRuntimeLogPath(response.launch?.runtimeLogPath);
+  return runtimeLogPath ? ` Sanitized browser log: ${runtimeLogPath}.` : "";
+}
+
+function sanitizeOperatorDiagnosticText(value: string | undefined, fallback: string): string {
+  const raw = value?.trim() || fallback;
+  return raw
+    .replace(/\bsha256:[a-f0-9]{32,}\b/gi, "[REDACTED_FINGERPRINT]")
+    .replace(/\b[a-f0-9]{64,}\b/gi, "[REDACTED_FINGERPRINT]")
+    .replace(/\bauthorization\s*:\s*(?:bearer|basic)?\s*[^\s<>"')]+/gi, "[REDACTED_SECRET]")
+    .replace(/\b[A-Za-z0-9_-]*(?:api[_-]?key|token|secret|password|passwd|cookie|session|auth)[A-Za-z0-9_-]*\s*[:=]\s*(?:(?:bearer|basic)\s+)?[^\s<>"')]+/gi, "[REDACTED_SECRET]")
+    .replace(/\bCDP\b/gi, "browser connection")
+    .replace(/\bDevTools\b/gi, "browser diagnostics")
+    .replace(/startup\/runtime log path/gi, "startup and browser log path")
+    .replace(/\b(?:https?|wss?):\/\/[^\s<>"')]+/gi, "[REDACTED_URL]")
+    .replace(/\b(?:127\.0\.0\.1|localhost):\d+\/[^\s<>"')]+/gi, "[REDACTED_URL]")
+    .replace(/\b(?:127\.0\.0\.1|localhost|0\.0\.0\.0):\d+\b/gi, "[REDACTED_URL]")
+    .replace(/\[::1\]:\d+\b/gi, "[REDACTED_URL]")
+    .replace(/\b(?:[A-Za-z0-9-]+\.)*(?:service-now|servicenow)[A-Za-z0-9.-]*(?::\d+)?(?:\/[^\s<>"')]+)?/gi, "[REDACTED_HOST]")
+    .replace(/\b(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?::\d+)?\/[^\s<>"')]+/g, "[REDACTED_URL]")
+    .replace(/\b[A-Za-z]:[\\/][^\s<>"')]+/g, "[REDACTED_PATH]")
+    .replace(/\\\\[A-Za-z0-9._$-]+\\[^\s<>"')]+/g, "[REDACTED_PATH]")
+    .replace(/\/(?:[^\s<>"')/]+\/)*[^\s<>"')]+/g, "[REDACTED_PATH]");
+}
+
+function operatorLaunchDetails(response: OperatorRuntimeResponse, fallbackStatus: string): string {
+  const baseDetails = response.ok
+    ? "A separate QA test browser is open. Log in and open an Incident form, then click Check current ticket page."
+    : sanitizeOperatorDiagnosticText(response.launch?.blockedReason, fallbackStatus);
+  return `${baseDetails}${operatorRuntimeLogDetails(response)}`;
+}
+
+function operatorStatusFromResponse(
+  action: OperatorAction,
+  response: OperatorRuntimeResponse
+): OperatorActionStatus {
+  if (action === "launch") {
+    const status = response.launch?.status ?? "unknown";
+    return response.ok
+      ? { label: "Browser connected", tone: "success", details: operatorLaunchDetails(response, status) }
+      : { label: "Browser connection blocked", tone: "blocked", details: operatorLaunchDetails(response, status) };
+  }
+  if (action === "verify") {
+    const plannedCount = response.defaultPlan?.plannedFields?.length ?? 0;
+    return response.ok
+      ? { label: "Current ticket page checked", tone: "success", details: `${plannedCount} fields are ready for local review. Autofill remains text-only; click Autofill allowed fields only after reviewing the preview.` }
+      : { label: "Page check blocked", tone: "blocked", details: sanitizeOperatorDiagnosticText(response.fieldInspection?.blockedReason ?? response.defaultPlan?.blockedReason, "Current page is not a verified QA Incident form.") };
+  }
+  const filledCount = response.runtime?.filledFields?.length ?? 0;
+  return response.ok
+    ? { label: "Autofill completed", tone: "success", details: `${filledCount} text fields were filled. Review manually in ServiceNow. This tool did not Save, Submit, Update, Resolve, Close, upload, email, or call ServiceNow API.` }
+    : { label: "Autofill blocked", tone: "blocked", details: sanitizeOperatorDiagnosticText(response.runtime?.blockedReason ?? response.defaultPlan?.blockedReason, "No field was changed.") };
+}
+
+function QaOperatorRuntimePanel({
+  busyAction,
+  cdpEndpointReady,
+  lastResponse,
+  mode,
+  targetReady,
+  verifiedPageFingerprintReady,
+  onAutofill,
+  onCollapse,
+  onLaunchBrowser,
+  onResetRuntime,
+  onVerify,
+  status,
+  targetLabel,
+  workbenchCopy
+}: {
+  busyAction: "launch" | "verify" | "autofill" | null;
+  cdpEndpointReady: boolean;
+  lastResponse: OperatorRuntimeResponse | null;
+  mode: WorkbenchEnvironmentMode;
+  targetReady: boolean;
+  verifiedPageFingerprintReady: boolean;
+  onAutofill: () => void;
+  onCollapse: () => void;
+  onLaunchBrowser: () => void;
+  onResetRuntime: () => void;
+  onVerify: () => void;
+  status: OperatorActionStatus;
+  targetLabel: string;
+  workbenchCopy: OperatorWorkbenchCopy;
+}) {
+  const canUseRuntime = isQaWorkbenchMode(mode);
+  const qaBoundCdpEndpointReady = canUseRuntime && cdpEndpointReady;
+  const qaBoundVerifiedPageFingerprintReady = qaBoundCdpEndpointReady && verifiedPageFingerprintReady;
+  const launchDisabled = !canUseRuntime || !targetReady || busyAction !== null;
+  const verifyDisabled = !canUseRuntime || !targetReady || !qaBoundCdpEndpointReady || busyAction !== null;
+  const autofillDisabled = !canUseRuntime || !targetReady || !qaBoundCdpEndpointReady || busyAction !== null || !qaBoundVerifiedPageFingerprintReady;
+  const launchDisabledReason = !canUseRuntime
+    ? workbenchCopy.runtime.disabledProductionReason
+    : !targetReady
+      ? workbenchCopy.runtime.disabledTargetReason
+      : busyAction !== null
+        ? workbenchCopy.runtime.disabledBusyReason
+        : workbenchCopy.runtime.startReadyReason;
+  const verifyDisabledReason = !canUseRuntime
+    ? workbenchCopy.runtime.disabledProductionReason
+    : !targetReady
+      ? workbenchCopy.runtime.disabledTargetReason
+      : busyAction !== null
+        ? workbenchCopy.runtime.disabledBusyReason
+        : !qaBoundCdpEndpointReady
+          ? workbenchCopy.runtime.verifyCdpReason
+          : workbenchCopy.runtime.verifyReadyReason;
+  const autofillDisabledReason = !canUseRuntime
+    ? workbenchCopy.runtime.disabledProductionReason
+    : !targetReady
+      ? workbenchCopy.runtime.disabledTargetReason
+      : busyAction !== null
+        ? workbenchCopy.runtime.disabledBusyReason
+        : !qaBoundCdpEndpointReady
+          ? workbenchCopy.runtime.verifyCdpReason
+          : !qaBoundVerifiedPageFingerprintReady
+            ? workbenchCopy.runtime.autofillVerifyReason
+            : workbenchCopy.runtime.autofillReadyReason;
+  const runtimeStatusChip =
+    status.tone === "working"
+      ? workbenchCopy.runtime.statusBusy
+      : status.tone === "blocked"
+        ? workbenchCopy.runtime.statusBlocked
+        : status.tone === "success"
+          ? workbenchCopy.runtime.statusSuccess
+          : workbenchCopy.runtime.statusReady;
+  const runtimeStatusDescription = qaBoundVerifiedPageFingerprintReady
+    ? workbenchCopy.runtime.statusVerified
+    : qaBoundCdpEndpointReady
+      ? workbenchCopy.runtime.statusCdpReady
+      : workbenchCopy.runtime.statusWaiting;
+  const lastPlanCount = lastResponse?.defaultPlan?.plannedFields?.length ?? 0;
+  const filledCount = lastResponse?.runtime?.filledFields?.length ?? 0;
+  const evidenceText = lastResponse
+    ? `${workbenchCopy.runtime.sanitizedEvidence}${lastPlanCount > 0 ? ` ${lastPlanCount} planned text fields.` : ""}${filledCount > 0 ? ` ${filledCount} filled text fields.` : ""}`
+    : workbenchCopy.runtime.noEvidence;
+  const actionCards = [
+    {
+      step: "1",
+      title: workbenchCopy.runtime.startTitle,
+      description: workbenchCopy.runtime.startDescription,
+      buttonText: busyAction === "launch" ? workbenchCopy.runtime.starting : workbenchCopy.runtime.startTitle,
+      disabled: launchDisabled,
+      reason: launchDisabledReason,
+      onClick: onLaunchBrowser,
+      busy: busyAction === "launch",
+      ready: !launchDisabled
+    },
+    {
+      step: "2",
+      title: workbenchCopy.runtime.verifyTitle,
+      description: workbenchCopy.runtime.verifyDescription,
+      buttonText: busyAction === "verify" ? workbenchCopy.runtime.verifying : workbenchCopy.runtime.verifyTitle,
+      disabled: verifyDisabled,
+      reason: verifyDisabledReason,
+      onClick: onVerify,
+      busy: busyAction === "verify",
+      ready: !verifyDisabled
+    },
+    {
+      step: "3",
+      title: workbenchCopy.runtime.autofillTitle,
+      description: workbenchCopy.runtime.autofillDescription,
+      buttonText: busyAction === "autofill" ? workbenchCopy.runtime.autofilling : workbenchCopy.runtime.autofillTitle,
+      disabled: autofillDisabled,
+      reason: autofillDisabledReason,
+      onClick: onAutofill,
+      busy: busyAction === "autofill",
+      ready: !autofillDisabled
+    }
+  ];
+
+  return (
+    <section className="operator-runtime-panel target-runtime-panel" aria-labelledby="runtime-rail-title">
+      <header className="runtime-panel-header">
+        <div>
+          <p className="eyebrow">{workbenchCopy.runtime.eyebrow}</p>
+          <h2 id="runtime-rail-title">{workbenchCopy.runtime.title}</h2>
+        </div>
+        <div className="runtime-panel-header-actions">
+          <span className={`runtime-status-chip ${status.tone}`}>{runtimeStatusChip}</span>
+          <button
+            aria-label={workbenchCopy.runtime.collapseRuntime}
+            className="runtime-rail-collapse-button"
+            type="button"
+            onClick={onCollapse}
+          >
+            <WorkbenchIcon name="chevron" />
+          </button>
+        </div>
+      </header>
+
+      <div className="runtime-action-list" aria-label={workbenchCopy.runtime.title}>
+        {actionCards.map((action) => (
+          <article
+            className={action.busy ? "runtime-action-card working" : action.ready ? "runtime-action-card ready" : "runtime-action-card blocked"}
+            key={action.step}
+          >
+            <div className="runtime-action-topline">
+              <span className="runtime-step-number">{action.step}</span>
+              <span className={action.busy ? "runtime-mini-chip working" : action.ready ? "runtime-mini-chip ready" : "runtime-mini-chip blocked"}>
+                {action.busy
+                  ? workbenchCopy.runtime.statusBusy
+                  : action.ready
+                    ? workbenchCopy.runtime.readyChip
+                    : workbenchCopy.runtime.waitingChip}
+              </span>
+            </div>
+            <h3>{action.title}</h3>
+            <p>{action.description}</p>
+            <button disabled={action.disabled} type="button" onClick={action.onClick}>
+              <span>{action.step} {action.buttonText}</span>
+              <WorkbenchIcon name="chevron" />
+            </button>
+            <small>{action.reason}</small>
+          </article>
+        ))}
+      </div>
+
+      <section className="runtime-status-card" aria-labelledby="runtime-status-title">
+        <div>
+          <p className="eyebrow">{workbenchCopy.runtime.sanitizedMode}</p>
+          <h3 id="runtime-status-title">{workbenchCopy.runtime.runtimeStatus}</h3>
+        </div>
+        <dl>
+          <div>
+            <dt>{workbenchCopy.runtime.sanitizedMode}</dt>
+            <dd>{targetLabel}</dd>
+          </div>
+          <div>
+            <dt>{workbenchCopy.runtime.cdpLabel}</dt>
+            <dd>{qaBoundCdpEndpointReady ? workbenchCopy.runtime.cdpReady : workbenchCopy.runtime.cdpWaiting}</dd>
+          </div>
+        </dl>
+        <p>{runtimeStatusDescription}</p>
+        <strong className="runtime-status-label">{status.label}</strong>
+        <p className="runtime-status-detail">{status.details}</p>
+        <small>{evidenceText}</small>
+        <button className="runtime-reset-button" type="button" onClick={onResetRuntime}>
+          {workbenchCopy.runtime.resetRuntimeState}
+        </button>
+        <small>{workbenchCopy.runtime.resetRuntimeStateHelper}</small>
+      </section>
+
+      <section className="runtime-safety-note" aria-labelledby="runtime-safety-title">
+        <WorkbenchIcon name="shield" />
+        <div>
+          <h3 id="runtime-safety-title">{workbenchCopy.runtime.safetyTitle}</h3>
+          <p>{workbenchCopy.runtime.safetyNote}</p>
+        </div>
+      </section>
+    </section>
+  );
+}
+
 function QaTextFieldAutofillPanel({
   approvalPhrase,
   dedicatedProfileConfirmed,
@@ -4025,14 +6031,14 @@ function QaTextFieldAutofillPanel({
   const panelStopMessage =
     plan.status === "ready-for-autofill"
       ? plan.stopMessage
-      : "Planning gate only: browser text-field execution remains blocked until a later selector-verified execution slice is reviewed.";
+      : "Planning check only: browser text-field execution remains blocked until a later selector-verified execution slice is reviewed.";
 
   return (
     <section className="qa-autofill-panel qa-smoke-panel" aria-labelledby="qa-autofill-title">
       <header className="qa-smoke-header">
         <div>
-          <p className="eyebrow">QA browser-assisted text-field autofill planning gate</p>
-          <h2 id="qa-autofill-title">QA browser-assisted text-field autofill planning gate</h2>
+          <p className="eyebrow">QA browser-assisted text-field autofill planning check</p>
+          <h2 id="qa-autofill-title">QA browser-assisted text-field autofill planning check</h2>
           <p>
             Planning/review only in this slice. Text fields only: Short description, Description, Work notes.
             Autofill approval does not approve Save, Submit, Update, or Close.
@@ -4046,7 +6052,7 @@ function QaTextFieldAutofillPanel({
       <section className="qa-smoke-safe-scope" aria-labelledby="qa-autofill-safe-scope-title">
         <h3 id="qa-autofill-safe-scope-title">First autofill planning safe scope</h3>
         <ul>
-          <li>QA/dev only, single ticket only, dedicated/tool-owned Chromium profile only, manual login only.</li>
+          <li>QA/dev only, single ticket only, tool-owned browser profile only, manual login only.</li>
           <li>Text fields only: Short description, Description, Work notes.</li>
           <li>Selector verification is mandatory; missing or mismatched selectors keep this panel blocked.</li>
           <li>No ServiceNow API, bulk fill, browser artifacts, auth-material export, or external AI on QA content.</li>
@@ -4087,7 +6093,7 @@ function QaTextFieldAutofillPanel({
           type="checkbox"
           onChange={(event) => onDedicatedProfileConfirmedChange(event.currentTarget.checked)}
         />
-        <span>Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.</span>
+        <span>Tool-owned browser profile confirmed: this autofill test uses only the workbench profile.</span>
       </label>
 
       <label className="qa-smoke-approval">
@@ -4124,9 +6130,9 @@ function QaTextFieldAutofillPanel({
 }
 
 const qaAutofillFieldFallbacks = [
-  { key: "shortDescription", label: "Short description", value: "Blocked until the safe gate is ready." },
-  { key: "description", label: "Description", value: "Blocked until the safe gate is ready." },
-  { key: "workNotes", label: "Work notes", value: "Blocked until the safe gate is ready." }
+  { key: "shortDescription", label: "Short description", value: "Blocked until the safe check is ready." },
+  { key: "description", label: "Description", value: "Blocked until the safe check is ready." },
+  { key: "workNotes", label: "Work notes", value: "Blocked until the safe check is ready." }
 ] as const;
 
 function MockFormField({
@@ -4159,6 +6165,184 @@ function MockFormField({
 
 function fieldValue(field: FieldDraft | undefined, fallback = "Not set"): string {
   return field?.value ?? fallback;
+}
+
+function operatorSafeDisplayText(value: string): string {
+  return value
+    .replaceAll("QA TEST ONLY - Fake ", "")
+    .replaceAll("QA TEST ONLY - ", "")
+    .replaceAll("Fake ", "Sanitized ")
+    .replaceAll("fake sanitized", "sanitized")
+    .replaceAll("Fake", "Sanitized")
+    .replaceAll("Demo", "Sanitized")
+    .replaceAll("demo", "sanitized")
+    .replaceAll("sanitized sanitized", "sanitized")
+    .replaceAll("Sanitized sanitized", "Sanitized")
+    .replaceAll("Sanitized Sanitized", "Sanitized");
+}
+
+function WorkbenchIcon({ name }: { name: WorkbenchIconName }) {
+  const commonProps = {
+    "aria-hidden": true,
+    className: "workbench-svg-icon",
+    focusable: false,
+    viewBox: "0 0 24 24"
+  } as const;
+
+  switch (name) {
+    case "app":
+      return (
+        <svg {...commonProps}>
+          <path d="M12 3.5 19.5 8v8L12 20.5 4.5 16V8L12 3.5Z" />
+          <path d="M8.5 12.2h7M9 9.4h6M9 15h4.5" />
+        </svg>
+      );
+    case "inbox":
+      return (
+        <svg {...commonProps}>
+          <path d="M4 6.5h16v9.2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6.5Z" />
+          <path d="M4 13h4.4l1.5 2h4.2l1.5-2H20" />
+        </svg>
+      );
+    case "workbench":
+      return (
+        <svg {...commonProps}>
+          <path d="M5 5h6v6H5V5Zm8 0h6v6h-6V5ZM5 13h6v6H5v-6Zm8 0h6v6h-6v-6Z" />
+        </svg>
+      );
+    case "knowledge":
+      return (
+        <svg {...commonProps}>
+          <path d="M6 5.5h8.5A3.5 3.5 0 0 1 18 9v9.5H8A2 2 0 0 1 6 16.5v-11Z" />
+          <path d="M9 8.5h5M9 12h6" />
+        </svg>
+      );
+    case "history":
+      return (
+        <svg {...commonProps}>
+          <path d="M6.5 8.4A6.5 6.5 0 1 1 5.8 14" />
+          <path d="M6.5 5.5v3.2h3.1M12 8v4.5l3 1.8" />
+        </svg>
+      );
+    case "search":
+      return (
+        <svg {...commonProps}>
+          <circle cx="10.5" cy="10.5" r="5.5" />
+          <path d="m15 15 4 4" />
+        </svg>
+      );
+    case "settings":
+      return (
+        <svg {...commonProps}>
+          <path d="M12 8.3a3.7 3.7 0 1 1 0 7.4 3.7 3.7 0 0 1 0-7.4Z" />
+          <path d="M4.8 13.5v-3l2-.7.6-1.4-.9-1.9 2.1-2.1 1.9.9 1.5-.6.6-2h3l.7 2 1.4.6 1.9-.9 2.1 2.1-.9 1.9.6 1.4 2 .7v3l-2 .7-.6 1.4.9 1.9-2.1 2.1-1.9-.9-1.4.6-.7 2h-3l-.6-2-1.5-.6-1.9.9-2.1-2.1.9-1.9-.6-1.4-2-.7Z" />
+        </svg>
+      );
+    case "source":
+      return (
+        <svg {...commonProps}>
+          <path d="M5.5 4.5h9L18.5 9v10.5h-13v-15Z" />
+          <path d="M14.5 4.5V9h4M8.5 12h7M8.5 15h5" />
+        </svg>
+      );
+    case "summary":
+      return (
+        <svg {...commonProps}>
+          <path d="M5 5h14v14H5V5Z" />
+          <path d="M8 9h8M8 12h8M8 15h5" />
+        </svg>
+      );
+    case "draft":
+      return (
+        <svg {...commonProps}>
+          <path d="M5.5 19 7 14.8 15.8 6a2 2 0 0 1 2.8 2.8L9.8 17.6 5.5 19Z" />
+          <path d="M14.5 7.3 17.3 10" />
+        </svg>
+      );
+    case "shield":
+      return (
+        <svg {...commonProps}>
+          <path d="M12 3.8 19 6v5.5c0 4.4-2.9 7.2-7 8.7-4.1-1.5-7-4.3-7-8.7V6l7-2.2Z" />
+          <path d="m8.8 12.2 2.1 2.1 4.5-5" />
+        </svg>
+      );
+    case "globe":
+      return (
+        <svg {...commonProps}>
+          <circle cx="12" cy="12" r="8" />
+          <path d="M4 12h16M12 4c2.2 2.3 3.2 4.9 3.2 8s-1 5.7-3.2 8M12 4c-2.2 2.3-3.2 4.9-3.2 8s1 5.7 3.2 8" />
+        </svg>
+      );
+    case "chevron":
+    default:
+      return (
+        <svg {...commonProps}>
+          <path d="m8 9.5 4 4 4-4" />
+        </svg>
+      );
+  }
+}
+
+function getWorkbenchEnvironmentChipLabel(mode: WorkbenchEnvironmentMode, workbenchCopy: OperatorWorkbenchCopy): string {
+  return mode === "production-shadow" ? workbenchCopy.environment.production : workbenchCopy.environment.qa;
+}
+
+function getWorkbenchSettingsEnvironmentLabel(mode: WorkbenchEnvironmentMode, workbenchCopy: OperatorWorkbenchCopy): string {
+  return mode === "production-shadow" ? workbenchCopy.settings.productionEnvironment : workbenchCopy.settings.qaTestEnvironment;
+}
+
+function getWorkbenchSettingsUrlLabel(mode: WorkbenchEnvironmentMode, workbenchCopy: OperatorWorkbenchCopy): string {
+  return mode === "production-shadow" ? workbenchCopy.settings.productionUrl : workbenchCopy.settings.qaUrl;
+}
+
+function getWorkbenchSettingsUrlDescription(mode: WorkbenchEnvironmentMode, workbenchCopy: OperatorWorkbenchCopy): string {
+  return mode === "production-shadow" ? workbenchCopy.settings.urlDescriptionProduction : workbenchCopy.settings.urlDescriptionQa;
+}
+
+function getWorkbenchSettingsSubmitPolicy(mode: WorkbenchEnvironmentMode, workbenchCopy: OperatorWorkbenchCopy): string {
+  return mode === "production-shadow" ? workbenchCopy.settings.productionPolicy : workbenchCopy.settings.qaSubmitPolicy;
+}
+
+
+function languageDisplayLabel(language: LanguageCode): string {
+  return languageOptions.find((option) => option.code === language)?.label ?? language;
+}
+
+function languageShortLabel(language: LanguageCode): string {
+  switch (language) {
+    case "en-US":
+      return "EN";
+    case "zh-CN":
+      return "简";
+    case "zh-TW":
+      return "繁";
+    case "es-ES":
+      return "ES";
+  }
+}
+
+function formatSourceTime(receivedAt: string): string {
+  return receivedAt.split(" ").at(1) ?? receivedAt;
+}
+
+function operatorShortSourceTitle(subject: string): string {
+  const title = operatorSafeDisplayText(subject);
+  return title.length > 48 ? `${title.slice(0, 45).trim()}…` : title;
+}
+
+function formatQueueStatus(status: DemoQueueStatus, workbenchCopy: OperatorWorkbenchCopy): string {
+  switch (status) {
+    case "New":
+      return workbenchCopy.list.new;
+    case "Reviewed":
+      return workbenchCopy.list.inReview;
+    case "Drafted":
+      return workbenchCopy.list.drafted;
+    case "Done":
+      return workbenchCopy.list.done;
+    case "Skipped":
+      return workbenchCopy.list.skipped;
+  }
 }
 
 function statusClassName(status: DemoQueueStatus): string {

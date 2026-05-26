@@ -13,6 +13,7 @@ coverage/
 # Local runtime data - never commit sessions, cookies, screenshots, logs, DBs
 .local/
 .local*/
+.codegraph/
 **/.local/
 **/.local*/
 browser-profiles/
