@@ -16,7 +16,7 @@
 2. The real autofill code exists only as a lower-level CLI runtime: `sda qa autofill-runtime`.
 3. The launch path is split and awkward: the current CLI can plan/smoke a browser, but the actual CDP-enabled Windows Chromium start was being done manually through PowerShell.
 4. The manual PowerShell message `Started dedicated Chromium with CDP` was misleading because it did not prove `/json/version` readiness.
-5. The Windows-dedicated path validation had a WSL gap: real `%LOCALAPPDATA%\\ServiceNowAutomation\\...` paths were not accepted unless `%LOCALAPPDATA%` existed in the Node process.
+5. The Windows-dedicated path validation had a WSL gap: `%LOCALAPPDATA%\ServiceNowAutomation\...` runtime paths were not accepted unless `%LOCALAPPDATA%` existed in the Node process.
 
 ## Immediate product behavior
 

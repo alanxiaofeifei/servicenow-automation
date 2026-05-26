@@ -97,6 +97,7 @@ describe("QA text-field autofill runtime", () => {
 
       expect(result.status).toBe("blocked");
       expect(result.blockedReason).toBe(testCase.expectedReason);
+      expect(result.pageFingerprint).toBeUndefined();
       expect(result.safety.browserAutomationCalled).toBe(false);
       expect(driver.inspectCalls).toBe(0);
       expect(driver.fillCalls).toHaveLength(0);
@@ -181,6 +182,7 @@ describe("QA text-field autofill runtime", () => {
 
     expect(result.status).toBe("blocked");
     expect(result.blockedReason).toBe("approval-stale-after-page-change");
+    expect(result.pageFingerprint).toBeUndefined();
     expect(driver.fillCalls).toHaveLength(0);
   });
 
@@ -207,6 +209,7 @@ describe("QA text-field autofill runtime", () => {
 
       expect(result.status).toBe("blocked");
       expect(result.blockedReason).toBe(testCase.expectedReason);
+      expect(result.pageFingerprint).toBeUndefined();
       expect(driver.fillCalls).toHaveLength(0);
     }
   });
@@ -225,6 +228,7 @@ describe("QA text-field autofill runtime", () => {
     });
     expect(unexpectedRequiredResult.status).toBe("blocked");
     expect(unexpectedRequiredResult.blockedReason).toBe("unexpected-required-field");
+    expect(unexpectedRequiredResult.pageFingerprint).toBeUndefined();
     expect(unexpectedRequired.fillCalls).toHaveLength(0);
 
     const wrongHost = fakeDriver([inspection({ currentUrl: "https://other.service-now.example.invalid/nav_to.do" })]);
@@ -240,6 +244,7 @@ describe("QA text-field autofill runtime", () => {
     });
     expect(wrongHostResult.status).toBe("blocked");
     expect(wrongHostResult.blockedReason).toBe("current-page-target-denied");
+    expect(wrongHostResult.pageFingerprint).toBeUndefined();
     expect(wrongHost.fillCalls).toHaveLength(0);
   });
 });
@@ -330,6 +335,110 @@ describe("QA incident default field read-only runtime", () => {
     }
   });
 
+  it("fails closed when the only page target does not match the configured host", async () => {
+    const restoreFetch = installFakeCdpTargetList([
+      {
+        type: "page",
+        url: "https://other.example.invalid/nav_to.do?uri=incident.do",
+        webSocketDebuggerUrl: localCdpWebSocketUrl("single-other-incident")
+      }
+    ]);
+
+    try {
+      await expect(
+        qaAutofillRuntimeTestHooks.resolveCdpPageWebSocketUrl(
+          localCdpHttpEndpoint(),
+          "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
+        )
+      ).rejects.toThrow("Unable to select a single current browser page target for QA verify-only inspection.");
+    } finally {
+      restoreFetch();
+    }
+  });
+
+  it("requires a configured target before selecting any CDP page target", async () => {
+    const restoreFetch = installFakeCdpTargetList([
+      {
+        type: "page",
+        url: "https://other.example.invalid/nav_to.do?uri=incident.do",
+        webSocketDebuggerUrl: localCdpWebSocketUrl("unconfigured-target")
+      }
+    ]);
+
+    try {
+      await expect(qaAutofillRuntimeTestHooks.resolveCdpPageWebSocketUrl(localCdpHttpEndpoint())).rejects.toThrow(
+        "Unable to select a single current browser page target for QA verify-only inspection."
+      );
+    } finally {
+      restoreFetch();
+    }
+  });
+
+  it("rejects direct page WebSocket endpoints before connecting to an unverified target", async () => {
+    const fetchProbe = installCdpFetchProbe();
+
+    try {
+      await expect(
+        qaAutofillRuntimeTestHooks.resolveCdpPageWebSocketUrl(
+          localCdpWebSocketUrl("unverified-direct-page"),
+          "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
+        )
+      ).rejects.toThrow("CDP endpoint must be the local browser HTTP endpoint so the page target can be verified.");
+      expect(fetchProbe.calls).toBe(0);
+    } finally {
+      fetchProbe.restore();
+    }
+  });
+
+  it.each([
+    {
+      name: "non-local HTTP",
+      endpoint: "http://cdp.example.invalid:9222",
+      expectedMessage: "CDP endpoint must be local and must use http:// or ws://.",
+      forbiddenFragments: ["cdp.example.invalid"]
+    },
+    {
+      name: "non-local HTTPS",
+      endpoint: "https://cdp.example.invalid:9222",
+      expectedMessage: "CDP endpoint must be local and must use http:// or ws://.",
+      forbiddenFragments: ["cdp.example.invalid"]
+    },
+    {
+      name: "loopback userinfo",
+      endpoint: `${["http", "://local-user", String.fromCharCode(64), loopbackCdpHost()].join("")}:9222`,
+      expectedMessage: "CDP endpoint must be local and must use http:// or ws://.",
+      forbiddenFragments: ["local-user", loopbackCdpHost()]
+    },
+    {
+      name: "malformed",
+      endpoint: "not-a-cdp-endpoint",
+      expectedMessage: "CDP endpoint must be a local http:// or ws:// URL.",
+      forbiddenFragments: ["not-a-cdp-endpoint"]
+    }
+  ])("rejects $name CDP endpoints before fetching target list", async ({ endpoint, expectedMessage, forbiddenFragments }) => {
+    const fetchProbe = installCdpFetchProbe();
+
+    try {
+      let thrown: Error | undefined;
+      try {
+        await qaAutofillRuntimeTestHooks.resolveCdpPageWebSocketUrl(
+          endpoint,
+          "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
+        );
+      } catch (error) {
+        thrown = error as Error;
+      }
+
+      expect(thrown?.message).toBe(expectedMessage);
+      for (const fragment of forbiddenFragments) {
+        expect(thrown?.message).not.toContain(fragment);
+      }
+      expect(fetchProbe.calls).toBe(0);
+    } finally {
+      fetchProbe.restore();
+    }
+  });
+
   it("inspects Incident controls from same-origin frames without relying on top-window element constructors", async () => {
     const frameDocument = fakeIncidentDocument([
       fakeIncidentDomControl("input", { name: "incident.short_description", "aria-label": "Short description", required: "true" }),
@@ -353,6 +462,24 @@ describe("QA incident default field read-only runtime", () => {
       ]);
       expect(result.fields.map((field) => field.type)).toEqual(["text", "textarea", "textarea"]);
       expect(result.fields[0]).toMatchObject({ required: true, starred: false, writable: true, valuePresent: false });
+    } finally {
+      restoreGlobals();
+    }
+  });
+
+  it("checks the configured target before incident field DOM inspection", async () => {
+    const queryProbe = { calls: 0 };
+    const restoreGlobals = installFakeBrowserGlobals({
+      controls: [fakeIncidentDomControl("input", { name: "incident.short_description" })],
+      href: "https://other.example.invalid/nav_to.do",
+      queryProbe
+    });
+
+    try {
+      const result = await qaAutofillRuntimeTestHooks.incidentFieldInspectionScript("qa.service-now.example.invalid");
+
+      expect(result).toEqual({ currentUrl: "", pageFingerprint: "", fields: [] });
+      expect(queryProbe.calls).toBe(0);
     } finally {
       restoreGlobals();
     }
@@ -411,6 +538,7 @@ describe("QA incident default field read-only runtime", () => {
 
     expect(result.status).toBe("blocked");
     expect(result.blockedReason).toBe("current-page-target-denied");
+    expect(result.pageFingerprint).toBeUndefined();
     expect(result.fields).toEqual([]);
     expect(result.safety.browserAutomationCalled).toBe(true);
   });
@@ -470,6 +598,7 @@ describe("QA incident default field autofill runtime", () => {
 
     expect(result.status).toBe("blocked");
     expect(result.blockedReason).toBe("approval-stale-after-page-change");
+    expect(result.pageFingerprint).toBeUndefined();
     expect(result.pageFingerprintMatched).toBe(false);
     expect(result.filledFields).toEqual([]);
     expect(result.blockedFields).toEqual([]);
@@ -543,6 +672,92 @@ describe("QA incident default field autofill runtime", () => {
     ]);
   });
 
+  it("blocks default text autofill when verify inspection reports duplicate visible writable controls", async () => {
+    const textOnlyFields = plannedIncidentDefaultFields().filter((field) =>
+      ["shortDescription", "description", "workNotes"].includes(field.key)
+    );
+    const driver = fakeDefaultFieldDriver(
+      incidentFieldInspection({
+        pageFingerprint: "stable-incident-form",
+        fields: incidentDefaultFields().map((field) =>
+          field.name === "incident.short_description"
+            ? incidentField({
+                name: "incident.short_description",
+                label: "Short description",
+                type: "text",
+                writable: true,
+                matchedControlCount: 2,
+                visibleControlCount: 2
+              })
+            : field
+        )
+      })
+    );
+
+    const result = await runQaIncidentDefaultFieldAutofillRuntime({
+      environment: qaEnvironment,
+      driver,
+      plannedFields: textOnlyFields,
+      execute: true,
+      approvalPageFingerprint: "stable-incident-form"
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(result.blockedReason).toBe("field-control-ambiguous");
+    expect(result.pageFingerprintMatched).toBe(true);
+    expect(result.filledFields).toEqual([]);
+    expect(result.blockedFields).toEqual([
+      {
+        key: "shortDescription",
+        label: "Short description",
+        controlType: "text",
+        valueLength: qaDefaultTextFieldValues.shortDescription.length,
+        blockedReason: "field-control-ambiguous"
+      }
+    ]);
+    expect(driver.fillCalls).toHaveLength(0);
+    expect(JSON.stringify(result)).not.toContain(qaDefaultTextFieldValues.shortDescription);
+  });
+
+  it("tolerates hidden/template duplicate text controls when exactly one visible writable control remains", async () => {
+    const textOnlyFields = plannedIncidentDefaultFields().filter((field) =>
+      ["shortDescription", "description", "workNotes"].includes(field.key)
+    );
+    const driver = fakeDefaultFieldDriver(
+      incidentFieldInspection({
+        pageFingerprint: "stable-incident-form",
+        fields: incidentDefaultFields().map((field) =>
+          field.name === "incident.short_description"
+            ? incidentField({
+                name: "incident.short_description",
+                label: "Short description",
+                type: "text",
+                writable: true,
+                matchedControlCount: 5,
+                visibleControlCount: 1
+              })
+            : field
+        )
+      })
+    );
+
+    const result = await runQaIncidentDefaultFieldAutofillRuntime({
+      environment: qaEnvironment,
+      driver,
+      plannedFields: textOnlyFields,
+      execute: true,
+      approvalPageFingerprint: "stable-incident-form"
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.filledFields.map((field) => field.key)).toEqual([
+      "shortDescription",
+      "description",
+      "workNotes"
+    ]);
+    expect(driver.fillCalls).toHaveLength(1);
+  });
+
   it("blocks execute-mode default-field autofill when the prior verify fingerprint is missing", async () => {
     const textOnlyFields = plannedIncidentDefaultFields().filter((field) =>
       ["shortDescription", "description", "workNotes"].includes(field.key)
@@ -582,6 +797,94 @@ describe("QA incident default field autofill runtime", () => {
     expect(result.blockedReason).toBe("approval-stale-after-page-change");
     expect(result.pageFingerprint).toBeUndefined();
     expect(driver.fillCalls).toHaveLength(0);
+  });
+
+  it("checks the configured target before invoking default-field fill inspection", async () => {
+    const textOnlyFields = plannedIncidentDefaultFields().filter((field) =>
+      ["shortDescription", "description", "workNotes"].includes(field.key)
+    );
+    const restoreGlobals = installFakeBrowserGlobals({
+      controls: [],
+      href: "https://other.example.invalid/nav_to.do"
+    });
+    const globals = globalThis as unknown as { __sdaInspectionProbe?: { calls: number } };
+    globals.__sdaInspectionProbe = { calls: 0 };
+
+    try {
+      const result = await qaAutofillRuntimeTestHooks.incidentDefaultFieldFillScript(
+        {
+          plannedFields: textOnlyFields,
+          expectedPageFingerprint: "verified-page",
+          allowedHost: "qa.service-now.example.invalid"
+        },
+        "async () => { globalThis.__sdaInspectionProbe.calls += 1; return { currentUrl: globalThis.location.href, pageFingerprint: 'verified-page', fields: [] }; }"
+      );
+
+      expect(result.status).toBe("blocked");
+      expect(result.blockedReason).toBe("current-page-target-denied");
+      expect(globals.__sdaInspectionProbe?.calls).toBe(0);
+    } finally {
+      delete globals.__sdaInspectionProbe;
+      restoreGlobals();
+    }
+  });
+
+  it.each([
+    {
+      key: "shortDescription" as const,
+      label: "Short description",
+      tagName: "input" as const,
+      name: "incident.short_description",
+      controlType: "text" as const
+    },
+    {
+      key: "description" as const,
+      label: "Description",
+      tagName: "textarea" as const,
+      name: "incident.description",
+      controlType: "textarea" as const
+    },
+    {
+      key: "workNotes" as const,
+      label: "Work notes",
+      tagName: "textarea" as const,
+      name: "incident.work_notes",
+      controlType: "textarea" as const
+    }
+  ])("blocks the browser-evaluated default-field sink for duplicate visible writable $label controls", async (fieldCase) => {
+    const firstControl = fakeIncidentDomControl(fieldCase.tagName, { name: fieldCase.name });
+    const secondControl = fakeIncidentDomControl(fieldCase.tagName, { name: fieldCase.name });
+    const restoreGlobals = installFakeBrowserGlobals({
+      controls: [firstControl, secondControl],
+      href: "https://qa.service-now.example.invalid/nav_to.do"
+    });
+
+    try {
+      const result = await qaAutofillRuntimeTestHooks.incidentDefaultFieldFillScript(
+        {
+          plannedFields: [{ key: fieldCase.key, label: fieldCase.label, value: "safe text", valueLength: 9 }],
+          expectedPageFingerprint: "verified-page",
+          allowedHost: "qa.service-now.example.invalid"
+        },
+        "async () => ({ currentUrl: globalThis.location.href, pageFingerprint: 'verified-page', fields: [] })"
+      );
+
+      expect(result.status).toBe("blocked");
+      expect(result.blockedReason).toBe("field-control-ambiguous");
+      expect(result.blockedFields).toEqual([
+        {
+          key: fieldCase.key,
+          label: fieldCase.label,
+          controlType: fieldCase.controlType,
+          valueLength: 9,
+          blockedReason: "field-control-ambiguous"
+        }
+      ]);
+      expect(firstControl.value).toBe("");
+      expect(secondControl.value).toBe("");
+    } finally {
+      restoreGlobals();
+    }
   });
 
   it("blocks the browser-evaluated default-field sink when an approved text key resolves to a select control", async () => {
@@ -674,7 +977,7 @@ function fakeIncidentDomControl(
   };
 }
 
-function fakeIncidentDocument(controls: FakeIncidentDomControl[]): FakeIncidentDocument {
+function fakeIncidentDocument(controls: FakeIncidentDomControl[], queryProbe?: { calls: number }): FakeIncidentDocument {
   const fakeWindow: FakeIncidentWindow = {
     frames: [],
     getComputedStyle: () => ({ display: "block", visibility: "visible" })
@@ -684,9 +987,11 @@ function fakeIncidentDocument(controls: FakeIncidentDomControl[]): FakeIncidentD
     readyState: "complete",
     defaultView: fakeWindow,
     querySelectorAll(selector: string) {
+      if (queryProbe) queryProbe.calls += 1;
       return selector === "input, textarea, select" ? controls : [];
     },
     querySelector() {
+      if (queryProbe) queryProbe.calls += 1;
       return null;
     }
   };
@@ -701,8 +1006,9 @@ function installFakeBrowserGlobals(options: {
   controls: FakeIncidentDomControl[];
   href: string;
   frameDocuments?: FakeIncidentDocument[];
+  queryProbe?: { calls: number };
 }): () => void {
-  const fakeDocument = fakeIncidentDocument(options.controls);
+  const fakeDocument = fakeIncidentDocument(options.controls, options.queryProbe);
   const frameWindows = (options.frameDocuments ?? []).map((document) => document.defaultView);
   fakeDocument.defaultView.frames = frameWindows;
 
@@ -731,6 +1037,25 @@ function installFakeCdpTargetList(targets: FakeCdpPageTarget[]): () => void {
 
   return () => {
     globals.fetch = previousFetch;
+  };
+}
+
+function installCdpFetchProbe(): { readonly calls: number; restore: () => void } {
+  const globals = globalThis as unknown as { fetch?: unknown };
+  const previousFetch = globals.fetch;
+  let calls = 0;
+  globals.fetch = async () => {
+    calls += 1;
+    throw new Error("Fetch must not be called for a denied browser debugging endpoint.");
+  };
+
+  return {
+    get calls() {
+      return calls;
+    },
+    restore() {
+      globals.fetch = previousFetch;
+    }
   };
 }
 

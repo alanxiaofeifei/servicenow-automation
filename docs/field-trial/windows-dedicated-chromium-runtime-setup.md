@@ -99,7 +99,7 @@ The script should print something like:
 
 ```text
 Status: installed
-Runtime: %LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Chromium\\chrome.exe
+Runtime: %LOCALAPPDATA%\ServiceNowAutomation\Runtime\Chromium\chrome.exe
 Runtime exists: True
 Chrome for Testing version: <version>
 
@@ -126,8 +126,8 @@ Expected:
 
 ```text
 True
-%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Chromium\\chrome.exe
-%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\smoke\\session-smoke-001
+%LOCALAPPDATA%\ServiceNowAutomation\Runtime\Chromium\chrome.exe
+%LOCALAPPDATA%\ServiceNowAutomation\Profiles\smoke\session-smoke-001
 ```
 
 ## Important PowerShell path note

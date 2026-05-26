@@ -338,7 +338,8 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
         if (!driver && parsed.flags["cdp-endpoint"]) {
           try {
             driver = createCdpQaIncidentFieldInspectionRuntimePageDriver({
-              endpoint: parsed.flags["cdp-endpoint"]
+              endpoint: parsed.flags["cdp-endpoint"],
+              targetUrl: environment.url
             });
           } catch {
             driver = undefined;
@@ -540,7 +541,8 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
       if (!driver && parsed.flags["cdp-endpoint"]) {
         try {
           driver = createCdpQaAutofillRuntimePageDriver({
-            endpoint: parsed.flags["cdp-endpoint"]
+            endpoint: parsed.flags["cdp-endpoint"],
+            targetUrl: environment.url
           });
         } catch {
           runtime = blockedQaAutofillRuntimeResult("cdp-endpoint-denied", false);
@@ -1443,7 +1445,7 @@ Commands:
   sda qa smoke --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> [--target-url <url>] [--approval-phrase <phrase>] [--language <lang>] [--template-preset <preset>] [--json]
   sda qa autofill --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> --dedicated-profile-confirmation <sentence> --approval-phrase <phrase> [--target-url <url>] [--json]
   sda qa autofill-fixture --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> --dedicated-profile-confirmation <sentence> --approval-phrase <phrase> [--selector-fixture <all-found|missing-work-notes|wrong-description-type|ambiguous-description|non-writable-work-notes|unexpected-required-field>] [--target-url <url>] [--json]
-  sda qa autofill-runtime --mode <qa|dev> --template <template> --user <sanitized_user> --summary <sanitized_summary> --cdp-endpoint <local_http_or_ws> --qa-isolation-confirmation <sentence> --dedicated-profile-confirmation <sentence> [--target-url <safe_landing_url>] [--approval-phrase <phrase> --approval-page-fingerprint <hash> --execute] [--json]
+  sda qa autofill-runtime --mode <qa|dev> --template <template> --user <sanitized_user> --summary <sanitized_summary> --cdp-endpoint <local_http_endpoint> --qa-isolation-confirmation <sentence> --dedicated-profile-confirmation <sentence> [--target-url <safe_landing_url>] [--approval-phrase <phrase> --approval-page-fingerprint <hash> --execute] [--json]
   sda qa manual-fill --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> [--write-action <save_incident|submit_incident|update_incident|close_incident>] [--target-url <url>] [--approval-phrase <phrase>] [--browser-executable <path>] [--execute --confirm-no-write-launch] [--json]
   sda run --workflow <workflow_name> --input <json_file> --dry-run [--json]
 

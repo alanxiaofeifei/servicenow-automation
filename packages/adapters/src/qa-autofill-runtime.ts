@@ -264,7 +264,7 @@ export async function runQaTextFieldAutofillRuntime(
       status: "blocked",
       blockedReason: unsafeInspectionReason,
       selectorVerification,
-      pageFingerprint: inspection.pageFingerprint,
+      pageFingerprint: undefined,
       pageFingerprintMatched: false,
       safety: runtimeSafety(true)
     };
@@ -300,7 +300,7 @@ export async function runQaTextFieldAutofillRuntime(
       status: "blocked",
       blockedReason: plan.blockedReason ?? "plan-not-ready",
       selectorVerification,
-      pageFingerprint: inspection.pageFingerprint,
+      pageFingerprint: undefined,
       pageFingerprintMatched,
       plan,
       safety: runtimeSafety(true)
@@ -315,7 +315,7 @@ export async function runQaTextFieldAutofillRuntime(
       status: "blocked",
       blockedReason: "browser-runtime-error",
       selectorVerification,
-      pageFingerprint: inspection.pageFingerprint,
+      pageFingerprint: undefined,
       pageFingerprintMatched,
       plan,
       safety: runtimeSafety(true)
@@ -336,7 +336,7 @@ export async function runQaTextFieldAutofillRuntime(
       status: "blocked",
       blockedReason: beforeFillReason ?? "approval-stale-after-page-change",
       selectorVerification: beforeFillSelectorVerification,
-      pageFingerprint: beforeFillInspection.pageFingerprint,
+      pageFingerprint: undefined,
       pageFingerprintMatched: request.approvalPageFingerprint === beforeFillInspection.pageFingerprint,
       plan,
       safety: runtimeSafety(true)
@@ -358,8 +358,8 @@ export async function runQaTextFieldAutofillRuntime(
     status: execution.status,
     blockedReason: execution.blockedReason,
     selectorVerification: beforeFillSelectorVerification,
-    pageFingerprint: beforeFillInspection.pageFingerprint,
-    pageFingerprintMatched: true,
+    pageFingerprint: execution.status === "completed" ? beforeFillInspection.pageFingerprint : undefined,
+    pageFingerprintMatched: execution.status === "completed",
     plan,
     execution,
     safety: runtimeSafety(true)
@@ -373,7 +373,7 @@ export function createCdpQaAutofillRuntimePageDriver(
   return {
     async inspectAllowedTextFields(descriptors) {
       return withCdpClient(options.endpoint, options.targetUrl, (client) =>
-        client.evaluate<QaAutofillRuntimeInspection>(buildInspectionExpression(descriptors))
+        client.evaluate<QaAutofillRuntimeInspection>(buildInspectionExpression(descriptors, hostFromTargetUrl(options.targetUrl) ?? ""))
       );
     },
     async fillAllowedTextFields(request) {
@@ -394,7 +394,9 @@ export function createCdpQaIncidentFieldInspectionRuntimePageDriver(
   return {
     async inspectIncidentFormFields() {
       return withCdpClient(options.endpoint, options.targetUrl, (client) =>
-        client.evaluate<QaIncidentFieldRuntimeInspection>(buildIncidentFieldInspectionExpression())
+        client.evaluate<QaIncidentFieldRuntimeInspection>(
+          buildIncidentFieldInspectionExpression(hostFromTargetUrl(options.targetUrl) ?? "")
+        )
       );
     }
   };
@@ -407,7 +409,9 @@ export function createCdpQaIncidentDefaultFieldAutofillRuntimePageDriver(
   return {
     async inspectIncidentFormFields() {
       return withCdpClient(options.endpoint, options.targetUrl, (client) =>
-        client.evaluate<QaIncidentFieldRuntimeInspection>(buildIncidentFieldInspectionExpression())
+        client.evaluate<QaIncidentFieldRuntimeInspection>(
+          buildIncidentFieldInspectionExpression(hostFromTargetUrl(options.targetUrl) ?? "")
+        )
       );
     },
     async fillIncidentDefaultFields(request) {
@@ -521,7 +525,7 @@ export async function inspectQaIncidentDefaultFieldsRuntime(
 
   const targetValidation = validateRuntimeCurrentPageTarget(request.environment, inspection.currentUrl);
   if (!targetValidation.allowed) {
-    return blockedIncidentFieldRuntimeResult("current-page-target-denied", true, inspection.pageFingerprint);
+    return blockedIncidentFieldRuntimeResult("current-page-target-denied", true);
   }
 
   return {
@@ -727,7 +731,6 @@ function defaultFieldRuntimeBlockedFields(
 ): QaIncidentDefaultFieldRuntimeBlockedField[] {
   const blockedFields: QaIncidentDefaultFieldRuntimeBlockedField[] = [];
   for (const plannedField of plannedFields) {
-    if (QA_INCIDENT_DEFAULT_RUNTIME_TEXT_FIELD_KEYS.has(plannedField.key)) continue;
     const matches = evidenceFields.filter((evidence) => evidenceMatchesDefaultField(evidence, plannedField.key));
     const matchedEvidence = matches[0];
     const blockedBase = {
@@ -749,6 +752,7 @@ function defaultFieldRuntimeBlockedFields(
       blockedFields.push({ ...blockedBase, blockedReason: "non-writable-control" });
       continue;
     }
+    if (QA_INCIDENT_DEFAULT_RUNTIME_TEXT_FIELD_KEYS.has(plannedField.key)) continue;
     blockedFields.push({
       ...blockedBase,
       blockedReason:
@@ -841,10 +845,10 @@ async function withCdpClient<T>(endpoint: string, targetUrl: string | undefined,
 type CdpPageTarget = { type?: string; url?: string; webSocketDebuggerUrl?: string };
 
 async function resolveCdpPageWebSocketUrl(endpoint: string, targetUrl?: string): Promise<string> {
+  validateLocalCdpEndpoint(endpoint);
   const url = new URL(endpoint);
-  if (url.protocol === "ws:" || url.protocol === "wss:") {
-    validateLocalCdpEndpoint(endpoint);
-    return endpoint;
+  if (url.protocol === "ws:") {
+    throw new Error("CDP endpoint must be the local browser HTTP endpoint so the page target can be verified.");
   }
 
   const listUrl = new URL("/json/list", url);
@@ -864,21 +868,16 @@ async function resolveCdpPageWebSocketUrl(endpoint: string, targetUrl?: string):
 }
 
 function selectCdpPageTarget(pageTargets: CdpPageTarget[], targetUrl?: string): CdpPageTarget | undefined {
-  if (pageTargets.length === 1) return pageTargets[0];
-
   const configuredHost = hostFromTargetUrl(targetUrl);
-  if (configuredHost) {
-    const configuredHostTargets = pageTargets.filter((target) => pageTargetMatchesHost(target, configuredHost));
-    const configuredIncidentTargets = configuredHostTargets.filter(isLikelyIncidentPageTarget);
-    const configuredIncidentTarget = single(configuredIncidentTargets);
-    if (configuredIncidentTarget) return configuredIncidentTarget;
-    const configuredHostTarget = single(configuredHostTargets);
-    if (configuredHostTarget) return configuredHostTarget;
-    return undefined;
-  }
+  if (!configuredHost) return undefined;
 
-  const inspectableTargets = pageTargets.filter(isInspectablePageTarget);
-  return single(inspectableTargets);
+  const configuredHostTargets = pageTargets.filter((target) => pageTargetMatchesHost(target, configuredHost));
+  const configuredIncidentTargets = configuredHostTargets.filter(isLikelyIncidentPageTarget);
+  const configuredIncidentTarget = single(configuredIncidentTargets);
+  if (configuredIncidentTarget) return configuredIncidentTarget;
+  const configuredHostTarget = single(configuredHostTargets);
+  if (configuredHostTarget) return configuredHostTarget;
+  return undefined;
 }
 
 function hostFromTargetUrl(targetUrl?: string): string | undefined {
@@ -895,13 +894,6 @@ function hostFromTargetUrl(targetUrl?: string): string | undefined {
 function pageTargetMatchesHost(target: CdpPageTarget, host: string): boolean {
   const url = parsePageTargetUrl(target.url);
   return Boolean(url && url.protocol === "https:" && !url.username && !url.password && url.host.toLowerCase() === host);
-}
-
-function isInspectablePageTarget(target: CdpPageTarget): boolean {
-  const url = parsePageTargetUrl(target.url);
-  if (!url) return false;
-  if (["about:", "chrome:", "devtools:", "edge:"].includes(url.protocol)) return false;
-  return url.protocol === "https:" || url.protocol === "http:";
 }
 
 function isLikelyIncidentPageTarget(target: CdpPageTarget): boolean {
@@ -948,7 +940,7 @@ function validateLocalCdpEndpoint(endpoint: string): void {
   }
 
   const localHosts = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
-  if (!["http:", "ws:"].includes(url.protocol) || !localHosts.has(url.hostname)) {
+  if (!["http:", "ws:"].includes(url.protocol) || url.username || url.password || !localHosts.has(url.hostname)) {
     throw new Error("CDP endpoint must be local and must use http:// or ws://.");
   }
 }
@@ -1029,12 +1021,12 @@ class CdpClient {
   }
 }
 
-function buildInspectionExpression(descriptors: QaAutofillFieldDescriptor[]): string {
-  return `(${inspectionScript})(${JSON.stringify(descriptors)})`;
+function buildInspectionExpression(descriptors: QaAutofillFieldDescriptor[], allowedHost: string): string {
+  return `(${inspectionScript})(${JSON.stringify(descriptors)}, ${JSON.stringify(allowedHost)})`;
 }
 
-function buildIncidentFieldInspectionExpression(): string {
-  return `(${incidentFieldInspectionScript})()`;
+function buildIncidentFieldInspectionExpression(allowedHost: string): string {
+  return `(${incidentFieldInspectionScript})(${JSON.stringify(allowedHost)})`;
 }
 
 function buildIncidentDefaultFieldFillExpression(request: QaIncidentDefaultFieldRuntimeFillRequest): string {
@@ -1096,8 +1088,12 @@ const incidentDefaultFieldFillScript = async (
     return blocked("approval-page-fingerprint-required");
   }
 
-  const inspect = (0, eval)(`(${inspectionScriptSource})`) as () => Promise<QaIncidentFieldRuntimeInspection>;
-  const inspection = await inspect();
+  if (!currentPageTargetAllowed(request.allowedHost)) {
+    return blocked("current-page-target-denied");
+  }
+
+  const inspect = (0, eval)(`(${inspectionScriptSource})`) as (allowedHost?: string) => Promise<QaIncidentFieldRuntimeInspection>;
+  const inspection = await inspect(request.allowedHost);
   if (!currentPageTargetAllowed(request.allowedHost)) {
     return blocked("current-page-target-denied");
   }
@@ -1117,10 +1113,14 @@ const incidentDefaultFieldFillScript = async (
 
   for (const field of request.plannedFields) {
     const control = findIncidentControl(documents, field.key, field.label);
-    if (!control) return blocked("field-control-missing");
-    if (control.ambiguous) return blocked("field-control-ambiguous");
+    if (!control) return blocked("field-control-missing", [blockedRuntimeTextField(field, undefined, "field-control-missing")]);
+    if (control.ambiguous) {
+      return blocked("field-control-ambiguous", [blockedRuntimeTextField(field, control.element, "field-control-ambiguous")]);
+    }
     if (!runtimeTextControlMatches(control.element, field.key)) return blocked("runtime-text-fields-only");
-    if (!isWritable(control.element)) return blocked("non-writable-control");
+    if (!isWritable(control.element)) {
+      return blocked("non-writable-control", [blockedRuntimeTextField(field, control.element, "non-writable-control")]);
+    }
     const fillStatus = fillControl(control.element, field.key, field.value);
     if (fillStatus !== "ok") return blocked(fillStatus);
     filledFields.push({
@@ -1181,6 +1181,20 @@ const incidentDefaultFieldFillScript = async (
     };
   }
 
+  function blockedRuntimeTextField(
+    field: (typeof request.plannedFields)[number],
+    element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | undefined,
+    blockedReason: QaIncidentDefaultFieldRuntimeBlockedFieldReason
+  ): QaIncidentDefaultFieldRuntimeBlockedField {
+    return {
+      key: field.key,
+      label: field.label,
+      valueLength: field.valueLength,
+      ...(element ? { controlType: runtimeIncidentControlType(element, field.key) } : {}),
+      blockedReason
+    };
+  }
+
   function runtimeIncidentControlType(
     element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
     key: QaIncidentDefaultFieldKey
@@ -1237,7 +1251,9 @@ const incidentDefaultFieldFillScript = async (
     scored.sort((left, right) => right.score - left.score);
     const bestScore = scored[0].score;
     const best = scored.filter((candidate) => candidate.score === bestScore);
-    if (best.length > 1 && bestScore < 120) return { element: best[0].element, ambiguous: true };
+    const writableBest = best.filter((candidate) => isWritable(candidate.element));
+    if (writableBest.length > 1) return { element: writableBest[0].element, ambiguous: true };
+    if (writableBest.length === 1) return { element: writableBest[0].element, ambiguous: false };
     return { element: best[0].element, ambiguous: false };
   }
 
@@ -1402,7 +1418,11 @@ const incidentDefaultFieldFillScript = async (
   }
 };
 
-const incidentFieldInspectionScript = async (): Promise<QaIncidentFieldRuntimeInspection> => {
+const incidentFieldInspectionScript = async (allowedHost?: string): Promise<QaIncidentFieldRuntimeInspection> => {
+  if (allowedHost !== undefined && !currentPageTargetAllowed(allowedHost)) {
+    return { currentUrl: "", pageFingerprint: "", fields: [] };
+  }
+
   const documents = collectSameOriginDocuments();
   const fieldsByIdentity = new Map<string, QaIncidentFormFieldEvidence>();
   const visibleControlCountsByIdentity = new Map<string, number>();
@@ -1454,6 +1474,21 @@ const incidentFieldInspectionScript = async (): Promise<QaIncidentFieldRuntimeIn
     pageFingerprint: await sha256Hex(JSON.stringify(fingerprintShape)),
     fields
   };
+
+  function currentPageTargetAllowed(targetHost: string): boolean {
+    if (!targetHost) return false;
+    try {
+      const current = new URL(globalThis.location.href);
+      return (
+        current.protocol === "https:" &&
+        !current.username &&
+        !current.password &&
+        current.host.toLowerCase() === targetHost.toLowerCase()
+      );
+    } catch {
+      return false;
+    }
+  }
 
   function fieldEvidenceFor(
     element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
@@ -1632,7 +1667,14 @@ const incidentFieldInspectionScript = async (): Promise<QaIncidentFieldRuntimeIn
   }
 };
 
-const inspectionScript = async (descriptors: QaAutofillFieldDescriptor[]): Promise<QaAutofillRuntimeInspection> => {
+const inspectionScript = async (
+  descriptors: QaAutofillFieldDescriptor[],
+  allowedHost?: string
+): Promise<QaAutofillRuntimeInspection> => {
+  if (allowedHost !== undefined && !currentPageTargetAllowed(allowedHost)) {
+    return { currentUrl: "", pageFingerprint: "", fields: [], unexpectedRequiredFieldCount: 0 };
+  }
+
   const documents = collectSameOriginDocuments();
   const allowedElements: Element[] = [];
   const fields = descriptors.map((descriptor) => {
@@ -1679,6 +1721,21 @@ const inspectionScript = async (descriptors: QaAutofillFieldDescriptor[]): Promi
     fields: fields as QaAutofillFixtureField[],
     unexpectedRequiredFieldCount: fingerprintShape.unexpectedRequiredFieldCount
   };
+
+  function currentPageTargetAllowed(targetHost: string): boolean {
+    if (!targetHost) return false;
+    try {
+      const current = new URL(globalThis.location.href);
+      return (
+        current.protocol === "https:" &&
+        !current.username &&
+        !current.password &&
+        current.host.toLowerCase() === targetHost.toLowerCase()
+      );
+    } catch {
+      return false;
+    }
+  }
 
   function collectSameOriginDocuments(): Document[] {
     const docs: Document[] = [globalThis.document];
@@ -1795,10 +1852,11 @@ const fillScript = async (request: {
   expectedPageFingerprint: string;
   allowedHost: string;
 }): Promise<QaAutofillRuntimeFillResult> => {
-  const documents = collectSameOriginDocuments();
   if (!currentPageTargetAllowed(request.allowedHost)) {
     return blocked("current-page-target-denied");
   }
+
+  const documents = collectSameOriginDocuments();
 
   const inspection = await inspectDocuments(request.descriptors, documents);
   if (inspection.pageFingerprint !== request.expectedPageFingerprint) {
