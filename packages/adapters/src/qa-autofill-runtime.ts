@@ -1357,7 +1357,11 @@ const incidentDefaultFieldFillScript = async (
       unsupportedFields.map((field) => blockedIncidentDefaultField(field, documents))
     );
   }
-  const filledFields: QaIncidentDefaultFieldRuntimeFillResult["filledFields"] = [];
+  const fillTargets: Array<{
+    field: (typeof request.plannedFields)[number];
+    element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+    selectOptionValue?: string;
+  }> = [];
 
   for (const field of request.plannedFields) {
     const control = findIncidentControl(documents, field.key, field.label);
@@ -1376,12 +1380,24 @@ const incidentDefaultFieldFillScript = async (
         blockedRuntimeDefaultField(field, control.element, "reference-value-not-display-safe")
       ]);
     }
-    const fillStatus = fillControl(control.element, field.key, field.value);
-    if (fillStatus !== "ok") return blocked(fillStatus, [blockedRuntimeDefaultField(field, control.element, fillStatus)]);
+    const fillTarget = resolveFillTarget(control.element, field.value);
+    if (fillTarget.status !== "ok") {
+      return blocked(fillTarget.status, [blockedRuntimeDefaultField(field, control.element, fillTarget.status)]);
+    }
+    fillTargets.push({
+      field,
+      element: control.element,
+      ...(fillTarget.selectOptionValue === undefined ? {} : { selectOptionValue: fillTarget.selectOptionValue })
+    });
+  }
+
+  const filledFields: QaIncidentDefaultFieldRuntimeFillResult["filledFields"] = [];
+  for (const target of fillTargets) {
+    applyFillTarget(target.element, target.field.key, target.field.value, target.selectOptionValue);
     filledFields.push({
-      key: field.key,
-      label: field.label,
-      valueLength: field.value.length
+      key: target.field.key,
+      label: target.field.label,
+      valueLength: target.field.value.length
     });
   }
 
@@ -1546,17 +1562,26 @@ const incidentDefaultFieldFillScript = async (
     return candidates.some((candidate) => name === `sys_display.${candidate}` || id === `sys_display.${candidate}`);
   }
 
-  function fillControl(
+  function resolveFillTarget(
+    element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+    value: string
+  ): { status: "ok"; selectOptionValue?: string } | { status: "field-option-not-found" } {
+    if (!isSelectControl(element)) return { status: "ok" };
+    const option = findSelectOption(element, value);
+    if (!option) return { status: "field-option-not-found" };
+    return { status: "ok", selectOptionValue: option.value };
+  }
+
+  function applyFillTarget(
     element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
     key: QaIncidentDefaultFieldKey,
-    value: string
-  ): "ok" | "field-option-not-found" {
+    value: string,
+    selectOptionValue: string | undefined
+  ): void {
     if (isSelectControl(element)) {
-      const option = findSelectOption(element, value);
-      if (!option) return "field-option-not-found";
-      setNativeSelectValue(element, option.value);
+      setNativeSelectValue(element, selectOptionValue ?? value);
       dispatchFieldEvents(element);
-      return "ok";
+      return;
     }
 
     setNativeTextValue(element, value);
@@ -1564,7 +1589,6 @@ const incidentDefaultFieldFillScript = async (
     if (isReferenceField(key)) {
       element.dispatchEvent(new Event("blur", { bubbles: true }));
     }
-    return "ok";
   }
 
   function findSelectOption(

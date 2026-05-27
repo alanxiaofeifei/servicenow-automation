@@ -1197,6 +1197,39 @@ describe("QA incident default field autofill runtime", () => {
     }
   });
 
+  it("does not partially fill earlier default fields when a later select option is missing", async () => {
+    const shortDescriptionControl = fakeIncidentDomControl("input", { name: "incident.short_description" });
+    const categoryControl = fakeIncidentDomControl("select", { name: "incident.category" }, [
+      { value: "different-option", textContent: "Different safe option" }
+    ]);
+    const restoreGlobals = installFakeBrowserGlobals({
+      controls: [shortDescriptionControl, categoryControl],
+      href: "https://qa.service-now.example.invalid/nav_to.do"
+    });
+
+    try {
+      const result = await qaAutofillRuntimeTestHooks.incidentDefaultFieldFillScript(
+        {
+          plannedFields: [
+            plannedIncidentDefaultField("shortDescription", "Short description", qaDefaultTextFieldValues.shortDescription, "ticket-draft"),
+            plannedIncidentDefaultField("category", "Category", alanQaIncidentTestDefaults.category, "qa-default-profile")
+          ],
+          expectedPageFingerprint: "verified-page",
+          allowedHost: "qa.service-now.example.invalid"
+        },
+        "async () => ({ currentUrl: globalThis.location.href, pageFingerprint: 'verified-page', fields: [] })"
+      );
+
+      expect(result.status).toBe("blocked");
+      expect(result.blockedReason).toBe("field-option-not-found");
+      expect(result.filledFields).toEqual([]);
+      expect(shortDescriptionControl.value).toBe("");
+      expect(categoryControl.value).toBe("");
+    } finally {
+      restoreGlobals();
+    }
+  });
+
   it.each([
     {
       key: "requester" as const,
