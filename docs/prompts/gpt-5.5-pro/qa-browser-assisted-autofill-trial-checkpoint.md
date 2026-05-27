@@ -8,7 +8,7 @@ Date: 2026-05-22
 
 Review whether the project is ready to build and run the first QA-only browser-assisted autofill trial.
 
-Alan wants to test whether automatic field filling is usable in QA as soon as possible. This checkpoint is intentionally narrow: it should approve or block the smallest safe implementation path for one QA ticket, without approving Save/Submit/Update/Close automation.
+Alan wants to test whether automatic field filling is usable in QA as soon as possible. This checkpoint is intentionally narrow: it should approve or block the smallest safe implementation path for one QA ticket, without approving Save/Submit/Update/Resolve/Close automation.
 
 ## Current sanitized project state
 
@@ -45,7 +45,7 @@ Build a QA/dev-only, single-ticket, human-supervised browser-assisted autofill s
 3. The app prepares sanitized field mapping from deterministic/local draft data.
 4. Before any field-fill action, the UI shows a review screen with field names and values.
 5. The agent/browser automation may fill only approved text/select fields after Alan types the exact approval phrase.
-6. The tool must stop before Save, Submit, Update, Close, attachment upload, customer email, notification, or any record-changing action beyond field entry.
+6. The tool must stop before Save, Submit, Update, Resolve, Close, attachment upload, customer email, notification, or any record-changing action beyond field entry.
 7. Alan manually decides whether to Save in QA after a separate immediate approval step; that Save action is not part of the browser-assisted autofill implementation.
 
 ## Safety constraints
@@ -72,12 +72,12 @@ GPT-5.5 Pro should propose the final phrase, but the phrase should bind:
 - QA/dev mode,
 - single ticket,
 - autofill only,
-- no Save/Submit/Update/Close,
+- no Save/Submit/Update/Resolve/Close,
 - dedicated Chromium profile.
 
 Candidate:
 
-`I APPROVE QA AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE`
+`PRIVATE_APPROVAL_PHRASE - NO SAVE SUBMIT UPDATE OR CLOSE`
 
 ## Questions for GPT-5.5 Pro
 

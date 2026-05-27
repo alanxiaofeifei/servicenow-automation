@@ -12,7 +12,7 @@ This runbook does **not** authorize:
 
 - unattended execution,
 - agent-controlled login or ServiceNow navigation,
-- Save, Submit, Update, Close,
+- Save, Submit, Update, Resolve, Close,
 - button click automation,
 - attachment upload,
 - outbound email or notification-triggering action,
@@ -66,7 +66,7 @@ pnpm --filter @servicenow-automation/cli --silent sda qa autofill-fixture \
   --summary "Fake Chat intake — VPN connection issue after password or MFA change" \
   --qa-isolation-confirmation "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team." \
   --dedicated-profile-confirmation "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile." \
-  --approval-phrase "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED" \
+  --approval-phrase "PRIVATE_APPROVAL_PHRASE - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED" \
   --selector-fixture all-found \
   --json
 ```
@@ -147,16 +147,16 @@ If the page reloads, navigation occurs, form content changes, tab changes, ticke
 QA phrase:
 
 ```text
-I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED
+PRIVATE_APPROVAL_PHRASE - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED
 ```
 
 Dev phrase:
 
 ```text
-I APPROVE DEV SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED
+PRIVATE_APPROVAL_PHRASE - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED
 ```
 
-A Save/Submit/Update/Close phrase does not approve autofill. An autofill phrase does not approve Save/Submit/Update/Close.
+A Save/Submit/Update/Resolve/Close phrase does not approve autofill. An autofill phrase does not approve Save/Submit/Update/Resolve/Close.
 
 ## Phase 5 — Text-field autofill only
 
@@ -169,10 +169,10 @@ If all previous phases pass, the tool may fill only:
 Immediately after filling the three text fields, the tool must stop and show:
 
 ```text
-Autofill completed. Review manually. Tool will not Save, Submit, Update, or Close.
+Autofill completed. Review manually. Tool will not Save, Submit, Update, Resolve, or Close.
 ```
 
-No Save/Submit/Update/Close action may be represented as an operation, selector, fallback, UI affordance, hidden flag, or command path in this execution slice.
+No Save/Submit/Update/Resolve/Close action may be represented as an operation, selector, fallback, UI affordance, hidden flag, or command path in this execution slice.
 
 ## Phase 6 — Human review and sanitized outcome
 
@@ -184,7 +184,7 @@ Allowed outcome values:
 - `blocked`
 - `stopped`
 - generic field classes worked or failed
-- stopped before Save/Submit/Update/Close
+- stopped before Save/Submit/Update/Resolve/Close
 - generic stop reason
 - no artifacts captured
 
@@ -211,7 +211,7 @@ Forbidden outcome content:
 
 Before Alan runs the first real QA/dev text-field autofill-only trial, the execution-slice PR/diff must receive an independent review that checks:
 
-- no Save/Submit/Update/Close selectors/actions exist,
+- no Save/Submit/Update/Resolve/Close selectors/actions exist,
 - only the three text fields are allowlisted,
 - reference/select/status/routing/customer-visible fields are denied,
 - selector mismatch fails closed,

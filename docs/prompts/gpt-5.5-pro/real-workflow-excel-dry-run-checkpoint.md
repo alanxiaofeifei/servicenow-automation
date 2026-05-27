@@ -13,7 +13,7 @@ Recently completed:
 - #52 — Controlled QA single-ticket smoke flow.
   - Manual-fill assisted only.
   - Field mapping preview + exact QA/dev approval phrase.
-  - No browser DOM fill, no API, no Save/Submit/Update/Close, no bulk create, no Excel/Graph writes.
+  - No browser DOM fill, no API, no Save/Submit/Update/Resolve/Close, no bulk create, no Excel/Graph writes.
 - #53 — Centralized settings drawer, text-field display modes, contrast fixes.
 - #54 — Settings drawer close affordance.
   - Explicit `✕ Close` button.
@@ -139,7 +139,7 @@ Do not recommend for the next implementation slice:
 - Real self-service ticket polling.
 - Real ServiceNow browser DOM filling.
 - ServiceNow API calls.
-- Save / Submit / Update / Close on real or QA tickets.
+- Save / Submit / Update / Resolve / Close on real or QA tickets.
 - Microsoft Graph / Excel Web writes.
 - External AI calls using real enterprise ticket/customer/chat/mail content.
 - Screenshots, HAR, traces, storage-state, cookies, sessions, or credentials.

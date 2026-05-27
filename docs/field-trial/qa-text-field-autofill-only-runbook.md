@@ -4,7 +4,7 @@
 
 This runbook covers the first implementation slice after the GPT-5.5 Pro checkpoint returned **READY WITH CONDITIONS** for QA browser-assisted autofill.
 
-This slice contains the **planning/review gate** plus a **local fixture-only selector harness**. It prepares the safety contract, field preview, approval phrase, selector-verification requirement, and deterministic local execution checks. It does **not** authorize a real browser fill yet, and it does **not** authorize Save, Submit, Update, Close, attachment upload, notification-triggering actions, ServiceNow API writes, bulk fill, or production/prod-shadow use.
+This slice contains the **planning/review gate** plus a **local fixture-only selector harness**. It prepares the safety contract, field preview, approval phrase, selector-verification requirement, and deterministic local execution checks. It does **not** authorize a real browser fill yet, and it does **not** authorize Save, Submit, Update, Resolve, Close, attachment upload, notification-triggering actions, ServiceNow API writes, bulk fill, or production/prod-shadow use.
 
 ## Scope
 
@@ -27,7 +27,7 @@ Allowed in this planning slice:
 Forbidden in this slice:
 
 - Any real browser text-field fill in this PR/slice.
-- Save, Submit, Update, Close, or any button automation.
+- Save, Submit, Update, Resolve, Close, or any button automation.
 - Requester/caller, Assignment group, Configuration item, Category, Subcategory, Location, Impact, Urgency, Priority, State, Status, or customer-visible comments.
 - ServiceNow REST/API write.
 - Bulk create/fill or multi-ticket execution.
@@ -54,7 +54,7 @@ Forbidden until issue #90 has a recorded acceptable verdict and the later execut
 - unattended browser launch,
 - ServiceNow login or navigation by the agent,
 - DOM writes against a real QA/dev page,
-- Save, Submit, Update, Close,
+- Save, Submit, Update, Resolve, Close,
 - screenshots, HAR, traces, storage-state, cookies, sessions, page HTML, raw QA URLs, ticket identifiers, or real field values.
 
 ## Required confirmations
@@ -78,13 +78,13 @@ If either confirmation is missing or uncertain, stop.
 For QA:
 
 ```text
-I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED
+PRIVATE_APPROVAL_PHRASE - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED
 ```
 
 For dev:
 
 ```text
-I APPROVE DEV SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED
+PRIVATE_APPROVAL_PHRASE - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED
 ```
 
 Rules:
@@ -130,7 +130,7 @@ pnpm --filter @servicenow-automation/cli --silent sda qa autofill-fixture \
   --summary "Fake Chat intake — VPN connection issue after password or MFA change" \
   --qa-isolation-confirmation "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team." \
   --dedicated-profile-confirmation "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile." \
-  --approval-phrase "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED" \
+  --approval-phrase "PRIVATE_APPROVAL_PHRASE - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED" \
   --selector-fixture all-found \
   --json
 ```
@@ -154,7 +154,7 @@ pnpm --filter @servicenow-automation/cli --silent sda qa autofill-fixture \
   --summary "Fake Chat intake — VPN connection issue after password or MFA change" \
   --qa-isolation-confirmation "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team." \
   --dedicated-profile-confirmation "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile." \
-  --approval-phrase "I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED" \
+  --approval-phrase "PRIVATE_APPROVAL_PHRASE - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED" \
   --selector-fixture missing-work-notes \
   --json
 ```
@@ -178,7 +178,7 @@ Do not blind-fill. If a field value is real or copied from QA, stop.
 
 Alan provides the exact QA or dev autofill-only phrase shown above.
 
-A Save/Submit/Update/Close phrase does not approve autofill. An autofill phrase does not approve Save/Submit/Update/Close.
+A Save/Submit/Update/Resolve/Close phrase does not approve autofill. An autofill phrase does not approve Save/Submit/Update/Resolve/Close.
 
 ### Phase 4 — Real-browser autofill-only execution requirements for the later slice
 
@@ -228,7 +228,7 @@ Short description / Description / Work notes
 Planning/review only, or local fixture harness smoke
 
 ## Write actions
-No Save / Submit / Update / Close
+No Save / Submit / Update / Resolve / Close
 
 ## Result
 Planning gate completed / blocked / stopped

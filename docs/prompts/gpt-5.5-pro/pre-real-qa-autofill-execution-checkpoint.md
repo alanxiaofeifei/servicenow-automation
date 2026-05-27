@@ -16,7 +16,7 @@ Ask GPT-5.5 Pro to quote the unique checkpoint token before its verdict so the a
 
 Review whether the project is ready to move from the merged local selector-verified fixture harness to the first real QA/dev browser text-field autofill-only execution.
 
-This checkpoint is a new safety boundary. It must not approve Save, Submit, Update, Close, attachment upload, notifications, ServiceNow API writes, production, production-shadow, bulk fill, or any external AI use on real QA/ServiceNow content.
+This checkpoint is a new safety boundary. It must not approve Save, Submit, Update, Resolve, Close, attachment upload, notifications, ServiceNow API writes, production, production-shadow, bulk fill, or any external AI use on real QA/ServiceNow content.
 
 ## Current sanitized project state
 
@@ -81,13 +81,13 @@ Before any autofill-only action, require all of the following:
 
 Recommended QA approval phrase:
 
-`I APPROVE QA SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED`
+`PRIVATE_APPROVAL_PHRASE - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED`
 
 Recommended dev approval phrase:
 
-`I APPROVE DEV SINGLE-TICKET AUTOFILL ONLY - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED`
+`PRIVATE_APPROVAL_PHRASE - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED`
 
-These phrases approve only autofill. They do not approve Save, Submit, Update, Close, attachment upload, notification-triggering actions, ServiceNow API writes, or bulk actions.
+These phrases approve only autofill. They do not approve Save, Submit, Update, Resolve, Close, attachment upload, notification-triggering actions, ServiceNow API writes, or bulk actions.
 
 ## Stop rules
 
@@ -100,7 +100,7 @@ Fail closed if any of these occur:
 - Any selector is missing, ambiguous, duplicated, non-writable, or has the wrong element type.
 - Any unexpected required field appears.
 - Any non-text/reference/select/status/routing field would be changed.
-- Any action would click a button, Save, Submit, Update, Close, upload an attachment, send email, notify users, call ServiceNow REST/API, or perform bulk fill.
+- Any action would click a button, Save, Submit, Update, Resolve, Close, upload an attachment, send email, notify users, call ServiceNow REST/API, or perform bulk fill.
 - Any output would expose raw QA/dev URL, ticket identifier, sys_id, requester/customer/internal text, exact real field values, cookies, sessions, storage-state, page HTML, screenshots, HAR, traces, or recordings.
 - The page changes or reloads after approval but before autofill.
 
@@ -121,7 +121,7 @@ Record only:
 
 - Whether autofill completed, blocked, or stopped.
 - Which generic field classes worked or failed.
-- Whether the tool stopped before Save/Submit/Update/Close.
+- Whether the tool stopped before Save/Submit/Update/Resolve/Close.
 - Generic stop reason if applicable.
 - Confirmation that no screenshots, HAR, traces, cookies, sessions, storage-state, page HTML, raw QA/dev URLs, ticket identifiers, or real field values were captured.
 

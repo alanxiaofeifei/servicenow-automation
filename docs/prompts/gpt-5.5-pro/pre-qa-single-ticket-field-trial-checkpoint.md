@@ -36,7 +36,7 @@ The PR adds or updates:
 - recording-derived fake QA scenarios only;
 - deterministic `ManualPasteScenario` to queue item mapping;
 - controlled QA single-ticket smoke UI;
-- explicit Save / Submit / Update / Close approval phrases;
+- explicit Save / Submit / Update / Resolve / Close approval phrases;
 - Excel dry-run QA evidence fields;
 - a manual-fill QA runbook;
 - a 3–5 minute demo script.
@@ -104,10 +104,10 @@ Expected priority: 4 - Low
 Each real write action has its own approval phrase. One phrase never covers another action.
 
 ```text
-Save:   I APPROVE QA SAVE ONLY
-Submit: I APPROVE QA SUBMIT ONLY
-Update: I APPROVE QA UPDATE ONLY
-Close:  I APPROVE QA CLOSE ONLY
+Save:   PRIVATE_APPROVAL_PHRASE
+Submit: PRIVATE_APPROVAL_PHRASE
+Update: PRIVATE_APPROVAL_PHRASE
+Close:  PRIVATE_APPROVAL_PHRASE
 ```
 
 Rules:
@@ -208,4 +208,4 @@ Risks or blockers:
 
 ## Important nuance
 
-QA is safer than production, but QA writes are still real writes. Do not recommend uncontrolled Save, Submit, Update, Close, bulk actions, real data, production-shadow behavior, or external AI over real enterprise/customer/ticket content.
+QA is safer than production, but QA writes are still real writes. Do not recommend uncontrolled Save, Submit, Update, Resolve, Close, bulk actions, real data, production-shadow behavior, or external AI over real enterprise/customer/ticket content.

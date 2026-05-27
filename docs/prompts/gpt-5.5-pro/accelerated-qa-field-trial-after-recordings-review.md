@@ -17,7 +17,7 @@ Multi-channel Intake
 → Copy Markdown Summary
 ```
 
-Current hard boundary: no real ServiceNow write, no Save / Submit / Update / Close, no browser DOM fill, no Graph / Excel write, no real Teams/mailbox/ServiceNow Chat integration.
+Current hard boundary: no real ServiceNow write, no Save / Submit / Update / Resolve / Close, no browser DOM fill, no Graph / Excel write, no real Teams/mailbox/ServiceNow Chat integration.
 
 ## New information
 

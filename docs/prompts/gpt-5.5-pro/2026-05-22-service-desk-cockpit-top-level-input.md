@@ -186,7 +186,7 @@ Requirements:
 - Use `Prepare Work Notes` / `Copy Work Notes` language.
 - Do not say or imply `Save to ServiceNow` unless a separate QA write checkpoint approves it.
 - Keep internal work notes separate from requester-visible comments.
-- Require action-specific approval for Save / Submit / Update / Close.
+- Require action-specific approval for Save / Submit / Update / Resolve / Close.
 
 ### 6. Remote-support-aware assistance
 
@@ -228,7 +228,7 @@ Requirements:
 
 - Mock mode requires no URL and never writes.
 - QA/Dev may accept a configured ServiceNow URL, but still require explicit approval before any real write.
-- Production Shadow is read-only/shadow-only: no Save, Submit, Update, Close, or bulk action.
+- Production Shadow is read-only/shadow-only: no Save, Submit, Update, Resolve, Close, or bulk action.
 - Custom URL settings must not modify `allowsRealSubmit`, `shadowOnly`, or action gates.
 
 ## Current implementation status reported by local agent
@@ -309,7 +309,7 @@ Responsibilities:
 - action-specific approval phrases;
 - target URL validation;
 - production-shadow denial regardless of approval;
-- Save / Submit / Update / Close separation;
+- Save / Submit / Update / Resolve / Close separation;
 - QA isolation confirmation before any manual-fill readiness.
 
 ### Layer 5 — Local reporting/export
@@ -451,7 +451,7 @@ Candidate designs:
 
 1. Production Shadow mode:
    - read-only comparison only;
-   - no Save/Submit/Update/Close;
+   - no Save/Submit/Update/Resolve/Close;
    - no screenshots/HAR/traces/storage-state;
    - no raw real ticket content in repo or external AI;
    - compare generated draft vs human manual handling.
@@ -493,7 +493,7 @@ Stop immediately if:
 - any real customer/user data appears in the app or repo;
 - any URL contains credentials, query/hash payload, token/session/sys_id-like data;
 - the tool tries to auto-fill DOM or call ServiceNow API;
-- the tool tries Save/Submit/Update/Close without the matching approval phrase;
+- the tool tries Save/Submit/Update/Resolve/Close without the matching approval phrase;
 - screenshots, traces, cookies, storage-state, or sessions would be stored;
 - production shadow is about to perform a real write.
 
@@ -555,4 +555,4 @@ Please produce:
 12. What to build next after the current local XLSX + environment URL settings slice.
 13. Resume/interview positioning language.
 
-Important: do not recommend uncontrolled Save, Submit, Update, Close, bulk actions, production-shadow writes, external AI on raw workplace data, or real integrations before the separate gates are satisfied.
+Important: do not recommend uncontrolled Save, Submit, Update, Resolve, Close, bulk actions, production-shadow writes, external AI on raw workplace data, or real integrations before the separate gates are satisfied.

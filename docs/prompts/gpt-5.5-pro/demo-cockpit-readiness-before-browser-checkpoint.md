@@ -81,7 +81,7 @@ Still forbidden:
 - Real ServiceNow URL/login/DOM/page inspection.
 - Browser screenshots / HAR / traces / video / cookie or session export.
 - Real ServiceNow field fill.
-- Save / Submit / Update / Close.
+- Save / Submit / Update / Resolve / Close.
 - Real email send or attachment upload.
 - External AI with real ServiceNow/mailbox/chat content.
 
@@ -112,7 +112,7 @@ Questions:
 2. Should #41 fake P1/P2 high-severity simulator be implemented before UI polish and demo recording, or deferred?
 3. What are the top 5 mandatory UI/content polish items before recording a 3–5 minute demo?
 4. Does the product story clearly differentiate Alan from a regular Service Desk agent?
-5. Is the multi-channel intake framing better than email-first for YAGEO and future companies?
+5. Is the multi-channel intake framing better than email-first for demo customer and future companies?
 6. Should #33 `about:blank` smoke be done now, or kept as a separate technical validation after mock demo acceptance?
 7. What exact READY WITH CONDITIONS gates must be satisfied before any QA login/read-only exploration?
 8. What should be cut if time is tight?
@@ -135,4 +135,4 @@ Then provide:
 
 ## Important
 
-Do not recommend real ServiceNow writes, Save/Submit/Update/Close, real mailbox/Teams/Graph access, or external AI on real enterprise content for the next demo path. If you recommend browser/QA work, it must be staged separately and safety-gated.
+Do not recommend real ServiceNow writes, Save/Submit/Update/Resolve/Close, real mailbox/Teams/Graph access, or external AI on real enterprise content for the next demo path. If you recommend browser/QA work, it must be staged separately and safety-gated.

@@ -261,7 +261,7 @@ QA environment only
 - Browser profile isolation uncertain.
 - QA host or environment uncertain.
 - Any real customer data appears in the draft.
-- Any Save / Submit / Update / Close action is not explicitly approved.
+- Any Save / Submit / Update / Resolve / Close action is not explicitly approved.
 - Any attempt to auto-fill DOM or use API occurs.
 - Any screenshot, trace, cookie, storage-state, or session would be stored.
 

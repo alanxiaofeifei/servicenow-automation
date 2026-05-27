@@ -21,7 +21,7 @@ screenshots/HAR/traces/video
 browser artifact export
 cookie/session/storage export
 field fill against real ServiceNow
-Save / Submit / Update / Close
+Save / Submit / Update / Resolve / Close
 ServiceNow API calls
 real mailbox access
 real email sending

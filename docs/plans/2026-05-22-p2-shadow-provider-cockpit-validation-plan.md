@@ -14,7 +14,7 @@
 
 Do not implement or run these until a separate checkpoint approves them:
 
-- production Save / Submit / Update / Close;
+- production Save / Submit / Update / Resolve / Close;
 - ServiceNow API writes;
 - browser DOM autofill;
 - bulk ticket creation/update/close;
@@ -45,7 +45,7 @@ QA/dev is safer than production but still a real write surface. QA write actions
 1. Production Shadow must keep:
    - `shadowOnly = true`
    - `allowsRealSubmit = false`
-   - Save / Submit / Update / Close denied
+   - Save / Submit / Update / Resolve / Close denied
    - no DOM autofill
    - no ServiceNow API write
 2. UI copy must say:
@@ -59,7 +59,7 @@ QA/dev is safer than production but still a real write surface. QA write actions
 - Production Shadow card never shows a write-enabled state.
 - Custom Production Shadow URL does not change write gates.
 - Approval phrases cannot unlock production writes.
-- Tests cover Save / Submit / Update / Close denial under Production Shadow.
+- Tests cover Save / Submit / Update / Resolve / Close denial under Production Shadow.
 
 ---
 

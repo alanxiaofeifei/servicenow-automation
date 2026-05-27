@@ -27,7 +27,7 @@ Issue #25 reviewed the first QA/dev no-write controlled browser session and retu
 Issue #26 tracked the first QA no-write field trial. Alan confirmed QA landing/home page reachability, but a serious safety finding occurred:
 
 - Launching Windows Chrome from WSL opened Alan's existing/default Windows Chrome profile.
-- Chrome reused Alan's current Yageo login state.
+- Chrome reused Alan's current demo customer login state.
 - Alan did not type credentials.
 - This means the intended isolated browser profile was **not proven** for the Windows Chrome launch path.
 - Alan must **not** run `sda browser reset --mode qa` for that session because it might affect his normal work browser/profile.
@@ -44,7 +44,7 @@ Open controlled browser
 → observe landing/home page only
 → no DOM automation
 → no field fill
-→ no Save / Submit / Update / Close
+→ no Save / Submit / Update / Resolve / Close
 → close browser
 → reset only the proven project-owned isolated profile if appropriate
 ```
@@ -57,7 +57,7 @@ Still forbidden:
 - page title/current URL metadata capture unless separately reviewed
 - screenshots / HAR / trace / ServiceNow page recording
 - real Incident form navigation
-- Save / Submit / Update / Close
+- Save / Submit / Update / Resolve / Close
 - Create Change / Upload / Send Email
 - production-shadow
 - external AI using real ServiceNow content
@@ -90,7 +90,7 @@ Confirm that all of these are true:
 7. Dry-run remains the default.
 8. Real launch still requires both `--execute` and `--confirm-no-write-launch`.
 9. Production shadow remains blocked.
-10. No Save/Submit/Update/Close/write action is implemented or enabled by the profile-isolation fix.
+10. No Save/Submit/Update/Resolve/Close/write action is implemented or enabled by the profile-isolation fix.
 11. No ServiceNow page screenshot, HAR, trace, storage state, cookies, or customer/ticket data is committed.
 12. `pnpm build`, `pnpm typecheck`, and `pnpm test` pass.
 13. Independent pre-commit review passed.
