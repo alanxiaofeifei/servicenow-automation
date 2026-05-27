@@ -6,7 +6,9 @@ Service desk agents spend time turning scattered support context into clean Serv
 
 ## 2. Safety statement
 
-This is not an auto-submitter. The tool automates drafting, not accountability. Final submit remains manual.
+This is not an auto-submitter. The tool automates drafting, not accountability. Final operation remains manual. Do not show real ServiceNow pages, real tickets, customer data, browser endpoints, page fingerprints, cookies, sessions, HARs, traces, screenshots, or recordings during the demo.
+
+This demo explicitly forbids Save, Submit, Update, Resolve, Close, upload, email, bulk action, and any ServiceNow API write.
 
 ## 3. VPN scenario
 
