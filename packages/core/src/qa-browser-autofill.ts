@@ -432,7 +432,7 @@ function safetyFlags(): QaAutofillSafety {
 
 function autofillStopRules(): string[] {
   return [
-    "Stop before Save, Submit, Update, Close, attachment upload, outbound email, notification, API write, or bulk action.",
+    "Stop before Save, Submit, Update, Resolve, Close, attachment upload, outbound email, notification, API write, or bulk action.",
     "Stop if QA/dev isolation or the dedicated/tool-owned Chromium profile is not confirmed immediately before autofill.",
     "Stop if any selector is missing, ambiguous, or points outside the approved text-field allowlist.",
     "Stop if unexpected required fields appear; do not guess reference, select, routing, impact, urgency, priority, state, or status values.",
