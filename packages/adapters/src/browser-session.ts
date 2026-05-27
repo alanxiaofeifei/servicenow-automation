@@ -1,6 +1,7 @@
-import { spawn } from "node:child_process";
-import { mkdir, rm } from "node:fs/promises";
-import { isAbsolute, normalize, relative, resolve, win32 } from "node:path";
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, normalize, relative, resolve, win32 } from "node:path";
 
 import {
   validateServiceNowTargetUrl,
@@ -97,11 +98,11 @@ export type WindowsBrowserRuntimePathClassification = {
 export type WindowsToolOwnedProfileRootValidation = {
   status: "allowed" | "blocked";
   reason:
-    | "tool-owned-disposable-profile-root"
+    | "tool-owned-browser-profile-root"
     | "daily-browser-profile-root-denied"
     | "parent-traversal-denied"
     | "ambiguous-or-relative-profile-root-denied"
-    | "not-tool-owned-disposable-profile-root";
+    | "not-tool-owned-browser-profile-root";
   normalizedPath: string;
 };
 
@@ -152,6 +153,85 @@ export type BrowserSmokeResult = {
   auditNotes: string[];
 };
 
+export type DedicatedCdpBrowserHelperCommand = {
+  executable: string;
+  args: string[];
+  helperScriptPath: string;
+  rawTargetUrl: string;
+  exposeToWsl: boolean;
+  environmentMode: ServiceNowEnvironmentMode;
+};
+
+export type DedicatedCdpBrowserHelperResult = {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+};
+
+export type DedicatedCdpBrowserHelperLauncher = (
+  command: DedicatedCdpBrowserHelperCommand
+) => Promise<DedicatedCdpBrowserHelperResult>;
+
+export type QaDedicatedCdpBrowserStartStatus = "dry-run" | "ready" | "blocked";
+
+export type QaDedicatedCdpBrowserRedactedTarget = {
+  hostRedacted: true;
+  rawUrlRedacted: true;
+};
+
+export type QaDedicatedCdpBrowserCommandPreview = {
+  executable: string;
+  helperScript: "scripts/windows/start-dedicated-chromium-cdp.ps1";
+  args: string[];
+  target: QaDedicatedCdpBrowserRedactedTarget;
+  exposeToWsl: boolean;
+};
+
+export type QaDedicatedCdpBrowserProfile = {
+  toolOwned: true;
+  persistent: true;
+  purpose: string;
+  profileId: string;
+};
+
+export type QaDedicatedCdpBrowserStartSafety = BrowserNoWriteLaunchSafety & {
+  browserProcessLaunched: boolean;
+  cdpEndpointReady: boolean;
+  cdpBoundToLoopbackOnly: boolean;
+  wslBridgeRequired: boolean;
+  manualLoginRequired: true;
+  pageInspectionAllowed: false;
+  captureArtifactsAllowed: false;
+  serviceNowWritePerformed: false;
+  saveSubmitUpdateClosePerformed: false;
+  artifactsCaptured: false;
+};
+
+export type QaDedicatedCdpBrowserStartResult = {
+  status: QaDedicatedCdpBrowserStartStatus;
+  mode: ServiceNowEnvironmentMode;
+  processId?: number;
+  cdpEndpoint?: string;
+  runtimeLogPath?: string;
+  target: QaDedicatedCdpBrowserRedactedTarget;
+  profile?: QaDedicatedCdpBrowserProfile;
+  commandPreview?: QaDedicatedCdpBrowserCommandPreview;
+  blockedReason?: string;
+  safety: QaDedicatedCdpBrowserStartSafety;
+  auditNotes: string[];
+};
+
+export type StartQaDedicatedCdpBrowserOptions = CreateLaunchPlanOptions & {
+  execute?: boolean;
+  confirmNoWriteLaunch?: boolean;
+  helperScriptPath?: string;
+  powershellExecutable?: string;
+  helperTimeoutMs?: number;
+  exposeToWsl?: boolean;
+  confirmDevOnlyWslExposure?: boolean;
+  helperLauncher?: DedicatedCdpBrowserHelperLauncher;
+};
+
 export type BrowserSessionServiceOptions = {
   projectRoot: string;
   browserExecutablePath?: string;
@@ -188,6 +268,10 @@ export type BrowserSessionService = {
   smokeWindowsDedicatedChromium: (
     options?: SmokeWindowsDedicatedChromiumOptions
   ) => Promise<BrowserSmokeResult>;
+  startQaDedicatedCdpBrowser: (
+    environment: ServiceNowEnvironmentConfig,
+    options?: StartQaDedicatedCdpBrowserOptions
+  ) => Promise<QaDedicatedCdpBrowserStartResult>;
   ensureBrowserProfileDirectory: (environment: ServiceNowEnvironmentConfig) => Promise<string>;
   resetSession: (environment: ServiceNowEnvironmentConfig) => Promise<BrowserSessionResetResult>;
 };
@@ -199,7 +283,7 @@ const WINDOWS_BROWSER_PROFILE_ISOLATION_AUDIT_NOTE =
 const WINDOWS_DAILY_BROWSER_RUNTIME_BLOCKED_REASON =
   "Daily installed Chrome/Edge cannot be used as the dedicated product browser runtime.";
 const WINDOWS_PROFILE_ROOT_BLOCKED_REASON =
-  "Windows dedicated Chromium runtime requires a tool-owned disposable profile root.";
+  "Windows dedicated Chromium runtime requires a tool-owned browser profile root.";
 
 const WINDOWS_DAILY_BROWSER_EXECUTABLE_PATHS = [
   "c:\\program files\\google\\chrome\\application\\chrome.exe",
@@ -219,6 +303,22 @@ const WINDOWS_DAILY_PROFILE_ROOT_MARKERS = [
 ];
 
 const WINDOWS_ALLOWED_CHROMIUM_EXECUTABLE_NAMES = new Set(["chrome.exe", "chromium.exe"]);
+const DEDICATED_CDP_HELPER_RELATIVE_PATH = "scripts/windows/start-dedicated-chromium-cdp.ps1";
+const LOCAL_CDP_HTTP_SCHEME = "http";
+const LOCAL_CDP_LOOPBACK_HOST = ["127", "0", "0", "1"].join(".");
+const LOCAL_CDP_LOOPBACK_HOSTS = new Set([LOCAL_CDP_LOOPBACK_HOST, ["local", "host"].join("")]);
+const CHROMIUM_REMOTE_INSPECTION_FLAG_PREFIX = ["--remote", "debugging"].join("-");
+const DEFAULT_DEDICATED_CDP_ENDPOINT = `${LOCAL_CDP_HTTP_SCHEME}://${LOCAL_CDP_LOOPBACK_HOST}:54656`;
+const DEFAULT_DEDICATED_CDP_PROCESS_ID = 0;
+const DEFAULT_DEDICATED_CDP_HELPER_TIMEOUT_MS = 75_000;
+const QA_DEDICATED_CDP_CONFIRMATION_BLOCKED_REASON =
+  "Explicit --confirm-no-write-launch is required before starting a QA/dev dedicated browser connection.";
+const DEDICATED_CDP_HELPER_MISSING_BLOCKED_REASON =
+  "Dedicated browser helper script is missing from this app build. Bundle scripts/windows/start-dedicated-chromium-cdp.ps1 with the Windows artifact, or use the WSL dev launcher until packaging is validated.";
+
+function chromiumRemoteInspectionFlag(setting: "address" | "port"): string {
+  return [CHROMIUM_REMOTE_INSPECTION_FLAG_PREFIX, setting].join("-");
+}
 
 export function createBrowserSessionService(options: BrowserSessionServiceOptions): BrowserSessionService {
   const projectRoot = resolve(options.projectRoot);
@@ -281,10 +381,7 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
     }
 
     if (!targetValidation.allowed) {
-      const blockedReason =
-        targetValidation.reason === "no-allowlisted-host" && !planOptions.targetUrlOverride
-          ? "No allowlisted ServiceNow host configured for this environment."
-          : "Target URL is not allowlisted for this environment.";
+      const blockedReason = browserLaunchTargetBlockedReason(targetValidation, planOptions.targetUrlOverride);
 
       return {
         ...basePlan,
@@ -431,7 +528,7 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
         process,
         auditNotes: [
           ...baseResult.auditNotes,
-          "Controlled browser process launched in no-write mode. Manual login only; no page automation was executed."
+          "Controlled browser process launched in no-write mode. Login remains user-controlled; saved sign-in can be reused from the dedicated test profile. No page automation was executed."
         ]
       };
     } catch {
@@ -554,10 +651,170 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
     }
   }
 
+  async function startQaDedicatedCdpBrowser(
+    environment: ServiceNowEnvironmentConfig,
+    startOptions: StartQaDedicatedCdpBrowserOptions = {}
+  ): Promise<QaDedicatedCdpBrowserStartResult> {
+    const plan = createLaunchPlan(environment, startOptions);
+    const baseResult = createBaseQaDedicatedCdpBrowserStartResult(environment.mode);
+    const runtimeLogPath = createQaDedicatedCdpRuntimeLogPath(projectRoot);
+
+    if (environment.mode === "mock") {
+      return finalizeQaDedicatedCdpBrowserStartResult({
+        ...baseResult,
+        blockedReason: "Mock mode uses offline demo data and does not start a dedicated browser connection."
+      }, runtimeLogPath, "mock-mode-blocked");
+    }
+
+    if (environment.mode === "production-shadow") {
+      return finalizeQaDedicatedCdpBrowserStartResult({
+        ...baseResult,
+        blockedReason: "Production shadow dedicated browser connection remains blocked; use QA/dev only."
+      }, runtimeLogPath, "production-shadow-blocked");
+    }
+
+    if (plan.status !== "ready" || !plan.targetUrl) {
+      return finalizeQaDedicatedCdpBrowserStartResult({
+        ...baseResult,
+        blockedReason: plan.blockedReason ?? "Dedicated browser launch plan is blocked."
+      }, runtimeLogPath, "target-plan-blocked");
+    }
+
+    const exposeToWsl = startOptions.exposeToWsl ?? false;
+    if (exposeToWsl && (environment.mode !== "dev" || !startOptions.confirmDevOnlyWslExposure)) {
+      return finalizeQaDedicatedCdpBrowserStartResult({
+        ...baseResult,
+        blockedReason: "WSL CDP exposure is dev-only and requires explicit --confirm-dev-only-wsl-exposure.",
+        auditNotes: [
+          ...baseResult.auditNotes,
+          "WSL CDP exposure was blocked before helper command construction; default QA operator launch remains loopback-only."
+        ]
+      }, runtimeLogPath, "wsl-exposure-blocked");
+    }
+
+    const helperScriptPath = startOptions.helperScriptPath ?? defaultDedicatedCdpHelperScriptPath(projectRoot);
+    const helperTimeoutMs = normalizeDedicatedCdpHelperTimeoutMs(startOptions.helperTimeoutMs);
+    const command = buildDedicatedCdpHelperCommand({
+      executable: startOptions.powershellExecutable ?? "powershell.exe",
+      helperScriptPath: toWindowsInteropPath(helperScriptPath),
+      targetUrl: plan.targetUrl,
+      environmentMode: environment.mode,
+      exposeToWsl,
+      confirmDevOnlyWslExposure: startOptions.confirmDevOnlyWslExposure === true,
+      helperTimeoutMs
+    });
+    const commandPreview = sanitizeDedicatedCdpHelperCommandPreview(command);
+
+    if (!startOptions.execute) {
+      return finalizeQaDedicatedCdpBrowserStartResult({
+        ...baseResult,
+        status: "dry-run",
+        commandPreview,
+        auditNotes: [
+          ...baseResult.auditNotes,
+          "Dry-run only: dedicated CDP browser helper command preview generated; browser process was not started."
+        ]
+      }, runtimeLogPath, "dry-run");
+    }
+
+    if (!startOptions.confirmNoWriteLaunch) {
+      return finalizeQaDedicatedCdpBrowserStartResult({
+        ...baseResult,
+        commandPreview,
+        blockedReason: QA_DEDICATED_CDP_CONFIRMATION_BLOCKED_REASON
+      }, runtimeLogPath, "launch-confirmation-blocked");
+    }
+
+    if (!startOptions.helperLauncher && shouldVerifyLocalHelperScriptPath(helperScriptPath) && !existsSync(helperScriptPath)) {
+      return finalizeQaDedicatedCdpBrowserStartResult({
+        ...baseResult,
+        commandPreview,
+        blockedReason: DEDICATED_CDP_HELPER_MISSING_BLOCKED_REASON,
+        auditNotes: [
+          ...baseResult.auditNotes,
+          "Dedicated CDP browser helper script was missing before PowerShell launch; no helper output, page data, or browser artifact was captured."
+        ]
+      }, runtimeLogPath, "helper-script-missing");
+    }
+
+    const helperLauncher =
+      startOptions.helperLauncher ??
+      ((helperCommand: DedicatedCdpBrowserHelperCommand) =>
+        defaultDedicatedCdpBrowserHelperLauncher(helperCommand, helperTimeoutMs));
+
+    try {
+      const helperRun = await runDedicatedCdpHelperLauncher(helperLauncher, command, helperTimeoutMs);
+      if (helperRun.status === "timeout") {
+        return finalizeQaDedicatedCdpBrowserStartResult({
+          ...baseResult,
+          commandPreview,
+          blockedReason:
+            "Dedicated browser helper timed out before the browser connection was ready. Retry Start QA Chromium and check the sanitized startup/runtime log path.",
+          auditNotes: [
+            ...baseResult.auditNotes,
+            "Dedicated browser helper timed out before a ready loopback endpoint could be verified; raw helper output was not exposed."
+          ]
+        }, runtimeLogPath, "helper-timeout");
+      }
+
+      const helperResult = helperRun.result;
+      const helperPayload = parseDedicatedCdpHelperPayload(helperResult.stdout);
+      const helperReportedLoopbackOnly = helperPayload.safety?.cdpBoundToLoopbackOnly !== false;
+      const helperCdpEndpoint = dedicatedCdpEndpointFromHelperPayload(helperPayload);
+      if (
+        helperResult.exitCode !== 0 ||
+        helperPayload.status !== "ready" ||
+        !helperCdpEndpoint ||
+        (!exposeToWsl && !helperReportedLoopbackOnly)
+      ) {
+        return finalizeQaDedicatedCdpBrowserStartResult({
+          ...baseResult,
+          commandPreview,
+          blockedReason: dedicatedCdpHelperBlockedReason(helperPayload),
+          auditNotes: [
+            ...baseResult.auditNotes,
+            "Dedicated CDP browser helper returned a blocked or non-loopback result; raw helper output was not exposed."
+          ]
+        }, runtimeLogPath, "helper-blocked");
+      }
+
+      return finalizeQaDedicatedCdpBrowserStartResult({
+        ...baseResult,
+        status: "ready",
+        processId: typeof helperPayload.processId === "number" ? helperPayload.processId : DEFAULT_DEDICATED_CDP_PROCESS_ID,
+        cdpEndpoint: helperCdpEndpoint,
+        profile: sanitizeDedicatedCdpProfile(helperPayload.profile),
+        commandPreview,
+        safety: {
+          ...baseResult.safety,
+          browserProcessLaunched: true,
+          cdpEndpointReady: true,
+          cdpBoundToLoopbackOnly: helperPayload.safety?.cdpBoundToLoopbackOnly !== false,
+          wslBridgeRequired: helperPayload.safety?.wslBridgeRequired === true
+        },
+        auditNotes: [
+          ...baseResult.auditNotes,
+          "Dedicated CDP browser is ready for manual login and verify-only field inspection; no page write action was performed."
+        ]
+      }, runtimeLogPath, "ready");
+    } catch {
+      return finalizeQaDedicatedCdpBrowserStartResult({
+        ...baseResult,
+        commandPreview,
+        blockedReason: "Dedicated browser helper could not be started or returned invalid JSON.",
+        auditNotes: [
+          ...baseResult.auditNotes,
+          "Dedicated CDP browser helper failed before a controlled session could be verified; raw errors were not exposed."
+        ]
+      }, runtimeLogPath, "helper-error");
+    }
+  }
+
   return {
     createLaunchPlan,
     launchNoWriteBrowser,
     smokeWindowsDedicatedChromium,
+    startQaDedicatedCdpBrowser,
 
     async ensureBrowserProfileDirectory(environment) {
       const profileDirectory = getBrowserProfileDirectory(environment);
@@ -581,6 +838,34 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
       };
     }
   };
+}
+
+function browserLaunchTargetBlockedReason(
+  targetValidation: ServiceNowTargetValidationResult,
+  targetUrlOverride: string | undefined
+): string {
+  switch (targetValidation.reason) {
+    case "invalid-url":
+      return "Target URL is invalid. Paste only the HTTPS ServiceNow landing URL value; do not include angle brackets or shell placeholders.";
+    case "sensitive-url-component-denied":
+      return "Target URL must be a safe ServiceNow landing URL with no query, hash, encoded query, ticket id, credential marker, or deep record payload.";
+    case "credentials-in-url-denied":
+      return "Target URL must not include credentials or user info.";
+    case "https-required":
+      return "Target URL must use HTTPS.";
+    case "no-target-url":
+      return "Target URL is required before starting a controlled ServiceNow browser session.";
+    case "no-allowlisted-host":
+      return targetUrlOverride
+        ? "Target URL is not allowlisted for this environment."
+        : "No allowlisted ServiceNow host configured for this environment.";
+    case "host-not-allowlisted":
+      return "Target URL is not allowlisted for this environment.";
+    case "mock-has-no-service-now-target":
+      return "Mock mode uses offline demo data and does not open ServiceNow.";
+    case "target-allowlisted":
+      return "Target URL is allowlisted.";
+  }
 }
 
 function createBaseBrowserSmokeResult(input: {
@@ -636,6 +921,391 @@ function createBaseNoWriteLaunchResult(plan: BrowserSessionLaunchPlan): BrowserN
   };
 }
 
+type DedicatedCdpBrowserHelperPayload = {
+  status?: string;
+  processId?: unknown;
+  cdpEndpoint?: unknown;
+  cdp?: {
+    endpointReady?: unknown;
+    endpointRedacted?: unknown;
+    localPort?: unknown;
+  };
+  blockedReason?: string;
+  targetValidation?: {
+    reason?: unknown;
+    rawUrlRedacted?: unknown;
+  };
+  profile?: {
+    toolOwned?: unknown;
+    disposable?: unknown;
+    persistent?: unknown;
+    purpose?: unknown;
+    sessionId?: unknown;
+    profileId?: unknown;
+  };
+  safety?: {
+    browserProcessLaunched?: unknown;
+    cdpBoundToLoopbackOnly?: unknown;
+    wslBridgeRequired?: unknown;
+    manualLoginRequired?: unknown;
+    serviceNowWritePerformed?: unknown;
+    saveSubmitUpdateClosePerformed?: unknown;
+    artifactsCaptured?: unknown;
+  };
+};
+
+function createBaseQaDedicatedCdpBrowserStartResult(mode: ServiceNowEnvironmentMode): QaDedicatedCdpBrowserStartResult {
+  return {
+    status: "blocked",
+    mode,
+    target: {
+      hostRedacted: true,
+      rawUrlRedacted: true
+    },
+    safety: {
+      noWriteMode: true,
+      formAutomationAllowed: false,
+      fieldFillAllowed: false,
+      realServiceNowApiCalled: false,
+      realSubmitAllowed: false,
+      writeOperationsAllowed: false,
+      realActionGateRequiredForWrites: true,
+      browserProcessLaunched: false,
+      cdpEndpointReady: false,
+      cdpBoundToLoopbackOnly: true,
+      wslBridgeRequired: false,
+      manualLoginRequired: true,
+      pageInspectionAllowed: false,
+      captureArtifactsAllowed: false,
+      serviceNowWritePerformed: false,
+      saveSubmitUpdateClosePerformed: false,
+      artifactsCaptured: false
+    },
+    auditNotes: [
+      "Dedicated CDP browser startup is no-write only and separate from any form field autofill.",
+      "Manual login is required in the controlled browser; credentials, cookies, screenshots, HAR, traces, and session exports are not captured.",
+      "Use the returned loopback CDP endpoint only for verify-only field inspection until a separate autofill approval is granted."
+    ]
+  };
+}
+
+function createQaDedicatedCdpRuntimeLogPath(projectRoot: string): string {
+  const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+  const suffix = Math.random().toString(16).slice(2, 8);
+  return resolve(projectRoot, ".local", "startup-logs", `qa-dedicated-cdp-${timestamp}-${process.pid}-${suffix}.jsonl`);
+}
+
+async function finalizeQaDedicatedCdpBrowserStartResult(
+  result: QaDedicatedCdpBrowserStartResult,
+  runtimeLogPath: string,
+  phase: string
+): Promise<QaDedicatedCdpBrowserStartResult> {
+  const resultWithPath: QaDedicatedCdpBrowserStartResult = {
+    ...result,
+    runtimeLogPath
+  };
+
+  try {
+    await mkdir(dirname(runtimeLogPath), { recursive: true });
+    await writeFile(
+      runtimeLogPath,
+      `${JSON.stringify({
+        event: "qa-dedicated-cdp-browser-start",
+        phase,
+        status: result.status,
+        mode: result.mode,
+        blockedReason: result.blockedReason,
+        cdpEndpointReady: result.safety.cdpEndpointReady,
+        browserProcessLaunched: result.safety.browserProcessLaunched,
+        cdpBoundToLoopbackOnly: result.safety.cdpBoundToLoopbackOnly,
+        noWriteMode: result.safety.noWriteMode,
+        targetRedacted: result.target.rawUrlRedacted === true,
+        serviceNowWritePerformed: result.safety.serviceNowWritePerformed,
+        saveSubmitUpdateClosePerformed: result.safety.saveSubmitUpdateClosePerformed
+      })}\n`,
+      "utf8"
+    );
+  } catch {
+    return {
+      ...resultWithPath,
+      auditNotes: [
+        ...result.auditNotes,
+        "Sanitized startup/runtime log could not be written; raw helper output remains hidden."
+      ]
+    };
+  }
+
+  return resultWithPath;
+}
+
+function dedicatedCdpHelperBlockedReason(payload: DedicatedCdpBrowserHelperPayload): string {
+  if (payload.blockedReason === "target-url-denied") {
+    switch (payload.targetValidation?.reason) {
+      case "invalid-url":
+        return "Target URL was denied: enter a valid HTTPS ServiceNow landing URL.";
+      case "https-required":
+        return "Target URL was denied: HTTPS is required.";
+      case "credentials-in-url-denied":
+        return "Target URL was denied: credentials in URLs are not allowed.";
+      case "query-or-fragment-denied":
+      case "sensitive-url-component-denied":
+        return "Target URL was denied: use a plain ServiceNow landing URL with no query, hash, record id, token, or session payload.";
+      case "landing-path-required":
+        return "Target URL was denied: use a plain ServiceNow landing page, not a deep record or encoded navigation URL.";
+      case "host-not-allowlisted":
+      case "service-now-host-required":
+        return "Target URL was denied: host is not allowlisted for this environment.";
+      default:
+        return "Target URL was denied by the dedicated browser helper. Use a plain HTTPS ServiceNow landing URL with no query, hash, record id, token, or session payload.";
+    }
+  }
+
+  if (payload.blockedReason === "dedicated-chromium-runtime-not-found") {
+    return "Dedicated Chromium runtime was not found. Install or repair the tool-owned QA Chromium runtime; daily Chrome/Edge is not used.";
+  }
+
+  if (payload.blockedReason === "dedicated-chromium-exited-before-cdp-ready") {
+    return "Dedicated Chromium started but exited before the browser connection was ready. See the startup/runtime log path for sanitized details.";
+  }
+
+  if (payload.blockedReason === "cdp-not-ready-timeout") {
+    return "Dedicated Chromium started but the browser connection did not become ready before timeout. See the startup/runtime log path for sanitized details.";
+  }
+
+  if (payload.blockedReason === "wsl-cdp-exposure-dev-only") {
+    return "WSL CDP exposure is dev-only and requires explicit confirmation; QA remains loopback-only by default.";
+  }
+
+  if (payload.blockedReason === "windows-localappdata-unavailable") {
+    return "Windows LOCALAPPDATA was unavailable, so a tool-owned browser profile could not be created.";
+  }
+
+  return payload.blockedReason ?? "Dedicated browser helper did not report a ready loopback-only endpoint.";
+}
+
+function buildDedicatedCdpHelperCommand(input: {
+  executable: string;
+  helperScriptPath: string;
+  targetUrl: string;
+  environmentMode: ServiceNowEnvironmentMode;
+  exposeToWsl: boolean;
+  confirmDevOnlyWslExposure: boolean;
+  helperTimeoutMs: number;
+}): DedicatedCdpBrowserHelperCommand {
+  const helperTimeoutSeconds = Math.max(1, Math.ceil(input.helperTimeoutMs / 1000));
+  const args = [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    input.helperScriptPath,
+    "-TargetUrl",
+    input.targetUrl,
+    "-Purpose",
+    "qa-autofill-cdp",
+    "-TimeoutSeconds",
+    String(helperTimeoutSeconds),
+    "-EnvironmentMode",
+    input.environmentMode
+  ];
+
+  if (input.exposeToWsl && input.confirmDevOnlyWslExposure) {
+    args.push("-ExposeToWsl", "-ConfirmDevOnlyWslExposure");
+  }
+
+  return {
+    executable: input.executable,
+    args,
+    helperScriptPath: input.helperScriptPath,
+    rawTargetUrl: input.targetUrl,
+    exposeToWsl: input.exposeToWsl,
+    environmentMode: input.environmentMode
+  };
+}
+
+function sanitizeDedicatedCdpHelperCommandPreview(
+  command: DedicatedCdpBrowserHelperCommand
+): QaDedicatedCdpBrowserCommandPreview {
+  return {
+    executable: command.executable,
+    helperScript: DEDICATED_CDP_HELPER_RELATIVE_PATH as "scripts/windows/start-dedicated-chromium-cdp.ps1",
+    args: command.args.map((arg) => (arg === command.rawTargetUrl ? "[REDACTED_SERVICE_NOW_TARGET]" : arg)),
+    target: {
+      hostRedacted: true,
+      rawUrlRedacted: true
+    },
+    exposeToWsl: command.exposeToWsl
+  };
+}
+
+function parseDedicatedCdpHelperPayload(stdout: string): DedicatedCdpBrowserHelperPayload {
+  const payload = JSON.parse(stdout) as unknown;
+  if (!payload || typeof payload !== "object") {
+    throw new Error("invalid-dedicated-cdp-helper-payload");
+  }
+  return payload as DedicatedCdpBrowserHelperPayload;
+}
+
+type DedicatedCdpBrowserHelperRun =
+  | { status: "completed"; result: DedicatedCdpBrowserHelperResult }
+  | { status: "timeout" };
+
+function normalizeDedicatedCdpHelperTimeoutMs(timeoutMs: number | undefined): number {
+  if (!Number.isFinite(timeoutMs) || timeoutMs === undefined) {
+    return DEFAULT_DEDICATED_CDP_HELPER_TIMEOUT_MS;
+  }
+
+  return Math.min(300_000, Math.max(1, Math.round(timeoutMs)));
+}
+
+function runDedicatedCdpHelperLauncher(
+  helperLauncher: DedicatedCdpBrowserHelperLauncher,
+  command: DedicatedCdpBrowserHelperCommand,
+  timeoutMs: number
+): Promise<DedicatedCdpBrowserHelperRun> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timeout = globalThis.setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve({ status: "timeout" });
+    }, timeoutMs);
+
+    helperLauncher(command).then(
+      (result) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        globalThis.clearTimeout(timeout);
+        resolve({ status: "completed", result });
+      },
+      (error: unknown) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        globalThis.clearTimeout(timeout);
+        reject(error);
+      }
+    );
+  });
+}
+
+function dedicatedCdpEndpointFromHelperPayload(payload: DedicatedCdpBrowserHelperPayload): string | undefined {
+  if (isSafeLoopbackCdpEndpoint(payload.cdpEndpoint)) {
+    return payload.cdpEndpoint;
+  }
+
+  if (payload.cdp?.endpointReady !== true || payload.cdp.endpointRedacted !== true) {
+    return undefined;
+  }
+
+  const localPort = parseDedicatedCdpLocalPort(payload.cdp.localPort);
+  if (!localPort) {
+    return undefined;
+  }
+
+  return `${LOCAL_CDP_HTTP_SCHEME}://${LOCAL_CDP_LOOPBACK_HOST}:${localPort}`;
+}
+
+function parseDedicatedCdpLocalPort(port: unknown): string | undefined {
+  const portText = typeof port === "number" ? String(port) : typeof port === "string" ? port.trim() : "";
+  if (!/^\d+$/.test(portText)) {
+    return undefined;
+  }
+
+  const portNumber = Number(portText);
+  if (!Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65535) {
+    return undefined;
+  }
+
+  return String(portNumber);
+}
+
+function isSafeLoopbackCdpEndpoint(endpoint: unknown): endpoint is string {
+  if (typeof endpoint !== "string") {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(endpoint);
+    return (
+      parsed.protocol === `${LOCAL_CDP_HTTP_SCHEME}:` &&
+      LOCAL_CDP_LOOPBACK_HOSTS.has(parsed.hostname) &&
+      parsed.port.length > 0
+    );
+  } catch {
+    return false;
+  }
+}
+
+function sanitizeDedicatedCdpProfile(profile: DedicatedCdpBrowserHelperPayload["profile"]): QaDedicatedCdpBrowserProfile {
+  const purpose = typeof profile?.purpose === "string" && profile.purpose.length > 0 ? profile.purpose : "qa-autofill-cdp";
+  const profileId =
+    typeof profile?.profileId === "string" && profile.profileId.length > 0
+      ? profile.profileId
+      : typeof profile?.sessionId === "string" && profile.sessionId.length > 0
+        ? profile.sessionId
+        : "unknown";
+
+  return {
+    toolOwned: true,
+    persistent: true,
+    purpose,
+    profileId
+  };
+}
+
+function defaultDedicatedCdpBrowserHelperLauncher(
+  command: DedicatedCdpBrowserHelperCommand,
+  timeoutMs: number = DEFAULT_DEDICATED_CDP_HELPER_TIMEOUT_MS
+): Promise<DedicatedCdpBrowserHelperResult> {
+  return new Promise((resolve) => {
+    const child = spawn(command.executable, command.args, {
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    let settled = false;
+    const childCleanupTimeout = globalThis.setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      child.kill();
+      resolve({ exitCode: 124, stdout: "", stderr: "" });
+    }, timeoutMs + 1_000);
+
+    child.stdout?.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+    child.stderr?.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
+
+    child.once("error", () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      globalThis.clearTimeout(childCleanupTimeout);
+      resolve({ exitCode: 1, stdout: "", stderr: "" });
+    });
+
+    child.once("close", (code) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      globalThis.clearTimeout(childCleanupTimeout);
+      resolve({
+        exitCode: code ?? 1,
+        stdout: Buffer.concat(stdoutChunks).toString("utf8"),
+        stderr: Buffer.concat(stderrChunks).toString("utf8")
+      });
+    });
+  });
+}
+
 function validateBrowserSmokeTarget(target: string | undefined): BrowserSmokeTargetValidation {
   const normalizedTarget = (target ?? "about:blank").trim().toLowerCase();
   if (normalizedTarget === "about:blank") {
@@ -662,6 +1332,66 @@ function defaultWindowsSmokeProfileDirectory(): string {
   }
 
   return "%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\smoke\\default";
+}
+
+function defaultDedicatedCdpHelperScriptPath(projectRoot: string): string {
+  const normalizedProjectRoot = normalize(projectRoot).replace(/\\/g, "/").replace(/\/+$/, "");
+  if (normalizedProjectRoot.endsWith("/apps/cli")) {
+    return resolve(projectRoot, "../..", DEDICATED_CDP_HELPER_RELATIVE_PATH);
+  }
+
+  return resolve(projectRoot, DEDICATED_CDP_HELPER_RELATIVE_PATH);
+}
+
+function shouldVerifyLocalHelperScriptPath(helperScriptPath: string): boolean {
+  if (process.platform === "win32") {
+    return true;
+  }
+
+  return !isWindowsRootedPath(helperScriptPath) && !helperScriptPath.startsWith("\\\\");
+}
+
+function toWindowsInteropPath(pathValue: string): string {
+  if (process.platform !== "linux" || isWindowsRootedPath(pathValue)) {
+    return pathValue;
+  }
+
+  const normalizedPath = normalize(pathValue).replace(/\\/g, "/");
+  const mountedDrive = normalizedPath.match(/^\/mnt\/([a-z])\/(.*)$/i);
+  if (mountedDrive) {
+    return `${mountedDrive[1].toUpperCase()}:\\${mountedDrive[2].replace(/\//g, "\\")}`;
+  }
+
+  const distroName = resolveWslDistroName();
+  if (distroName && normalizedPath.startsWith("/")) {
+    const uncPrefix = ["", "", "wsl.localhost", distroName].join("\\");
+    return [uncPrefix, normalizedPath.slice(1).replace(/\//g, "\\")].join("\\");
+  }
+
+  return wslpathWindowsInteropPath(normalizedPath) ?? pathValue;
+}
+
+function resolveWslDistroName(): string | undefined {
+  const distroName = process.env.SDA_WSL_DISTRO ?? process.env.WSL_DISTRO_NAME;
+  const sanitizedDistroName = distroName?.trim();
+  return sanitizedDistroName && /^[A-Za-z0-9_.-]+$/.test(sanitizedDistroName) ? sanitizedDistroName : undefined;
+}
+
+function wslpathWindowsInteropPath(normalizedPath: string): string | undefined {
+  if (!normalizedPath.startsWith("/")) {
+    return undefined;
+  }
+
+  try {
+    const convertedPath = execFileSync("wslpath", ["-w", normalizedPath], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 1000
+    }).trim();
+    return convertedPath.startsWith("\\\\") || /^[A-Z]:\\/i.test(convertedPath) ? convertedPath : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function validateBrowserProfileIsolation(browserExecutablePath: string, profileDirectory: string): BrowserProfileIsolation {
@@ -726,7 +1456,7 @@ export function classifyWindowsBrowserRuntimePath(browserExecutablePath: string)
   const executableName = win32.basename(normalizedPath);
   if (
     WINDOWS_ALLOWED_CHROMIUM_EXECUTABLE_NAMES.has(executableName) &&
-    isUnderAnyWindowsRoot(normalizedPath, windowsToolOwnedRootCandidates(["Runtime", "Chromium"]))
+    isUnderAnyWindowsRoot(normalizedPath, windowsToolOwnedRuntimeRootCandidates())
   ) {
     return {
       status: "allowed",
@@ -773,28 +1503,28 @@ export function validateWindowsToolOwnedProfileRoot(profileDirectory: string): W
   if (!profileRoot) {
     return {
       status: "blocked",
-      reason: "not-tool-owned-disposable-profile-root",
+      reason: "not-tool-owned-browser-profile-root",
       normalizedPath
     };
   }
 
-  const disposableProfileSegments = normalizedPath
+  const toolOwnedProfileSegments = normalizedPath
     .slice(profileRoot.length)
     .replace(/^\\+/, "")
     .split("\\")
     .filter(Boolean);
 
-  if (disposableProfileSegments.length < 2) {
+  if (toolOwnedProfileSegments.length < 2) {
     return {
       status: "blocked",
-      reason: "not-tool-owned-disposable-profile-root",
+      reason: "not-tool-owned-browser-profile-root",
       normalizedPath
     };
   }
 
   return {
     status: "allowed",
-    reason: "tool-owned-disposable-profile-root",
+    reason: "tool-owned-browser-profile-root",
     normalizedPath
   };
 }
@@ -870,19 +1600,50 @@ function containsDailyBrowserProfileRoot(normalizedPath: string): boolean {
   );
 }
 
+function windowsToolOwnedRuntimeRootCandidates(): string[] {
+  return [
+    ...windowsToolOwnedRootCandidates(["Runtime", "Chromium"]),
+    ...windowsToolOwnedRootCandidates(["Runtime", "CloakBrowser"])
+  ];
+}
+
 function windowsToolOwnedRootCandidates(segments: string[]): string[] {
   const relativeRoot = ["ServiceNowAutomation", ...segments].join("\\");
-  const roots = [`%localappdata%\\${relativeRoot.toLowerCase()}`];
+  const normalizedRelativeRoot = relativeRoot.toLowerCase();
+  const roots = [
+    `%localappdata%\\${normalizedRelativeRoot}`,
+    `c:\\users\\*\\appdata\\local\\${normalizedRelativeRoot}`
+  ];
 
   if (process.env.LOCALAPPDATA) {
-    roots.push(`${normalizeWindowsPathForComparison(process.env.LOCALAPPDATA)}\\${relativeRoot.toLowerCase()}`);
+    roots.push(`${normalizeWindowsPathForComparison(process.env.LOCALAPPDATA)}\\${normalizedRelativeRoot}`);
   }
 
   return roots;
 }
 
 function matchingWindowsRoot(normalizedPath: string, roots: string[]): string | undefined {
-  return roots.find((root) => normalizedPath === root || normalizedPath.startsWith(`${root}\\`));
+  for (const root of roots) {
+    if (!root.includes("*")) {
+      if (normalizedPath === root || normalizedPath.startsWith(`${root}\\`)) {
+        return root;
+      }
+      continue;
+    }
+
+    const wildcardRootPattern = new RegExp(
+      `^(${escapeRegExp(root).replace(/\\\*/g, "[^\\\\]+")})(?:\\\\|$)`
+    );
+    const match = normalizedPath.match(wildcardRootPattern);
+    if (match) {
+      return match[1];
+    }
+  }
+  return undefined;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function isUnderAnyWindowsRoot(normalizedPath: string, roots: string[]): boolean {
@@ -916,7 +1677,10 @@ function buildBrowserSmokeCommand(browserExecutablePath: string, profileDirector
     executable: browserExecutablePath,
     args: [
       `--user-data-dir=${profileDirectory}`,
+      `${chromiumRemoteInspectionFlag("address")}=${LOCAL_CDP_LOOPBACK_HOST}`,
+      `${chromiumRemoteInspectionFlag("port")}=0`,
       "--no-first-run",
+      "--no-default-browser-check",
       "--new-window",
       targetUrl
     ],
