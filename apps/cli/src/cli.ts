@@ -732,29 +732,29 @@ function parseArgs(argv: string[]): ParsedFlags {
   let confirmNoWriteLaunch = false;
 
   for (let index = 0; index < argv.length; index += 1) {
-    const token = argv[index];
-    if (token === "--help") {
-      positionals.push(token);
+    const arg = argv[index];
+    if (arg === "--help") {
+      positionals.push(arg);
       continue;
     }
-    if (token === "--json") {
+    if (arg === "--json") {
       json = true;
       continue;
     }
-    if (token === "--dry-run") {
+    if (arg === "--dry-run") {
       dryRun = true;
       continue;
     }
-    if (token === "--execute") {
+    if (arg === "--execute") {
       execute = true;
       continue;
     }
-    if (token === "--confirm-no-write-launch") {
+    if (arg === "--confirm-no-write-launch") {
       confirmNoWriteLaunch = true;
       continue;
     }
-    if (token.startsWith("--")) {
-      const name = token.slice(2);
+    if (arg.startsWith("--")) {
+      const name = arg.slice(2);
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
         throw new Error(`Missing value for --${name}`);
@@ -763,7 +763,7 @@ function parseArgs(argv: string[]): ParsedFlags {
       index += 1;
       continue;
     }
-    positionals.push(token);
+    positionals.push(arg);
   }
 
   return { json, dryRun, execute, confirmNoWriteLaunch, flags, positionals };
@@ -920,7 +920,7 @@ function formatBrowserPlan(status: string, browserProfileDirectory: string): str
 function formatBrowserLaunch(status: string, blockedReason?: string): string {
   return [
     `Browser no-write launch: ${status}`,
-    blockedReason ? `Blocked reason: ${blockedReason}` : "Safety: manual login only; no field fill, submit, update, save, or close."
+    blockedReason ? `Blocked reason: ${blockedReason}` : "Safety: login remains user-controlled; no field fill, submit, update, save, or close."
   ].join("\n");
 }
 

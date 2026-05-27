@@ -697,7 +697,7 @@ const runtimeSafetyStatuses = [
     label: "Browser/runtime",
     value: "dedicated test browser prepared/planned; not launched by this panel"
   },
-  { label: "Profile", value: "disposable/tool-owned model" },
+  { label: "Profile", value: "persistent/tool-owned model" },
   { label: "Data", value: "fake sanitized demo data only" }
 ];
 
@@ -980,6 +980,7 @@ type UiChromeTranslations = {
     noRawClickableLink: string;
     credentialPolicy: string;
     manualLoginRequired: string;
+    savedSignInReusable: string;
     noCredentialsRequired: string;
     ignoredLocalRuntimePath: string;
     submitPolicy: string;
@@ -1076,7 +1077,8 @@ const englishChromeTranslations: UiChromeTranslations = {
     urlHidden: "Target value hidden for privacy",
     noRawClickableLink: "No raw clickable target link. Controlled browser launch requires allowlist and safety checks.",
     credentialPolicy: "Credential policy",
-    manualLoginRequired: "Manual login required",
+    manualLoginRequired: "User-controlled login",
+    savedSignInReusable: "ServiceNow saved sign-in can be reused from the dedicated test profile.",
     noCredentialsRequired: "No credentials required",
     ignoredLocalRuntimePath: "Ignored local runtime path",
     submitPolicy: "Write policy",
@@ -1220,7 +1222,8 @@ const uiChromeTranslations: Record<LanguageCode, UiChromeTranslations> = {
       urlHidden: "完整 ServiceNow URL 已为隐私隐藏",
       noRawClickableLink: "不显示原始可点击目标链接。受控浏览器启动需要 URL allowlist 和安全检查。",
       credentialPolicy: "凭据策略",
-      manualLoginRequired: "必须手动登录",
+      manualLoginRequired: "用户自行控制登录",
+      savedSignInReusable: "ServiceNow 已保存登录状态可从专用测试 Profile 复用。",
       noCredentialsRequired: "无需凭据",
       ignoredLocalRuntimePath: "已忽略的本地浏览器目录",
       submitPolicy: "提交策略",
@@ -1487,9 +1490,9 @@ const englishOperatorWorkbenchCopy = {
     statusSuccess: "Verified",
     statusVerified: "Current ticket page checked; Autofill can fill allowed text fields only.",
     statusCdpReady: "Browser connection ready; Check Page enabled.",
-    statusWaiting: "Waiting for browser connection from the separate test browser.",
+    statusWaiting: "Waiting for the dedicated test browser profile to connect.",
     startTitle: "Start test browser",
-    startDescription: "Opens a separate test browser for the QA workspace; manual login remains required.",
+    startDescription: "Opens the same dedicated test browser profile for the QA workspace, so your ServiceNow sign-in can stay remembered; manual login remains yours.",
     starting: "Starting test browser",
     verifyTitle: "Check current ticket page",
     verifyDescription: "Confirms the visible Incident form is safe and current before any fill.",
@@ -1502,7 +1505,7 @@ const englishOperatorWorkbenchCopy = {
     disabledProductionReason: "Disabled: Production is read-only in this workbench; choose the QA workspace for Start, Check Page, and Autofill.",
     disabledTargetReason: "Disabled: configure an allowed QA target in Settings first.",
     disabledBusyReason: "Disabled: another browser/test step is still working.",
-    startReadyReason: "Ready: opens a separate test browser for the QA workspace; manual login only.",
+    startReadyReason: "Ready: opens the same dedicated test browser profile for QA; saved sign-in can be reused.",
     verifyCdpReason: "Disabled: start the test browser and wait until the browser connection is ready.",
     verifyReadyReason: "Ready: browser connection is ready; check the visible ticket page.",
     autofillVerifyReason: "Disabled: check the current ticket page first.",
@@ -1644,7 +1647,7 @@ const operatorWorkbenchTranslations = {
       statusCdpReady: "浏览器连接已准备好；可以检查当前工单页面。",
       statusWaiting: "等待单独的测试浏览器连接。",
       startTitle: "启动测试浏览器",
-      startDescription: "打开单独的 QA 工作区测试浏览器；仍需手动登录。",
+      startDescription: "打开同一个专用 QA 测试浏览器 Profile，可保留 ServiceNow 登录状态；登录仍由你手动完成。",
       starting: "正在启动测试浏览器",
       verifyTitle: "检查当前工单页面",
       verifyDescription: "在任何填充前确认可见 Incident 表单安全且仍是当前页面。",
@@ -1657,7 +1660,7 @@ const operatorWorkbenchTranslations = {
       disabledProductionReason: "禁用：生产环境在此工作台中保持只读；如需启动、检查页面、自动填充，请选择 QA 工作区。",
       disabledTargetReason: "禁用：请先在设置中配置允许的 QA 目标。",
       disabledBusyReason: "禁用：另一个浏览器/测试步骤仍在处理中。",
-      startReadyReason: "就绪：打开单独的 QA 工作区测试浏览器；仅手动登录。",
+      startReadyReason: "就绪：打开同一个专用 QA 测试浏览器 Profile；可复用已保存的登录状态。",
       verifyCdpReason: "禁用：请先启动测试浏览器，并等待浏览器连接就绪。",
       verifyReadyReason: "就绪：浏览器连接已准备好，可以检查当前工单页面。",
       autofillVerifyReason: "禁用：请先检查当前工单页面。",
@@ -1796,7 +1799,7 @@ const operatorWorkbenchTranslations = {
       statusCdpReady: "瀏覽器連線已準備好；可以檢查目前工單頁面。",
       statusWaiting: "等待單獨的測試瀏覽器連線。",
       startTitle: "啟動測試瀏覽器",
-      startDescription: "開啟單獨的 QA 工作區測試瀏覽器；仍需手動登入。",
+      startDescription: "開啟同一個專用 QA 測試瀏覽器 Profile，可保留 ServiceNow 登入狀態；登入仍由你手動完成。",
       starting: "正在啟動測試瀏覽器",
       verifyTitle: "檢查目前工單頁面",
       verifyDescription: "在任何填入前確認可見 Incident 表單安全且仍是目前頁面。",
@@ -1809,7 +1812,7 @@ const operatorWorkbenchTranslations = {
       disabledProductionReason: "停用：生產環境在此工作臺中保持唯讀；如需啟動、檢查、自動填入，請選擇 QA 工作區。",
       disabledTargetReason: "停用：請先在設定中設定允許的 QA 目標。",
       disabledBusyReason: "停用：另一個瀏覽器/測試步驟仍在處理中。",
-      startReadyReason: "就緒：開啟單獨的 QA 工作區測試瀏覽器；僅手動登入。",
+      startReadyReason: "就緒：開啟同一個專用 QA 測試瀏覽器 Profile；可重用已儲存的登入狀態。",
       verifyCdpReason: "停用：請先啟動測試瀏覽器，並等待瀏覽器連線就緒。",
       verifyReadyReason: "就緒：瀏覽器連線已準備好，可以檢查目前工單頁面。",
       autofillVerifyReason: "停用：請先檢查目前工單頁面。",
@@ -1948,7 +1951,7 @@ const operatorWorkbenchTranslations = {
       statusCdpReady: "Navegador conectado; se habilita revisar la página actual del ticket.",
       statusWaiting: "Esperando la conexión del navegador de prueba separado.",
       startTitle: "Start test browser",
-      startDescription: "Abre un navegador de prueba separado para el espacio QA; el inicio de sesión sigue siendo manual.",
+      startDescription: "Abre el mismo perfil dedicado del navegador de prueba para QA, para que el inicio de sesión de ServiceNow pueda conservarse; el inicio de sesión sigue siendo tuyo.",
       starting: "Iniciando navegador de prueba",
       verifyTitle: "Check current ticket page",
       verifyDescription: "Confirma que el formulario Incident visible sea seguro y actual antes de rellenar.",
@@ -1961,7 +1964,7 @@ const operatorWorkbenchTranslations = {
       disabledProductionReason: "Deshabilitado: Producción es de solo lectura en este workbench; elige QA workspace para Start, Check y Autofill.",
       disabledTargetReason: "Deshabilitado: configura primero un destino QA permitido en Settings.",
       disabledBusyReason: "Deshabilitado: otro paso de navegador/prueba sigue en curso.",
-      startReadyReason: "Listo: abre un navegador de prueba separado para el espacio QA; inicio de sesión manual solamente.",
+      startReadyReason: "Listo: abre el mismo perfil dedicado del navegador de prueba para QA; se puede reutilizar el inicio de sesión guardado.",
       verifyCdpReason: "Deshabilitado: inicia el navegador de prueba y espera a que la conexión del navegador esté lista.",
       verifyReadyReason: "Listo: conexión del navegador preparada; revisa la página de ticket visible.",
       autofillVerifyReason: "Deshabilitado: primero revisa la página de ticket actual.",
@@ -4974,10 +4977,14 @@ function EnvironmentCard({
         <div>
           <dt>{chrome.environment.credentialPolicy}</dt>
           <dd>
-            <code>{config.credentialPolicy}</code>
-            {config.credentialPolicy === "manual-login-only"
-              ? ` · ${chrome.environment.manualLoginRequired}`
-              : ` · ${chrome.environment.noCredentialsRequired}`}
+            {config.credentialPolicy === "manual-login-only" ? (
+              <>
+                <strong>{chrome.environment.manualLoginRequired}</strong>
+                <small>{chrome.environment.savedSignInReusable}</small>
+              </>
+            ) : (
+              <strong>{chrome.environment.noCredentialsRequired}</strong>
+            )}
           </dd>
         </div>
         <div>
@@ -5725,7 +5732,7 @@ function defaultOperatorActionStatus(): OperatorActionStatus {
   return {
     label: "Ready",
     tone: "idle",
-    details: "Use the buttons below to start the separate QA test browser, check the current ticket page, then autofill allowed fields for manual review."
+    details: "Use the buttons below to start the dedicated QA test browser profile, check the current ticket page, then autofill allowed fields for manual review."
   };
 }
 
@@ -5802,7 +5809,7 @@ function operatorRuntimeBlockedReasonDetails(value: string | undefined, fallback
 
 function operatorLaunchDetails(response: OperatorRuntimeResponse, fallbackStatus: string): string {
   const baseDetails = response.ok
-    ? "A separate QA test browser is open. Log in and open an Incident form, then click Check current ticket page."
+    ? "The dedicated QA test browser profile is open. Log in manually if needed, open an Incident form, then click Check current ticket page."
     : sanitizeOperatorDiagnosticText(response.launch?.blockedReason, fallbackStatus);
   return `${baseDetails}${operatorRuntimeLogDetails(response)}`;
 }
@@ -6140,7 +6147,7 @@ function QaTextFieldAutofillPanel({
       <section className="qa-smoke-safe-scope" aria-labelledby="qa-autofill-safe-scope-title">
         <h3 id="qa-autofill-safe-scope-title">First autofill planning safe scope</h3>
         <ul>
-          <li>QA/dev only, single ticket only, tool-owned browser profile only, manual login only.</li>
+          <li>QA/dev only, single ticket only, dedicated tool-owned browser profile; saved sign-in can be reused after your manual login.</li>
           <li>Text fields only: Short description, Description, Work notes.</li>
           <li>Selector verification is mandatory; missing or mismatched selectors keep this panel blocked.</li>
           <li>No ServiceNow API, bulk fill, browser artifacts, auth-material export, or external AI on QA content.</li>

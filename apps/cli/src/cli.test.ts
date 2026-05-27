@@ -1340,6 +1340,16 @@ describe("sda CLI", () => {
     expect(payload.safety.browserProcessLaunched).toBe(false);
   });
 
+  it("prints browser launch safety copy as user-controlled login without stale internal policy wording", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-browser-launch-copy-"));
+
+    const result = await runCli(["browser", "launch", "--mode", "qa"], { cwd: projectRoot });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Safety: login remains user-controlled; no field fill, submit, update, save, or close.");
+    expect(result.stdout).not.toContain(["manual", "login", "only"].join(" "));
+  });
+
   it("blocks Windows browser executable dry-run from WSL/Linux without exposing a launchable command", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-browser-windows-exe-blocked-"));
 
@@ -1496,7 +1506,7 @@ describe("sda CLI", () => {
     });
     expect(payload.smoke.profileValidation).toMatchObject({
       status: "allowed",
-      reason: "tool-owned-disposable-profile-root"
+      reason: "tool-owned-browser-profile-root"
     });
     expect(payload.smoke.commandPreview.args).toContain("about:blank");
     expect(payload.smoke.safety.browserProcessLaunched).toBe(false);

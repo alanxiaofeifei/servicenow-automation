@@ -15,12 +15,6 @@ function Write-JsonAndExit($Payload, [int]$Code) {
   exit $Code
 }
 
-function New-SafeSessionId {
-  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-  $suffix = [Guid]::NewGuid().ToString("N").Substring(0, 8)
-  return "$stamp-$suffix"
-}
-
 function Test-SafeTargetUrl([string]$Url) {
   if ($Url -eq "about:blank") {
     return @{
@@ -152,8 +146,10 @@ if (-not $targetValidation.allowed) {
 
 $safePurpose = ($Purpose -replace "[^a-zA-Z0-9_.-]", "-")
 if ($safePurpose.Length -eq 0) { $safePurpose = "qa-autofill-cdp" }
-$sessionId = New-SafeSessionId
-$profile = Join-Path $env:LOCALAPPDATA ("ServiceNowAutomation\Profiles\" + $safePurpose + "\" + $sessionId)
+$safeEnvironmentMode = ($EnvironmentMode -replace "[^a-zA-Z0-9_.-]", "-")
+if ($safeEnvironmentMode.Length -eq 0) { $safeEnvironmentMode = "qa" }
+$profile = Join-Path $env:LOCALAPPDATA ("ServiceNowAutomation\Profiles\" + $safeEnvironmentMode + "\" + $safePurpose)
+$profileId = ($safeEnvironmentMode + "-" + $safePurpose)
 New-Item -ItemType Directory -Force -Path $profile | Out-Null
 
 $loopbackAddress = @("127", "0", "0", "1") -join "."
@@ -184,21 +180,6 @@ $port = $null
 $version = $null
 
 while ((Get-Date) -lt $deadline) {
-  if ($process.HasExited) {
-    Write-JsonAndExit @{
-      status = "blocked"
-      blockedReason = "dedicated-chromium-exited-before-cdp-ready"
-      processId = $process.Id
-      target = $targetValidation.sanitizedTarget
-      safety = @{
-        browserProcessLaunched = $true
-        cdpBoundToLoopbackOnly = (-not [bool]$ExposeToWsl)
-        wslBridgeRequired = [bool]$ExposeToWsl
-        serviceNowWritePerformed = $false
-      }
-    } 1
-  }
-
   if (Test-Path $devToolsFile) {
     $lines = Get-Content -Path $devToolsFile -ErrorAction SilentlyContinue
     if ($lines.Length -ge 1) {
@@ -215,6 +196,21 @@ while ((Get-Date) -lt $deadline) {
         Start-Sleep -Milliseconds 500
       }
     }
+  }
+
+  if ($process.HasExited) {
+    Write-JsonAndExit @{
+      status = "blocked"
+      blockedReason = "dedicated-chromium-exited-before-cdp-ready"
+      processId = $process.Id
+      target = $targetValidation.sanitizedTarget
+      safety = @{
+        browserProcessLaunched = $true
+        cdpBoundToLoopbackOnly = (-not [bool]$ExposeToWsl)
+        wslBridgeRequired = [bool]$ExposeToWsl
+        serviceNowWritePerformed = $false
+      }
+    } 1
   }
 
   Start-Sleep -Milliseconds 500
@@ -246,9 +242,9 @@ Write-JsonAndExit @{
   target = $targetValidation.sanitizedTarget
   profile = @{
     toolOwned = $true
-    disposable = $true
+    persistent = $true
     purpose = $safePurpose
-    sessionId = $sessionId
+    profileId = $profileId
   }
   safety = @{
     browserProcessLaunched = $true

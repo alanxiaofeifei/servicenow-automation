@@ -71,8 +71,8 @@ function Get-DecodedTargetLocation([string]$Value) {
   return $current
 }
 
-function Test-PageTargetHost($Target, [string]$Host) {
-  if (-not $Host) { return $false }
+function Test-PageTargetHost($Target, [string]$ConfiguredHost) {
+  if (-not $ConfiguredHost) { return $false }
   if (-not $Target.url) { return $false }
   try {
     $uri = [Uri]([string]$Target.url)
@@ -81,7 +81,7 @@ function Test-PageTargetHost($Target, [string]$Host) {
   }
   if ($uri.Scheme -ne "https") { return $false }
   if ($uri.UserInfo -and $uri.UserInfo.Length -gt 0) { return $false }
-  return $uri.Host.ToLowerInvariant() -eq $Host.ToLowerInvariant()
+  return $uri.Host.ToLowerInvariant() -eq $ConfiguredHost.ToLowerInvariant()
 }
 
 function Test-LikelyIncidentPageTarget($Target) {
@@ -129,6 +129,20 @@ function Receive-WebSocketText([System.Net.WebSockets.ClientWebSocket]$Client) {
   }
 }
 
+function Receive-CdpResponseById([System.Net.WebSockets.ClientWebSocket]$Client, [int]$ExpectedId) {
+  while ($true) {
+    $responseText = Receive-WebSocketText $Client
+    try {
+      $response = $responseText | ConvertFrom-Json
+    } catch {
+      Write-BlockedAndExit "browser-runtime-error"
+    }
+    if ($response.id -eq $ExpectedId) {
+      return $response
+    }
+  }
+}
+
 try {
   $inputText = [Console]::In.ReadToEnd()
   if (-not $inputText.Trim()) {
@@ -170,7 +184,7 @@ try {
   $client = [System.Net.WebSockets.ClientWebSocket]::new()
   try {
     try {
-      $client.ConnectAsync($webSocketUri, [System.Threading.CancellationToken]::None).GetAwaiter().GetResult()
+      $client.ConnectAsync($webSocketUri, [System.Threading.CancellationToken]::None).GetAwaiter().GetResult() | Out-Null
     } catch {
       Write-BlockedAndExit "cdp-endpoint-denied"
     }
@@ -186,10 +200,9 @@ try {
 
     $payloadBytes = [System.Text.Encoding]::UTF8.GetBytes($payload)
     $payloadSegment = [ArraySegment[byte]]::new($payloadBytes)
-    $client.SendAsync($payloadSegment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, [System.Threading.CancellationToken]::None).GetAwaiter().GetResult()
+    $client.SendAsync($payloadSegment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, [System.Threading.CancellationToken]::None).GetAwaiter().GetResult() | Out-Null
 
-    $responseText = Receive-WebSocketText $client
-    $response = $responseText | ConvertFrom-Json
+    $response = Receive-CdpResponseById $client 1
     if ($response.error -or $response.result.exceptionDetails) {
       Write-BlockedAndExit "browser-runtime-error"
     }

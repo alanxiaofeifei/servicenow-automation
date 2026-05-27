@@ -179,11 +179,31 @@ describe("App", () => {
     const legacyPersonName = ["Al", "an"].join("");
     const legacyBrowserLabel = ["QA", "Chromium"].join(" ");
     const legacyEnvironmentLabel = ["QA Test", "Environment"].join(" ");
+    const staleManualLoginOnlyCopy = ["manual", "login", "only"].join(" ");
 
     expect(desktopSource).not.toMatch(new RegExp(legacyCustomerToken, "i"));
     expect(desktopSource).not.toContain(legacyPersonName);
     expect(desktopSource).not.toContain(legacyBrowserLabel);
     expect(desktopSource).not.toContain(legacyEnvironmentLabel);
+    expect(desktopSource).not.toContain(staleManualLoginOnlyCopy);
+    expect(desktopSource).toContain("saved sign-in can be reused");
+  });
+
+  it("keeps environment credential policy source user-readable instead of directly rendering raw enum values", () => {
+    const desktopSource = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
+
+    expect(desktopSource).toContain("User-controlled login");
+    expect(desktopSource).toContain("ServiceNow saved sign-in can be reused from the dedicated test profile.");
+    expect(desktopSource).not.toContain("<code>{config.credentialPolicy}</code>");
+  });
+
+  it("keeps live desktop and CLI paths off the full-field runtime until UI safety review is added", () => {
+    const desktopMainSource = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+    const cliSource = readFileSync(new URL("../../cli/src/cli.ts", import.meta.url), "utf8");
+
+    expect(desktopMainSource).toContain("buildQaIncidentDefaultRuntimeTextFieldPlan");
+    expect(desktopMainSource).not.toContain("buildQaIncidentDefaultRuntimeFullFieldPlan");
+    expect(cliSource).not.toContain("buildQaIncidentDefaultRuntimeFullFieldPlan");
   });
 
   it("keeps runtime actions visible with plain-language disabled reasons", () => {
@@ -195,11 +215,12 @@ describe("App", () => {
     expect(buttonAttrs(output, "1 Start test browser")).not.toContain("disabled");
     expect(buttonAttrs(output, "2 Check current ticket page")).toContain("disabled");
     expect(buttonAttrs(output, "3 Autofill allowed fields")).toContain("disabled");
-    expect(output).toContain("Ready: opens a separate test browser for the QA workspace; manual login only.");
+    expect(output).toContain("Ready: opens the same dedicated test browser profile for QA; saved sign-in can be reused.");
     expect(output).toContain("Disabled: start the test browser and wait until the browser connection is ready.");
-    expect(output).toContain("Opens a separate test browser for the QA workspace; manual login remains required.");
+    expect(output).toContain("Opens the same dedicated test browser profile for the QA workspace, so your ServiceNow sign-in can stay remembered; manual login remains yours.");
     expect(output).toContain("Confirms the visible Incident form is safe and current before any fill.");
     expect(output).toContain("Fills allowed fields only after page check. It never saves or submits.");
+    expect(output).not.toContain(["manual", "login", "only"].join(" "));
     expect(output).not.toContain("CDP readiness");
     expect(output).not.toContain("Verify current Incident");
     expect(output).toContain("Browser status");
@@ -351,7 +372,7 @@ describe("App", () => {
     expect(output).toContain("Target configured");
     expect(buttonAttrs(output, "1 Start test browser")).not.toContain("disabled");
     expect(buttonAttrs(output, "2 Check current ticket page")).toContain("disabled");
-    expect(output).toContain("Ready: opens a separate test browser for the QA workspace; manual login only.");
+    expect(output).toContain("Ready: opens the same dedicated test browser profile for QA; saved sign-in can be reused.");
     expect(output).toContain("Disabled: start the test browser and wait until the browser connection is ready.");
   });
 
@@ -574,7 +595,7 @@ describe("App", () => {
     expect(buttonAttrs(output, "2 Check current ticket page")).toContain("disabled");
     expect(buttonAttrs(output, "3 Autofill allowed fields")).toContain("disabled");
     expect(output).toContain("Disabled: Production is read-only in this workbench; choose the QA workspace for Start, Check Page, and Autofill.");
-    expect(output).toContain("Waiting for browser connection from the separate test browser.");
+    expect(output).toContain("Waiting for the dedicated test browser profile to connect.");
     expect(output).not.toContain("Browser connection ready; Check Page enabled.");
     expect(output).not.toContain("Current ticket page checked; Autofill can fill allowed text fields only.");
     expect(output).not.toContain(rawEndpoint);

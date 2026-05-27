@@ -166,7 +166,14 @@ function requireCdpEndpoint(value?: string): string {
 }
 
 function operatorCdpRuntimeBlockedReasonFromError(error: unknown): QaCdpRuntimeBlockedReason | undefined {
-  return error instanceof QaCdpRuntimeBlockedError ? error.blockedReason : undefined;
+  if (error instanceof QaCdpRuntimeBlockedError) return (error as { blockedReason: QaCdpRuntimeBlockedReason }).blockedReason;
+  if (!error || typeof error !== "object") return undefined;
+  const blockedReason = (error as { blockedReason?: unknown }).blockedReason;
+  return isOperatorCdpRuntimeBlockedReason(blockedReason) ? blockedReason : undefined;
+}
+
+function isOperatorCdpRuntimeBlockedReason(value: unknown): value is QaCdpRuntimeBlockedReason {
+  return value === "cdp-endpoint-denied" || value === "cdp-page-selection-denied" || value === "browser-runtime-error";
 }
 
 function safeApprovalPageFingerprint(value?: string): string | undefined {
