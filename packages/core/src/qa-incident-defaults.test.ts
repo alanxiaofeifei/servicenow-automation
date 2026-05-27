@@ -189,6 +189,20 @@ describe("QA incident default value planning", () => {
     expect(plan.stopRules).toContain("Route-out planning must set State to New before changing Assignment group and must leave Assigned to blank.");
   });
 
+  it("ignores unsafe route-out state overrides and still plans State as New", () => {
+    const plan = buildQaIncidentDefaultValuePlan({
+      draft: completeDraft(),
+      fields: routeOutEvidence(),
+      scenario: "route-out",
+      routeOutAssignmentGroup: routeOutAssignmentGroup(),
+      defaults: { routeOutState: "Resolved" }
+    });
+
+    expect(plan.status).toBe("ready-for-local-review");
+    expect(valueFor(plan, "state")).toBe("New");
+    expect(plan.plannedFields.find((field) => field.key === "state")?.source).toBe("computed-safety-rule");
+  });
+
   it("fails closed and redacts labels when a required field is not recognized", () => {
     const rawRequiredLabel = "Confidential custom required routing field";
     const rawRequiredName = "incident.u_confidential_required_route";

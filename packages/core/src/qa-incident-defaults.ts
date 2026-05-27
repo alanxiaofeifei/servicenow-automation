@@ -558,7 +558,7 @@ function valueAndSourceFor(
         ? { value: "", source: "route-out-clear-assigned-to" }
         : { value: defaults.assignedTo, source: "qa-default-profile" };
     case "state":
-      return { value: defaults.routeOutState, source: "computed-safety-rule" };
+      return { value: alanQaIncidentTestDefaults.routeOutState, source: "computed-safety-rule" };
     case "shortDescription":
       return valueFromDraft(draft.shortDescription, "ticket-draft");
     case "description":
