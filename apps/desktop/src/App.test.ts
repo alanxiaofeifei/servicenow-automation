@@ -682,6 +682,16 @@ describe("App", () => {
     expect(simplifiedChineseSettings).not.toContain("default-environment-settings");
   });
 
+  it("keeps localized checklist safety copy aligned on Resolve as a blocked write action", () => {
+    const zhCnOutput = renderAppMarkup("zh-CN");
+    const zhTwOutput = renderAppMarkup("zh-TW");
+
+    expect(zhCnOutput).toContain("Save、Submit、Update、Resolve、Close");
+    expect(zhTwOutput).toContain("Save、Submit、Update、Resolve、Close");
+    expect(zhCnOutput).not.toContain("Save、Submit、Update、Close、API");
+    expect(zhTwOutput).not.toContain("Save、Submit、Update、Close、API");
+  });
+
   it("renders the main draft as adaptive wrapping text areas without confidence or local-draft chrome", () => {
     const output = renderAppMarkup();
     const primaryMarkup = mainMarkupWithoutSettings(output);

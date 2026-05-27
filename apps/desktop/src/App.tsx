@@ -336,7 +336,7 @@ const zhCnFieldReviewChecklistTranslations = {
   checklistSupportingFields:
     "描述、子类别、配置项、业务服务、服务项、优先级、指派给、附加评论、工作备注、相关搜索 / 知识库与目录",
   checklistSafetyCopy:
-    "仅演示检查清单。仅本地状态。不会执行真实 ServiceNow 字段填充、Save、Submit、Update、Close、API 调用、浏览器自动化、DOM 检查、截图、HAR、trace、session 或 storage 导出。",
+    "仅演示检查清单。仅本地状态。不会执行真实 ServiceNow 字段填充、Save、Submit、Update、Resolve、Close、API 调用、浏览器自动化、DOM 检查、截图、HAR、trace、session 或 storage 导出。",
   checklistItemLabels: {
     "source-channel-reviewed": "来源渠道已审核",
     "requester-identified": "请求者已识别",
@@ -372,7 +372,7 @@ const zhTwFieldReviewChecklistTranslations = {
   checklistSupportingFields:
     "描述、子類別、設定項目、業務服務、服務項目、優先順序、指派給、附加留言、工作備註、相關搜尋 / 知識庫與目錄",
   checklistSafetyCopy:
-    "僅示範檢查清單。僅本地狀態。不會執行真實 ServiceNow 欄位填入、Save、Submit、Update、Close、API 呼叫、瀏覽器自動化、DOM 檢查、截圖、HAR、trace、session 或 storage 匯出。",
+    "僅示範檢查清單。僅本地狀態。不會執行真實 ServiceNow 欄位填入、Save、Submit、Update、Resolve、Close、API 呼叫、瀏覽器自動化、DOM 檢查、截圖、HAR、trace、session 或 storage 匯出。",
   checklistItemLabels: {
     "source-channel-reviewed": "來源管道已審核",
     "requester-identified": "請求者已識別",
