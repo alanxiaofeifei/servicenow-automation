@@ -189,7 +189,7 @@ function buildWriteActionApprovalPhrases(mode: RealActionMode): QaWriteActionApp
 
 function buildStopRules(): string[] {
   return [
-    "Stop before every Save/Submit/Update/Close unless Alan gives the exact action-specific approval phrase.",
+    "Stop before every Save/Submit/Update/Resolve/Close unless Alan gives the exact action-specific approval phrase.",
     "Stop if any real user, real ticket text, real ticket number, credential, cookie, session, screenshot, or recording detail appears.",
     "Stop if the QA ticket could notify production users or a real support team.",
     "Stop if the environment is production or production-shadow, or if QA isolation is not explicitly confirmed.",

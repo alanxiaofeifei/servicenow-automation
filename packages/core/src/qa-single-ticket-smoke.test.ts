@@ -167,7 +167,7 @@ describe("QA single-ticket smoke preview", () => {
       { action: "close_incident", label: "Close", phrase: "I APPROVE QA CLOSE ONLY" }
     ]);
     expect(plan.stopRules).toContain(
-      "Stop before every Save/Submit/Update/Close unless Alan gives the exact action-specific approval phrase."
+      "Stop before every Save/Submit/Update/Resolve/Close unless Alan gives the exact action-specific approval phrase."
     );
     expect(plan.stopRules).toContain("Stop if the QA ticket could notify production users or a real support team.");
     expect(plan.missingRequiredFields).toEqual([]);
