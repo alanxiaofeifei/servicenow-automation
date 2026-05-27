@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { FieldDraft, TicketDraft } from "./models";
 import {
   applyQaWorkNotesPrefix,
+  buildQaIncidentDefaultRuntimeFullFieldPlan,
   buildQaIncidentDefaultRuntimeTextFieldPlan,
   buildQaIncidentDefaultValuePlan,
   executeQaIncidentDefaultFieldEvidenceVerification,
@@ -119,6 +120,53 @@ describe("QA incident default value planning", () => {
     expect(runtimePlan.stopRules).toContain(
       "Runtime autofill is limited to text fields only: Short description, Description, and Work notes. Reference, select, assignment, requester, state, and routing fields remain verify-only."
     );
+  });
+
+  it("builds a reviewed full-field runtime plan while excluding manual-confirm and out-of-scope defaults", () => {
+    const fullPlan = buildQaIncidentDefaultValuePlan({
+      draft: completeDraft(),
+      fields: initialCreateEvidence(),
+      scenario: "initial-create"
+    });
+
+    const runtimePlan = buildQaIncidentDefaultRuntimeFullFieldPlan(fullPlan);
+
+    expect(runtimePlan.status).toBe("ready-for-local-review");
+    expect(runtimePlan.plannedFields.map((field) => field.key)).toEqual([
+      "requester",
+      "category",
+      "subcategory",
+      "location",
+      "assignmentGroup",
+      "assignedTo",
+      "shortDescription",
+      "description",
+      "workNotes"
+    ]);
+    expect(runtimePlan.excludedFieldKeys).toEqual(["channel", "impact", "urgency"]);
+    expect(runtimePlan.plannedFields.find((field) => field.key === "channel")).toBeUndefined();
+    expect(runtimePlan.plannedFields.every((field) => field.source !== "operator-confirmation-required")).toBe(true);
+    expect(runtimePlan.stopRules).toContain(
+      "Runtime autofill may fill only reviewed Requester, Category, Subcategory, Location, Channel, Assignment group, Assigned to, State, Short description, Description, and Work notes fields after fingerprint approval. Channel remains excluded until a reviewed value is present; Impact and Urgency remain out of scope."
+    );
+  });
+
+  it("builds a reviewed route-out runtime plan with State first and Assigned to intentionally blank", () => {
+    const fullPlan = buildQaIncidentDefaultValuePlan({
+      draft: completeDraft(),
+      fields: routeOutEvidence(),
+      scenario: "route-out",
+      routeOutAssignmentGroup: routeOutAssignmentGroup()
+    });
+
+    const runtimePlan = buildQaIncidentDefaultRuntimeFullFieldPlan(fullPlan);
+
+    expect(runtimePlan.status).toBe("ready-for-local-review");
+    expect(runtimePlan.plannedFields.map((field) => field.key)).toEqual(["state", "assignmentGroup", "assignedTo", "workNotes"]);
+    expect(valueFor(runtimePlan, "state")).toBe("New");
+    expect(valueFor(runtimePlan, "assignmentGroup")).toBe(routeOutAssignmentGroup());
+    expect(valueFor(runtimePlan, "assignedTo")).toBe("");
+    expect(runtimePlan.excludedFieldKeys).toEqual([]);
   });
 
   it("plans route-out with State set to New before assignment group and Assigned to left blank", () => {

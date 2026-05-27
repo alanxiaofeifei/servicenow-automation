@@ -98,6 +98,14 @@ export type QaIncidentDefaultRuntimeTextFieldPlan = QaIncidentDefaultValuePlan &
   excludedFieldKeys: QaIncidentDefaultFieldKey[];
 };
 
+export type QaIncidentDefaultRuntimeFullFieldPlan = QaIncidentDefaultValuePlan & {
+  /**
+   * Fields from the local review plan that are intentionally excluded from the reviewed full-field runtime slice.
+   * Manual-confirm fields without a reviewed value and out-of-scope defaults remain visible in review but are not auto-filled.
+   */
+  excludedFieldKeys: QaIncidentDefaultFieldKey[];
+};
+
 export type QaIncidentDefaultFixtureControl = {
   key: QaIncidentDefaultFieldKey;
   matchedControlCount: number;
@@ -248,6 +256,22 @@ const runtimeTextFieldOrder: QaIncidentDefaultFieldKey[] = ["shortDescription", 
 const runtimeTextFieldStopRule =
   "Runtime autofill is limited to text fields only: Short description, Description, and Work notes. Reference, select, assignment, requester, state, and routing fields remain verify-only.";
 
+const runtimeFullFieldInitialCreateOrder: QaIncidentDefaultFieldKey[] = [
+  "requester",
+  "category",
+  "subcategory",
+  "location",
+  "channel",
+  "assignmentGroup",
+  "assignedTo",
+  "shortDescription",
+  "description",
+  "workNotes"
+];
+
+const runtimeFullFieldStopRule =
+  "Runtime autofill may fill only reviewed Requester, Category, Subcategory, Location, Channel, Assignment group, Assigned to, State, Short description, Description, and Work notes fields after fingerprint approval. Channel remains excluded until a reviewed value is present; Impact and Urgency remain out of scope.";
+
 export function buildQaIncidentDefaultValuePlan(
   request: QaIncidentDefaultValuePlanRequest
 ): QaIncidentDefaultValuePlan {
@@ -330,6 +354,38 @@ export function buildQaIncidentDefaultRuntimeTextFieldPlan(
     plannedFields,
     excludedFieldKeys,
     stopRules: [runtimeTextFieldStopRule, ...plan.stopRules.filter((rule) => rule !== runtimeTextFieldStopRule)]
+  };
+}
+
+export function buildQaIncidentDefaultRuntimeFullFieldPlan(
+  plan: QaIncidentDefaultValuePlan
+): QaIncidentDefaultRuntimeFullFieldPlan {
+  if (plan.status !== "ready-for-local-review") {
+    return {
+      ...plan,
+      plannedFields: [],
+      excludedFieldKeys: []
+    };
+  }
+
+  const runtimeOrder = plan.scenario === "route-out" ? routeOutOrder : runtimeFullFieldInitialCreateOrder;
+  const plannedByKey = new Map(plan.plannedFields.map((field) => [field.key, field]));
+  const plannedFields = runtimeOrder.flatMap((key) => {
+    const field = plannedByKey.get(key);
+    if (!field) return [];
+    if (field.manualConfirmationRequired || field.source === "operator-confirmation-required") return [];
+    return [field];
+  });
+  const includedKeys = new Set(plannedFields.map((field) => field.key));
+  const excludedFieldKeys = plan.plannedFields
+    .map((field) => field.key)
+    .filter((key) => !includedKeys.has(key));
+
+  return {
+    ...plan,
+    plannedFields,
+    excludedFieldKeys,
+    stopRules: [runtimeFullFieldStopRule, ...plan.stopRules.filter((rule) => rule !== runtimeFullFieldStopRule)]
   };
 }
 
