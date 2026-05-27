@@ -87,7 +87,7 @@ describe("service desk workflow preview", () => {
       requiredFieldCheck:
         "Complete for manual fill: requester, channel, category, subcategory, location, impact, urgency, assignment group, short description, description, work notes.",
       approvalPhraseGate:
-        "Separate exact approval phrase required before each real Save/Submit/Update/Close action.",
+        "Separate exact approval phrase required before each real Save/Submit/Update/Resolve/Close action.",
       stopRuleCheck:
         "Stop if production mode, real user data, notification risk, missing QA isolation, or any DOM/API/bulk path appears.",
       qaIsolationCheck: "Pending explicit confirmation that QA will not notify production/support teams.",
@@ -101,7 +101,7 @@ describe("service desk workflow preview", () => {
     expect(preview.row["Evidence Review State"]).toBe("not reviewed (none)");
     expect(preview.row["Fake Scenario ID"]).toBe("vpn-issue");
     expect(preview.row["Required Field Check"]).toContain("Complete for manual fill");
-    expect(preview.row["Approval Phrase Gate"]).toContain("Save/Submit/Update/Close");
+    expect(preview.row["Approval Phrase Gate"]).toContain("Save/Submit/Update/Resolve/Close");
     expect(preview.row["Stop Rule Check"]).toContain("notification risk");
     expect(preview.row["QA Isolation Check"]).toContain("Pending explicit confirmation");
     expect(preview.row["QA Dry-run Outcome"]).toContain("Blocked until QA isolation is confirmed");

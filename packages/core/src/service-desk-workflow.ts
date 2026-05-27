@@ -323,7 +323,7 @@ function defaultRequiredFieldCheck(): string {
 }
 
 function defaultApprovalPhraseGate(): string {
-  return "Separate exact Alan approval phrase is required before each real Save, Submit, Update, or Close action.";
+  return "Separate exact Alan approval phrase is required before each real Save, Submit, Update, Resolve, or Close action.";
 }
 
 function defaultStopRuleCheck(): string {
