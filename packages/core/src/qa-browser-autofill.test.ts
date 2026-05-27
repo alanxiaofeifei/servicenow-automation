@@ -97,7 +97,7 @@ describe("QA browser-assisted text-field autofill gate", () => {
       noArtifactCapture: true,
       productionWriteAllowed: false
     });
-    expect(plan.stopMessage).toBe("Autofill completed. The tool will not Save, Submit, Update, or Close. Review the QA page manually.");
+    expect(plan.stopMessage).toBe("Autofill completed. The tool will not Save, Submit, Update, Resolve, or Close. Review the QA page manually.");
   });
 
   it("blocks mock and production-shadow even with the autofill phrase", () => {

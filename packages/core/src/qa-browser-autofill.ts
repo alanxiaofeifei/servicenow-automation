@@ -129,7 +129,7 @@ export type QaAutofillFixtureExecutionResult = {
 };
 
 const stopMessage =
-  "Autofill completed. The tool will not Save, Submit, Update, or Close. Review the QA page manually.";
+  "Autofill completed. The tool will not Save, Submit, Update, Resolve, or Close. Review the QA page manually.";
 
 const fieldDefinitions: Array<QaAutofillFieldDescriptor & { draftField: QaAutofillFieldKey }> = [
   {
