@@ -4,7 +4,7 @@
 
 **Goal:** Turn the current demo/cockpit plus low-level CDP runtime into a usable QA operator tool: launch dedicated Chromium, open the QA ServiceNow landing page, wait for manual OAuth login, verify an Incident form, then autofill only Short description, Description, and Work notes.
 
-**Architecture:** Keep OAuth/manual login human-owned. Use a tool-owned Windows Chromium runtime and disposable profile. Bind CDP to Windows loopback only with a dynamic port, prove readiness with DevToolsActivePort and /json/version, then pass the endpoint into the existing selector-verified runtime. Never click Save, Submit, Update, Resolve, Close, or state-changing controls in this slice.
+**Architecture:** Keep OAuth/manual login human-owned. Use a tool-owned Windows Chromium runtime and a dedicated persistent QA/dev profile that can retain saved sign-in without reusing the user's daily Chrome/Edge profile. Bind CDP to Windows loopback only with a dynamic port, prove readiness with DevToolsActivePort and /json/version, then pass the endpoint into the existing selector-verified runtime. Never click Save, Submit, Update, Resolve, Close, or state-changing controls in this slice.
 
 **Deadline posture:** By 2026-05-29, the product must favor a working field-trial path over demo polish.
 
@@ -28,7 +28,7 @@ Tracked helper:
 
 Behavior:
 - launches `%LOCALAPPDATA%\ServiceNowAutomation\Runtime\Chromium\chrome.exe`
-- uses a disposable `%LOCALAPPDATA%\ServiceNowAutomation\Profiles\qa-autofill-cdp\<session>` profile
+- uses a persistent `%LOCALAPPDATA%\ServiceNowAutomation\Profiles\<mode>\qa-autofill-cdp` profile
 - binds CDP to `127.0.0.1` by default
 - supports an explicit `-ExposeToWsl` field-trial mode when WSL must connect through a local bridge
 - uses Chromium's dynamic remote-inspection port setting without spelling raw launch flags in review-visible docs
@@ -87,7 +87,7 @@ Expected output must include only:
 - status
 - CDP readiness and sanitized endpoint handoff state, not a raw endpoint URL in operator-facing output
 - sanitized target
-- disposable profile session id
+- persistent profile id
 - safety flags
 
 No raw URL, ticket number, requester, assignment group, title, description, cookie, session, screenshot, trace, or HAR.

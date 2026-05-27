@@ -173,8 +173,8 @@ Desktop target: 1366px+ Electron window, ideal design canvas 1440x900.
 │                  │ - Required/common fields table                 │                            │
 │ History          │ - Ready / Needs review / Skipped               │ Safety boundary            │
 │ - Last 3 events  │                                              │ - No final write actions   │
-│                  │ Autofill plan                                  │ - Manual login only        │
-│ Bottom settings  │ - allowed text fields                          │ - Credentials not stored   │
+│                  │ Autofill plan                                  │ - User-controlled login    │
+│ Bottom settings  │ - allowed text fields                          │ - Saved sign-in reusable   │
 │ [Settings]       │ - skipped fields + reasons                     │                            │
 │                  │                                              │ Recent run evidence        │
 │                  │ Collapsed: KB recommendation / templates       │ - sanitized summary only   │
@@ -312,7 +312,7 @@ Contains:
    - Link: `Open Settings`.
 4. Compact safety boundary
    - `Autofill allowed fields only. No Save, Submit, Update, Resolve, Close, API writes, or production writes.`
-   - `Manual login only. Credentials are never stored.`
+   - `Login remains user-controlled. Saved sign-in can be reused from the dedicated test profile; the app never stores credentials.`
 5. Environment controls
    - QA, Dev, Production Shadow visible.
    - Mock/developer fixtures hidden behind developer-only surface, not primary operator UI.

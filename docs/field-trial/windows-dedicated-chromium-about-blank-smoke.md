@@ -4,7 +4,9 @@
 
 Draft runbook for GitHub issue #32.
 
-This runbook exists because GPT-5.5 Pro returned **NO-GO** for a Windows Chromium QA ServiceNow field trial. The next approved direction is local architecture validation only: prove that a dedicated/tool-owned Windows Chromium runtime can be planned for an `about:blank` launch with a tool-owned disposable profile before any QA ServiceNow login page is opened.
+Profile-model note: this older about:blank architecture runbook has been superseded by the current persistent/tool-owned profile model. The smoke target remains `about:blank`, but profile validation should now be read as dedicated persistent profile isolation, not per-launch cleanup.
+
+This runbook exists because GPT-5.5 Pro returned **NO-GO** for a Windows Chromium QA ServiceNow field trial. The next approved direction is local architecture validation only: prove that a dedicated/tool-owned Windows Chromium runtime can be planned for an `about:blank` launch with a tool-owned persistent profile before any QA ServiceNow login page is opened.
 
 ## Scope
 
@@ -13,7 +15,7 @@ Allowed in this stage:
 - `sda browser smoke` dry-run JSON output.
 - Target `about:blank` only.
 - Tool-owned Windows Chromium runtime path validation.
-- Tool-owned disposable profile root validation.
+- Tool-owned persistent profile root validation.
 - Optional real `about:blank` launch only after a separate checkpoint returns READY / READY WITH CONDITIONS.
 
 Forbidden in this stage:

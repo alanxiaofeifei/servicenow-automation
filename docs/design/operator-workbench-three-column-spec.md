@@ -78,7 +78,7 @@ Desktop target: 1366px+ width, Electron window. Use a 12-column CSS grid or equi
 │ - missing info     │ - Description                                      │                    │
 │                   │ - Work notes                                       │ Safety boundary     │
 │ History            │ - Category/Subcategory/Assignment/Priority          │ - no Save/Submit    │
-│ - recent sources   │                                                     │ - manual login only │
+│ - recent sources   │                                                     │ - saved sign-in ok  │
 │ - recent runs      │ Field preview                                      │                    │
 │                   │ - Required/common Incident fields                   │ Templates/settings  │
 │ Function switcher  │ - Autocomplete confidence                           │ - collapsed default │
@@ -200,7 +200,7 @@ Contains:
 4. Safety boundary
    - Always visible.
    - Explicitly says no Save, Submit, Update, Resolve, Close, API writes, or production writes.
-   - Manual login only; credentials are never stored.
+   - Login remains user-controlled; saved ServiceNow sign-in can be reused from the dedicated test profile, and the app never stores credentials.
 5. Environment controls
    - Mock Demo, QA Test Environment, Development Test Environment, Production Shadow Mode.
    - Default Mock.

@@ -2,7 +2,7 @@
 
 Use this for the field-trial build of ServiceNow Automation.
 
-Status note for PR #97: this quickstart currently describes the intended operator flow, but manual acceptance on 2026-05-24 found that `Start QA Chromium` produced no visible browser launch and the check-current-ticket step stayed disabled. Treat that as the active P0 blocker until fixed and re-tested from the Windows double-click app.
+Status note for K9 on 2026-05-26: the Windows app field-trial path has now passed supervised manual acceptance for the text-field-only, no-save flow. Alan confirmed that dedicated Chromium opened, the current-ticket check reached the ready state on a new QA Incident form, and Autofill filled only Short description, Description, and Work notes without Save/Submit/Update/Resolve/Close.
 
 ## Open the app
 
@@ -17,7 +17,7 @@ If the app does not open, copy only the visible error text and the printed start
 1. In the app, keep environment mode on QA.
 2. Edit/review the draft fields in the Ticket Draft panel.
 3. In `ServiceNow Automation operator`, click `1. Start QA Chromium`.
-4. In the new dedicated Chromium window, log in and open a QA Incident form.
+4. In the dedicated Chromium window, log in manually if needed and open a QA Incident form. The app now reuses the same tool-owned QA test profile, so ServiceNow saved sign-in can persist between launches without touching the user's daily Chrome/Edge profile.
 5. Return to the app and use the check-current-ticket action.
 6. Review the field plan shown in the app.
 7. Use Autofill only for the allowed fields.

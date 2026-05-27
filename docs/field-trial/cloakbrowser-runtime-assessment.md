@@ -10,8 +10,8 @@ The safe integration path is:
 ServiceNow Automation
   -> Windows helper script
   -> %LOCALAPPDATA%\ServiceNowAutomation\Runtime\CloakBrowser\chrome.exe
-  -> tool-owned disposable profile
-  -> manual login
+  -> tool-owned persistent profile
+  -> user-controlled login
   -> localhost CDP verify-only / approved autofill slices only
 ```
 
@@ -24,7 +24,7 @@ Potential benefits for this project:
 - dedicated Chromium executable separate from daily Chrome/Edge
 - source-level browser fingerprint hardening rather than fragile JavaScript stealth injections
 - Chromium/Playwright compatibility if a later reviewed browser-runtime slice needs it
-- direct binary launch still works with the current no-write/manual-login/CDP boundary
+- direct binary launch still works with the current no-write/user-controlled-login/CDP boundary
 
 ## Why not direct Playwright integration now
 
@@ -100,10 +100,10 @@ Both are tool-owned runtime roots. Daily installed Chrome and Edge remain blocke
 
 The helper still launches with:
 
-- tool-owned disposable profile under `%LOCALAPPDATA%\ServiceNowAutomation\Profiles\...`
+- tool-owned persistent profile under `%LOCALAPPDATA%\ServiceNowAutomation\Profiles\...`
 - CDP is bound to the local loopback interface by default
 - dynamic CDP port with ready output redacted to status/diagnostics
-- manual login
+- user-controlled login with saved sign-in reusable until explicit reset
 - no Save, Submit, Update, Close, upload, email, screenshot, HAR, trace, storage-state, cookie export, or ServiceNow API call
 
 ## Remaining gates before any real QA use
@@ -114,7 +114,7 @@ Before using CloakBrowser with a real QA/dev ServiceNow page:
 2. Install only after accepting the binary license.
 3. Run the Windows dedicated Chromium about:blank smoke test.
 4. Verify the CDP endpoint is loopback-only.
-5. Keep first ServiceNow use manual-login/no-write.
+5. Keep first ServiceNow use user-controlled-login/no-write.
 6. Treat any autofill as a separate fingerprint-bound approval slice.
 
 ## Recommendation

@@ -2,13 +2,13 @@
 
 ## Status
 
-Draft architecture note for issue #31.
+Architecture note for issue #31, updated after the persistent QA browser profile slice.
 
 This document replaces the temporary WSL Linux Chrome field-trial path as the preferred product direction.
 
 ## Decision
 
-The product should use a dedicated browser runtime and a tool-owned disposable profile. It must never depend on or modify the user's daily Chrome/Edge profile. Manual login is a safety feature, not a limitation.
+The product should use a dedicated browser runtime and a tool-owned persistent QA/dev profile. It must never depend on or modify the user's daily Chrome/Edge profile. Login remains human-owned; the dedicated tool profile may retain ServiceNow saved sign-in between launches.
 
 ## Why not WSL Linux Chrome as the main path?
 
@@ -47,8 +47,8 @@ Preferred model:
 ```text
 ServiceNow Automation App
   -> dedicated / bundled / portable Chromium runtime
-  -> tool-owned disposable profile directory
-  -> manual login
+  -> tool-owned persistent profile directory
+  -> user-controlled login with saved sign-in reuse
   -> no password storage
   -> cleanup on close and/or explicit safe reset
 ```
@@ -57,8 +57,8 @@ Example runtime roots:
 
 ```text
 %LOCALAPPDATA%\ServiceNowAutomation\Runtime\Chromium\chrome.exe
-%LOCALAPPDATA%\ServiceNowAutomation\Profiles\qa\<session-id>\
-%LOCALAPPDATA%\ServiceNowAutomation\Profiles\dev\<session-id>\
+%LOCALAPPDATA%\ServiceNowAutomation\Profiles\qa\qa-autofill-cdp\
+%LOCALAPPDATA%\ServiceNowAutomation\Profiles\dev\qa-autofill-cdp\
 ```
 
 The exact path can change, but the invariants must not.
@@ -70,10 +70,10 @@ A Windows browser launch is allowed only when all are true:
 1. Browser executable is a dedicated/tool-owned Chromium runtime, not daily Chrome/Edge.
 2. Browser profile directory is tool-owned.
 3. Browser profile directory is outside the user's normal Chrome/Edge profile roots.
-4. Browser profile directory is disposable or explicitly resettable.
+4. Browser profile directory is persistent for the mode/purpose but explicitly resettable.
 5. Dry-run remains default.
 6. Real launch requires explicit confirmation.
-7. Manual login remains required.
+7. Login remains user-controlled; saved sign-in can be reused from the dedicated profile.
 8. No DOM automation or page capture is enabled by launch.
 9. No write actions are enabled by launch.
 10. Cleanup/reset can only delete tool-owned profile directories.
@@ -104,17 +104,17 @@ The project therefore supports this non-vendored runtime root in addition to the
 %LOCALAPPDATA%\ServiceNowAutomation\Runtime\CloakBrowser\chrome.exe
 ```
 
-The helper still uses tool-owned disposable profiles and no-write/manual-login boundaries. CloakBrowser's Playwright/Puppeteer wrapper is not part of the current runtime path because the current safety model avoids browser-owned DOM automation. See `docs/field-trial/cloakbrowser-runtime-assessment.md` for the installer command and license notes.
+The helper still uses tool-owned profiles and no-write/user-controlled-login boundaries. CloakBrowser's Playwright/Puppeteer wrapper is not part of the current runtime path because the current safety model avoids browser-owned DOM automation. See `docs/field-trial/cloakbrowser-runtime-assessment.md` for the installer command and license notes.
 
 ## Session policy options
 
-### Option A — per-launch disposable profile
+### Option A — legacy per-launch fresh profile (superseded)
 
 - Create a fresh profile directory per launch.
-- Manual login every time.
+- User-controlled login every time.
 - Delete profile after browser close or explicit cleanup.
 
-Best for safety and demo clarity.
+Originally best for safety/demo clarity, but superseded for the QA field-trial flow because it forces repeated login.
 
 ### Option B — per-mode profile with explicit reset
 
@@ -124,17 +124,17 @@ Best for safety and demo clarity.
 
 More convenient, but higher risk because sessions persist.
 
-### Recommended initial product behavior
+### Current product behavior
 
-Start with **Option A** for QA/dev field trials:
+Use **Option B** for QA/dev field trials:
 
 ```text
-fresh profile per launch
-manual login
-cleanup after close or explicit safe reset
+persistent profile per mode/purpose
+user-controlled login
+saved sign-in can persist until explicit safe reset
 ```
 
-Only consider persistent per-mode sessions after a separate checkpoint.
+The no-write boundary is unchanged by profile persistence.
 
 ## No-write boundary
 

@@ -144,7 +144,7 @@ Perform these steps on Windows from the delivered artifact. Do not perform produ
 
 4. Browser connection status
    - Watch the browser connection indicator.
-   - Expected: it progresses to Ready only after the tool proves the separate test browser is reachable; it shows Failed/Disconnected if readiness cannot be proven.
+   - Expected: it progresses to Ready only after the tool proves the dedicated test browser profile is reachable; it shows Failed/Disconnected if readiness cannot be proven.
    - Fail if Ready appears before the test browser is actually reachable.
 
 5. Check-page button transition
