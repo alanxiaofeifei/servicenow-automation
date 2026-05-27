@@ -42,7 +42,7 @@ Forbidden:
 
 Linux Chrome inside WSL is a development-machine workaround to protect Alan's daily work browser.
 
-The product direction should follow Alan's AIA-era safety pattern:
+The product direction should follow the operator-owned safety pattern:
 
 > The product should use a dedicated browser runtime and a tool-owned persistent profile. It must never depend on or modify the user's daily Chrome/Edge profile. Login remains user-controlled; saved sign-in can be reused from the dedicated test profile.
 
@@ -59,8 +59,8 @@ Long-term target:
 
 Stop immediately and close the browser if any of these occur:
 
-- Browser path is `/mnt/c`, `/mnt/d`, another Windows drive path, or ends with `.exe`.
-- Browser opens Alan's normal Windows Chrome/Edge profile.
+- Browser path is a Windows-mounted drive path or ends with `.exe`.
+- Browser opens the operator's normal Windows Chrome/Edge profile.
 - QA page redirects into a real ticket/customer/user record page.
 - Any editable record page appears and read-only observation cannot be guaranteed.
 - Any command output exposes query/hash, record identifiers, secrets, or credential-bearing URL parts.
