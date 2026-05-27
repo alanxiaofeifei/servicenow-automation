@@ -98,11 +98,11 @@ export type WindowsBrowserRuntimePathClassification = {
 export type WindowsToolOwnedProfileRootValidation = {
   status: "allowed" | "blocked";
   reason:
-    | "tool-owned-disposable-profile-root"
+    | "tool-owned-browser-profile-root"
     | "daily-browser-profile-root-denied"
     | "parent-traversal-denied"
     | "ambiguous-or-relative-profile-root-denied"
-    | "not-tool-owned-disposable-profile-root";
+    | "not-tool-owned-browser-profile-root";
   normalizedPath: string;
 };
 
@@ -189,9 +189,9 @@ export type QaDedicatedCdpBrowserCommandPreview = {
 
 export type QaDedicatedCdpBrowserProfile = {
   toolOwned: true;
-  disposable: true;
+  persistent: true;
   purpose: string;
-  sessionId: string;
+  profileId: string;
 };
 
 export type QaDedicatedCdpBrowserStartSafety = BrowserNoWriteLaunchSafety & {
@@ -283,7 +283,7 @@ const WINDOWS_BROWSER_PROFILE_ISOLATION_AUDIT_NOTE =
 const WINDOWS_DAILY_BROWSER_RUNTIME_BLOCKED_REASON =
   "Daily installed Chrome/Edge cannot be used as the dedicated product browser runtime.";
 const WINDOWS_PROFILE_ROOT_BLOCKED_REASON =
-  "Windows dedicated Chromium runtime requires a tool-owned disposable profile root.";
+  "Windows dedicated Chromium runtime requires a tool-owned browser profile root.";
 
 const WINDOWS_DAILY_BROWSER_EXECUTABLE_PATHS = [
   "c:\\program files\\google\\chrome\\application\\chrome.exe",
@@ -528,7 +528,7 @@ export function createBrowserSessionService(options: BrowserSessionServiceOption
         process,
         auditNotes: [
           ...baseResult.auditNotes,
-          "Controlled browser process launched in no-write mode. Manual login only; no page automation was executed."
+          "Controlled browser process launched in no-write mode. Login remains user-controlled; saved sign-in can be reused from the dedicated test profile. No page automation was executed."
         ]
       };
     } catch {
@@ -938,8 +938,10 @@ type DedicatedCdpBrowserHelperPayload = {
   profile?: {
     toolOwned?: unknown;
     disposable?: unknown;
+    persistent?: unknown;
     purpose?: unknown;
     sessionId?: unknown;
+    profileId?: unknown;
   };
   safety?: {
     browserProcessLaunched?: unknown;
@@ -1075,7 +1077,7 @@ function dedicatedCdpHelperBlockedReason(payload: DedicatedCdpBrowserHelperPaylo
   }
 
   if (payload.blockedReason === "windows-localappdata-unavailable") {
-    return "Windows LOCALAPPDATA was unavailable, so a disposable tool-owned browser profile could not be created.";
+    return "Windows LOCALAPPDATA was unavailable, so a tool-owned browser profile could not be created.";
   }
 
   return payload.blockedReason ?? "Dedicated browser helper did not report a ready loopback-only endpoint.";
@@ -1241,11 +1243,19 @@ function isSafeLoopbackCdpEndpoint(endpoint: unknown): endpoint is string {
 }
 
 function sanitizeDedicatedCdpProfile(profile: DedicatedCdpBrowserHelperPayload["profile"]): QaDedicatedCdpBrowserProfile {
+  const purpose = typeof profile?.purpose === "string" && profile.purpose.length > 0 ? profile.purpose : "qa-autofill-cdp";
+  const profileId =
+    typeof profile?.profileId === "string" && profile.profileId.length > 0
+      ? profile.profileId
+      : typeof profile?.sessionId === "string" && profile.sessionId.length > 0
+        ? profile.sessionId
+        : "unknown";
+
   return {
     toolOwned: true,
-    disposable: true,
-    purpose: typeof profile?.purpose === "string" && profile.purpose.length > 0 ? profile.purpose : "qa-autofill-cdp",
-    sessionId: typeof profile?.sessionId === "string" && profile.sessionId.length > 0 ? profile.sessionId : "unknown"
+    persistent: true,
+    purpose,
+    profileId
   };
 }
 
@@ -1493,28 +1503,28 @@ export function validateWindowsToolOwnedProfileRoot(profileDirectory: string): W
   if (!profileRoot) {
     return {
       status: "blocked",
-      reason: "not-tool-owned-disposable-profile-root",
+      reason: "not-tool-owned-browser-profile-root",
       normalizedPath
     };
   }
 
-  const disposableProfileSegments = normalizedPath
+  const toolOwnedProfileSegments = normalizedPath
     .slice(profileRoot.length)
     .replace(/^\\+/, "")
     .split("\\")
     .filter(Boolean);
 
-  if (disposableProfileSegments.length < 2) {
+  if (toolOwnedProfileSegments.length < 2) {
     return {
       status: "blocked",
-      reason: "not-tool-owned-disposable-profile-root",
+      reason: "not-tool-owned-browser-profile-root",
       normalizedPath
     };
   }
 
   return {
     status: "allowed",
-    reason: "tool-owned-disposable-profile-root",
+    reason: "tool-owned-browser-profile-root",
     normalizedPath
   };
 }

@@ -306,7 +306,7 @@ describe("BrowserSessionService", () => {
     });
   });
 
-  it("validates Windows dedicated Chromium only when paired with a tool-owned disposable profile root", () => {
+  it("validates Windows dedicated Chromium only when paired with a tool-owned browser profile root", () => {
     const browserExecutablePath = "%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Chromium\\chrome.exe";
 
     expect(
@@ -323,7 +323,7 @@ describe("BrowserSessionService", () => {
       })
     ).toMatchObject({
       status: "blocked",
-      reason: "Windows dedicated Chromium runtime requires a tool-owned disposable profile root."
+      reason: "Windows dedicated Chromium runtime requires a tool-owned browser profile root."
     });
   });
 
@@ -331,7 +331,7 @@ describe("BrowserSessionService", () => {
     expect(validateWindowsToolOwnedProfileRoot("%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\qa\\session-123"))
       .toMatchObject({
         status: "allowed",
-        reason: "tool-owned-disposable-profile-root"
+        reason: "tool-owned-browser-profile-root"
       });
 
     expect(validateWindowsToolOwnedProfileRoot("%LOCALAPPDATA%\\Google\\Chrome\\User Data")).toMatchObject({
@@ -352,17 +352,17 @@ describe("BrowserSessionService", () => {
     });
     expect(validateWindowsToolOwnedProfileRoot("%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles")).toMatchObject({
       status: "blocked",
-      reason: "not-tool-owned-disposable-profile-root"
+      reason: "not-tool-owned-browser-profile-root"
     });
     expect(validateWindowsToolOwnedProfileRoot("%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\qa"))
       .toMatchObject({
         status: "blocked",
-        reason: "not-tool-owned-disposable-profile-root"
+        reason: "not-tool-owned-browser-profile-root"
       });
     expect(validateWindowsToolOwnedProfileRoot("%LOCALAPPDATA%\\ServiceNowAutomation\\ProfilesX\\qa\\session-123"))
       .toMatchObject({
         status: "blocked",
-        reason: "not-tool-owned-disposable-profile-root"
+        reason: "not-tool-owned-browser-profile-root"
       });
     expect(
       validateWindowsToolOwnedProfileRoot("%LOCALAPPDATA%\\ServiceNowAutomation\\Profiles\\qa\\..\\..\\Google")
@@ -409,6 +409,10 @@ describe("BrowserSessionService", () => {
     expect(blocked.blockedReason).toBe("Explicit --confirm-no-write-launch is required before opening a real QA/dev browser window.");
     expect(launched.status).toBe("launched");
     expect(launched.process).toEqual({ pid: 67890 });
+    expect(launched.auditNotes).toContain(
+      "Controlled browser process launched in no-write mode. Login remains user-controlled; saved sign-in can be reused from the dedicated test profile. No page automation was executed."
+    );
+    expect(JSON.stringify(launched)).not.toContain(["Manual", "login", "only"].join(" "));
     expect(launchedCommands).toHaveLength(1);
     expect(JSON.stringify(launchedCommands[0])).toContain("--user-data-dir=");
   });
@@ -512,7 +516,7 @@ describe("BrowserSessionService", () => {
     });
     expect(result.profileValidation).toMatchObject({
       status: "allowed",
-      reason: "tool-owned-disposable-profile-root"
+      reason: "tool-owned-browser-profile-root"
     });
     expect(result.commandPreview).toMatchObject({
       target: "about:blank",
@@ -723,9 +727,9 @@ describe("BrowserSessionService", () => {
           cdpEndpoint: localLoopbackHttpEndpoint(54656),
           profile: {
             toolOwned: true,
-            disposable: true,
+            persistent: true,
             purpose: "qa-autofill-cdp",
-            sessionId: "session-wsl-expose"
+            profileId: "dev-qa-autofill-cdp"
           },
           safety: {
             browserProcessLaunched: true,
@@ -801,6 +805,11 @@ describe("BrowserSessionService", () => {
     expect(helperScript).toContain("function ConvertTo-ProcessArgument");
     expect(helperScript).toContain("$argumentLine = ($argsList | ForEach-Object { ConvertTo-ProcessArgument $_ }) -join");
     expect(helperScript).toContain("Start-Process -FilePath $runtime -ArgumentList $argumentLine -PassThru");
+    expect(helperScript).toContain("$safeEnvironmentMode = ($EnvironmentMode -replace");
+    expect(helperScript).toContain('$profile = Join-Path $env:LOCALAPPDATA ("ServiceNowAutomation\\Profiles\\" + $safeEnvironmentMode + "\\" + $safePurpose)');
+    expect(helperScript).toContain("persistent = $true");
+    expect(helperScript).toContain("profileId = ($safeEnvironmentMode + \"-\" + $safePurpose)");
+    expect(helperScript).not.toContain("$sessionId = New-SafeSessionId");
     expect(helperScript).not.toContain(sensitiveRecordKey);
     expect(helperScript).not.toContain(rawLoopbackCdpPrefix);
     expect(helperScript).not.toContain(`${remoteDebuggingPrefix}-address=${loopbackCdpHost()}`);
@@ -986,9 +995,9 @@ describe("BrowserSessionService", () => {
           target: "https://<service-now-host>/nav_to.do",
           profile: {
             toolOwned: true,
-            disposable: true,
+            persistent: true,
             purpose: "qa-autofill-cdp",
-            sessionId: "session-123"
+            profileId: "qa-qa-autofill-cdp"
           },
           safety: {
             browserProcessLaunched: true,
@@ -1020,7 +1029,7 @@ describe("BrowserSessionService", () => {
     expect(ready.status).toBe("ready");
     expect(ready.processId).toBe(24680);
     expect(ready.cdpEndpoint).toBe(localLoopbackHttpEndpoint(54656));
-    expect(ready.profile).toMatchObject({ toolOwned: true, disposable: true, sessionId: "session-123" });
+    expect(ready.profile).toMatchObject({ toolOwned: true, persistent: true, profileId: "qa-qa-autofill-cdp" });
     expect(ready.safety.browserProcessLaunched).toBe(true);
     expect(ready.safety.cdpEndpointReady).toBe(true);
     expect(ready.runtimeLogPath).toContain(join(projectRoot, ".local", "startup-logs"));
@@ -1052,7 +1061,7 @@ describe("BrowserSessionService", () => {
     });
     expect(result.profileValidation).toMatchObject({
       status: "allowed",
-      reason: "tool-owned-disposable-profile-root"
+      reason: "tool-owned-browser-profile-root"
     });
   });
 
@@ -1173,7 +1182,7 @@ describe("BrowserSessionService", () => {
       status: "blocked",
       reason: "daily-browser-profile-root-denied"
     });
-    expect(dailyProfile.blockedReason).toBe("Windows dedicated Chromium runtime requires a tool-owned disposable profile root.");
+    expect(dailyProfile.blockedReason).toBe("Windows dedicated Chromium runtime requires a tool-owned browser profile root.");
     expect(dailyProfile.commandPreview).toBeUndefined();
   });
 });

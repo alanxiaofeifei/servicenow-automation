@@ -137,6 +137,7 @@ export type QaIncidentDefaultFieldRuntimeFillBlockedReason =
 export type QaIncidentDefaultFieldRuntimeBlockedFieldReason =
   | "field-control-missing"
   | "field-control-ambiguous"
+  | "field-option-not-found"
   | "non-writable-control"
   | "operator-confirmation-required"
   | "unsupported-control-type";
@@ -260,7 +261,15 @@ type WindowsLocalCdpEvaluationPayload<T> = {
 
 const DEFAULT_WINDOWS_LOCAL_CDP_EVALUATION_TIMEOUT_MS = 30_000;
 
-const QA_INCIDENT_DEFAULT_RUNTIME_TEXT_FIELD_KEYS = new Set<QaIncidentDefaultFieldKey>([
+const QA_INCIDENT_DEFAULT_RUNTIME_SUPPORTED_FIELD_KEYS = new Set<QaIncidentDefaultFieldKey>([
+  "requester",
+  "category",
+  "subcategory",
+  "location",
+  "channel",
+  "assignmentGroup",
+  "assignedTo",
+  "state",
   "shortDescription",
   "description",
   "workNotes"
@@ -438,7 +447,11 @@ export function createCdpQaIncidentFieldInspectionRuntimePageDriver(
 export function createCdpQaIncidentDefaultFieldAutofillRuntimePageDriver(
   options: CdpQaAutofillRuntimePageDriverOptions
 ): QaIncidentDefaultFieldAutofillRuntimePageDriver {
-  validateLocalCdpEndpoint(options.endpoint);
+  try {
+    validateLocalCdpEndpoint(options.endpoint);
+  } catch {
+    throw new QaCdpRuntimeBlockedError("cdp-endpoint-denied");
+  }
   return {
     async inspectIncidentFormFields() {
       return withCdpClient(options.endpoint, options.targetUrl, (client) =>
@@ -458,7 +471,11 @@ export function createCdpQaIncidentDefaultFieldAutofillRuntimePageDriver(
 export function createWindowsLocalCdpQaIncidentDefaultFieldAutofillRuntimePageDriver(
   options: WindowsLocalCdpRuntimePageDriverOptions
 ): QaIncidentDefaultFieldAutofillRuntimePageDriver {
-  validateLocalCdpEndpoint(options.endpoint);
+  try {
+    validateLocalCdpEndpoint(options.endpoint);
+  } catch {
+    throw new QaCdpRuntimeBlockedError("cdp-endpoint-denied");
+  }
   return {
     async inspectIncidentFormFields() {
       return evaluateWithWindowsLocalCdp<QaIncidentFieldRuntimeInspection>(
@@ -590,7 +607,14 @@ export async function inspectQaIncidentDefaultFieldsRuntime(
 }
 
 function cdpRuntimeBlockedReasonFromError(error: unknown): QaCdpRuntimeBlockedReason | undefined {
-  return error instanceof QaCdpRuntimeBlockedError ? error.blockedReason : undefined;
+  if (error instanceof QaCdpRuntimeBlockedError) return error.blockedReason;
+  if (!error || typeof error !== "object") return undefined;
+  const blockedReason = (error as { blockedReason?: unknown }).blockedReason;
+  return isCdpRuntimeBlockedReason(blockedReason) ? blockedReason : undefined;
+}
+
+function isCdpRuntimeBlockedReason(value: unknown): value is QaCdpRuntimeBlockedReason {
+  return value === "cdp-endpoint-denied" || value === "cdp-page-selection-denied" || value === "browser-runtime-error";
 }
 
 function incidentFieldRuntimePreflightBlockedReason(
@@ -809,16 +833,37 @@ function defaultFieldRuntimeBlockedFields(
       blockedFields.push({ ...blockedBase, blockedReason: "non-writable-control" });
       continue;
     }
-    if (QA_INCIDENT_DEFAULT_RUNTIME_TEXT_FIELD_KEYS.has(plannedField.key)) continue;
+    if (plannedField.manualConfirmationRequired || plannedField.source === "operator-confirmation-required") {
+      blockedFields.push({ ...blockedBase, blockedReason: "operator-confirmation-required" });
+      continue;
+    }
+    if (
+      QA_INCIDENT_DEFAULT_RUNTIME_SUPPORTED_FIELD_KEYS.has(plannedField.key) &&
+      defaultFieldControlTypeMatches(plannedField.key, matchedEvidence.type)
+    ) {
+      continue;
+    }
     blockedFields.push({
       ...blockedBase,
-      blockedReason:
-        plannedField.manualConfirmationRequired || plannedField.source === "operator-confirmation-required"
-          ? "operator-confirmation-required"
-          : "unsupported-control-type"
+      blockedReason: "unsupported-control-type"
     });
   }
   return blockedFields;
+}
+
+function defaultFieldControlTypeMatches(key: QaIncidentDefaultFieldKey, actual: QaIncidentFormFieldType): boolean {
+  const expected = defaultFieldExpectedControlType(key);
+  if (!expected) return false;
+  if (expected === actual) return true;
+  return expected === "select" && actual === "choice";
+}
+
+function defaultFieldExpectedControlType(key: QaIncidentDefaultFieldKey): QaIncidentFormFieldType | undefined {
+  if (["requester", "location", "assignmentGroup", "assignedTo"].includes(key)) return "reference";
+  if (["category", "subcategory", "channel", "state"].includes(key)) return "select";
+  if (key === "shortDescription") return "text";
+  if (key === "description" || key === "workNotes") return "textarea";
+  return undefined;
 }
 
 function evidenceMatchesDefaultField(evidence: QaIncidentFormFieldEvidence, key: QaIncidentDefaultFieldKey): boolean {
@@ -897,12 +942,17 @@ async function evaluateWithWindowsLocalCdp<T>(options: WindowsLocalCdpRuntimePag
     expressionBase64: Buffer.from(expression, "utf8").toString("base64")
   });
 
-  const payload = await runWindowsLocalCdpEvaluationHelper<T>({
-    powershellExecutable: options.powershellExecutable ?? "powershell.exe",
-    helperScriptPath: options.helperScriptPath,
-    input,
-    timeoutMs
-  });
+  let payload: WindowsLocalCdpEvaluationPayload<T>;
+  try {
+    payload = await runWindowsLocalCdpEvaluationHelper<T>({
+      powershellExecutable: options.powershellExecutable ?? "powershell.exe",
+      helperScriptPath: options.helperScriptPath,
+      input,
+      timeoutMs
+    });
+  } catch {
+    throw new QaCdpRuntimeBlockedError("cdp-endpoint-denied");
+  }
 
   if (payload.status !== "completed" || payload.value === undefined) {
     throw new QaCdpRuntimeBlockedError(safeCdpRuntimeBlockedReason(payload.blockedReason));
@@ -912,11 +962,7 @@ async function evaluateWithWindowsLocalCdp<T>(options: WindowsLocalCdpRuntimePag
 }
 
 function safeCdpRuntimeBlockedReason(blockedReason: string | undefined): QaCdpRuntimeBlockedReason {
-  return blockedReason === "cdp-endpoint-denied" ||
-    blockedReason === "cdp-page-selection-denied" ||
-    blockedReason === "browser-runtime-error"
-    ? blockedReason
-    : "browser-runtime-error";
+  return isCdpRuntimeBlockedReason(blockedReason) ? blockedReason : "browser-runtime-error";
 }
 
 function normalizeWindowsLocalCdpTimeoutMs(timeoutMs: number | undefined): number {
@@ -1003,10 +1049,15 @@ async function withCdpClient<T>(endpoint: string, targetUrl: string | undefined,
 type CdpPageTarget = { type?: string; url?: string; webSocketDebuggerUrl?: string };
 
 async function resolveCdpPageWebSocketUrl(endpoint: string, targetUrl?: string): Promise<string> {
-  validateLocalCdpEndpoint(endpoint);
-  const url = new URL(endpoint);
+  let url: URL;
+  try {
+    validateLocalCdpEndpoint(endpoint);
+    url = new URL(endpoint);
+  } catch {
+    throw new QaCdpRuntimeBlockedError("cdp-endpoint-denied");
+  }
   if (url.protocol === "ws:") {
-    throw new Error("CDP endpoint must be the local browser HTTP endpoint so the page target can be verified.");
+    throw new QaCdpRuntimeBlockedError("cdp-endpoint-denied");
   }
 
   const listUrl = new URL("/json/list", url);
@@ -1026,7 +1077,11 @@ async function resolveCdpPageWebSocketUrl(endpoint: string, targetUrl?: string):
     throw new QaCdpRuntimeBlockedError("cdp-page-selection-denied");
   }
   const webSocketUrl = selectedTarget.webSocketDebuggerUrl;
-  validateLocalCdpEndpoint(webSocketUrl);
+  try {
+    validateLocalCdpEndpoint(webSocketUrl);
+  } catch {
+    throw new QaCdpRuntimeBlockedError("cdp-endpoint-denied");
+  }
   return webSocketUrl;
 }
 
@@ -1265,10 +1320,20 @@ const incidentDefaultFieldFillScript = async (
   }
 
   const documents = collectSameOriginDocuments();
-  const unsupportedFields = request.plannedFields.filter((field) => !isRuntimeTextOnlyDefaultField(field.key));
+  const unsupportedFields = request.plannedFields.filter(
+    (field) =>
+      field.manualConfirmationRequired ||
+      field.source === "operator-confirmation-required" ||
+      !isRuntimeSupportedDefaultField(field.key)
+  );
   if (unsupportedFields.length > 0) {
+    const blockedReason = unsupportedFields.some(
+      (field) => field.manualConfirmationRequired || field.source === "operator-confirmation-required"
+    )
+      ? "operator-confirmation-required"
+      : "unsupported-control-type";
     return blocked(
-      "unsupported-control-type",
+      blockedReason,
       unsupportedFields.map((field) => blockedIncidentDefaultField(field, documents))
     );
   }
@@ -1276,16 +1341,18 @@ const incidentDefaultFieldFillScript = async (
 
   for (const field of request.plannedFields) {
     const control = findIncidentControl(documents, field.key, field.label);
-    if (!control) return blocked("field-control-missing", [blockedRuntimeTextField(field, undefined, "field-control-missing")]);
+    if (!control) return blocked("field-control-missing", [blockedRuntimeDefaultField(field, undefined, "field-control-missing")]);
     if (control.ambiguous) {
-      return blocked("field-control-ambiguous", [blockedRuntimeTextField(field, control.element, "field-control-ambiguous")]);
+      return blocked("field-control-ambiguous", [blockedRuntimeDefaultField(field, control.element, "field-control-ambiguous")]);
     }
-    if (!runtimeTextControlMatches(control.element, field.key)) return blocked("runtime-text-fields-only");
+    if (!runtimeDefaultControlMatches(control.element, field.key)) {
+      return blocked("unsupported-control-type", [blockedRuntimeDefaultField(field, control.element, "unsupported-control-type")]);
+    }
     if (!isWritable(control.element)) {
-      return blocked("non-writable-control", [blockedRuntimeTextField(field, control.element, "non-writable-control")]);
+      return blocked("non-writable-control", [blockedRuntimeDefaultField(field, control.element, "non-writable-control")]);
     }
     const fillStatus = fillControl(control.element, field.key, field.value);
-    if (fillStatus !== "ok") return blocked(fillStatus);
+    if (fillStatus !== "ok") return blocked(fillStatus, [blockedRuntimeDefaultField(field, control.element, fillStatus)]);
     filledFields.push({
       key: field.key,
       label: field.label,
@@ -1344,7 +1411,7 @@ const incidentDefaultFieldFillScript = async (
     };
   }
 
-  function blockedRuntimeTextField(
+  function blockedRuntimeDefaultField(
     field: (typeof request.plannedFields)[number],
     element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | undefined,
     blockedReason: QaIncidentDefaultFieldRuntimeBlockedFieldReason
@@ -1428,6 +1495,8 @@ const incidentDefaultFieldFillScript = async (
     const title = normalizeText(element.getAttribute("title") ?? "");
     const associated = normalizeText(associatedLabelText(element));
     const canonical = normalizeText(label);
+    if (isInputControl(element) && element.type === "hidden") return 0;
+    if (isReferenceField(key) && !isReferenceDisplayControl(element, candidates)) return 0;
     let score = 0;
     for (const candidate of candidates) {
       if (name === candidate || id === candidate) score = Math.max(score, 140);
@@ -1439,15 +1508,32 @@ const incidentDefaultFieldFillScript = async (
     if (canonical && (associated === canonical || aria === canonical || title === canonical)) score = Math.max(score, 90);
     if (canonical && (associated.includes(canonical) || aria.includes(canonical) || title.includes(canonical))) score = Math.max(score, 70);
     if (!preferredElementTypeMatches(element, key)) score -= 40;
-    if (isInputControl(element) && element.type === "hidden") return 0;
     return score;
   }
 
+  function isReferenceDisplayControl(
+    element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+    candidates: string[]
+  ): boolean {
+    if (!isTextInputControl(element)) return false;
+    const name = normalizeIdentity(element.getAttribute("name") ?? "");
+    const id = normalizeIdentity(element.getAttribute("id") ?? "");
+    return candidates.some((candidate) => name === `sys_display.${candidate}` || id === `sys_display.${candidate}`);
+  }
+
   function fillControl(
-    element: HTMLInputElement | HTMLTextAreaElement,
+    element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
     key: QaIncidentDefaultFieldKey,
     value: string
   ): "ok" | "field-option-not-found" {
+    if (isSelectControl(element)) {
+      const option = findSelectOption(element, value);
+      if (!option) return "field-option-not-found";
+      setNativeSelectValue(element, option.value);
+      dispatchFieldEvents(element);
+      return "ok";
+    }
+
     setNativeTextValue(element, value);
     dispatchFieldEvents(element);
     if (isReferenceField(key)) {
@@ -1456,12 +1542,37 @@ const incidentDefaultFieldFillScript = async (
     return "ok";
   }
 
+  function findSelectOption(
+    element: HTMLSelectElement,
+    value: string
+  ): { value: string; label?: string; text?: string; textContent?: string | null } | undefined {
+    const normalizedTarget = normalizeText(value);
+    return Array.from(element.options as Iterable<{ value: string; label?: string; text?: string; textContent?: string | null }>).find(
+      (option) => {
+        if (option.value === value) return true;
+        const optionText = normalizeText(option.textContent ?? option.text ?? option.label ?? "");
+        return Boolean(normalizedTarget && optionText === normalizedTarget);
+      }
+    );
+  }
+
   function setNativeTextValue(element: HTMLInputElement | HTMLTextAreaElement, value: string): void {
-    const ownerWindow = element.ownerDocument.defaultView;
-    const prototype = isTextAreaControl(element)
-      ? (ownerWindow?.HTMLTextAreaElement ?? HTMLTextAreaElement).prototype
-      : (ownerWindow?.HTMLInputElement ?? HTMLInputElement).prototype;
-    const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+    const ownerWindow = element.ownerDocument.defaultView as (Window & typeof globalThis) | null;
+    const constructor = isTextAreaControl(element)
+      ? ownerWindow?.HTMLTextAreaElement ?? globalThis.HTMLTextAreaElement
+      : ownerWindow?.HTMLInputElement ?? globalThis.HTMLInputElement;
+    const descriptor = constructor ? Object.getOwnPropertyDescriptor(constructor.prototype, "value") : undefined;
+    if (descriptor?.set) {
+      descriptor.set.call(element, value);
+    } else {
+      element.value = value;
+    }
+  }
+
+  function setNativeSelectValue(element: HTMLSelectElement, value: string): void {
+    const ownerWindow = element.ownerDocument.defaultView as (Window & typeof globalThis) | null;
+    const constructor = ownerWindow?.HTMLSelectElement ?? globalThis.HTMLSelectElement;
+    const descriptor = constructor ? Object.getOwnPropertyDescriptor(constructor.prototype, "value") : undefined;
     if (descriptor?.set) {
       descriptor.set.call(element, value);
     } else {
@@ -1527,7 +1638,7 @@ const incidentDefaultFieldFillScript = async (
       urgency: ["incident.urgency"],
       assignmentGroup: ["incident.assignment_group"],
       assignedTo: ["incident.assigned_to"],
-      state: ["incident.state"],
+      state: ["incident.state", "incident.incident_state"],
       shortDescription: ["incident.short_description"],
       description: ["incident.description"],
       workNotes: ["incident.work_notes"]
@@ -1535,23 +1646,35 @@ const incidentDefaultFieldFillScript = async (
     return map[key];
   }
 
-  function isRuntimeTextOnlyDefaultField(key: QaIncidentDefaultFieldKey): boolean {
-    return key === "shortDescription" || key === "description" || key === "workNotes";
+  function isRuntimeSupportedDefaultField(key: QaIncidentDefaultFieldKey): boolean {
+    return [
+      "requester",
+      "category",
+      "subcategory",
+      "location",
+      "channel",
+      "assignmentGroup",
+      "assignedTo",
+      "state",
+      "shortDescription",
+      "description",
+      "workNotes"
+    ].includes(key);
   }
 
   function preferredElementTypeMatches(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, key: QaIncidentDefaultFieldKey): boolean {
+    if (isReferenceField(key)) return isReferenceDisplayControl(element, fieldIdentityCandidates(key));
+    if (isSelectField(key)) return isSelectControl(element);
     if (key === "shortDescription") return isTextInputControl(element);
     if (key === "description" || key === "workNotes") return isTextAreaControl(element);
     return false;
   }
 
-  function runtimeTextControlMatches(
+  function runtimeDefaultControlMatches(
     element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
     key: QaIncidentDefaultFieldKey
-  ): element is HTMLInputElement | HTMLTextAreaElement {
-    if (key === "shortDescription") return isTextInputControl(element);
-    if (key === "description" || key === "workNotes") return isTextAreaControl(element);
-    return false;
+  ): boolean {
+    return preferredElementTypeMatches(element, key);
   }
 
   function isIncidentControlElement(element: Element): element is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
@@ -1578,6 +1701,10 @@ const incidentDefaultFieldFillScript = async (
 
   function isReferenceField(key: QaIncidentDefaultFieldKey): boolean {
     return ["requester", "location", "assignmentGroup", "assignedTo"].includes(key);
+  }
+
+  function isSelectField(key: QaIncidentDefaultFieldKey): boolean {
+    return ["category", "subcategory", "channel", "state"].includes(key);
   }
 };
 
