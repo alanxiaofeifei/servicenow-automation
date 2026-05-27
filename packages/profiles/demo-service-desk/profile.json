@@ -11,11 +11,6 @@
       "id": "demo-kb",
       "label": "Demo Knowledge Base",
       "path": "packages/kb/demo-articles"
-    },
-    {
-      "id": "local-notebooklm-demo customer-cn",
-      "label": "Optional local demo knowledge archive",
-      "path": "G:\\My Drive\\90_Archive_历史归档\\NoteBookLLM_demo customer_CN"
     }
   ],
   "demoMode": true

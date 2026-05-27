@@ -1,6 +1,6 @@
 # GPT-5.5 Pro checkpoint: K9 browser-runtime-error after Windows manual retest
 
-Checkpoint token: `SDA_K9_BROWSER_RUNTIME_ERROR_CHECKPOINT_2026_05_26`
+Checkpoint marker: `SDA_K9_BROWSER_RUNTIME_ERROR_CHECKPOINT_2026_05_26`
 
 ## External-AI safety rules
 
@@ -120,7 +120,7 @@ Please answer with:
 1. Most likely root cause(s), ranked.
 2. Specific code-level changes to make the failure classify as endpoint/page-selection/runtime-evaluation with sanitized diagnostics.
 3. Tests that should fail before the fix and pass after the fix.
-4. A minimal manual validation plan for Alan that does not require exposing raw ServiceNow URLs, ticket numbers, requester names, endpoints, fingerprints, or field values.
+4. A minimal manual validation plan for the operator that does not require exposing raw ServiceNow URLs, ticket numbers, requester names, endpoints, fingerprints, or field values.
 5. Any safety concerns with the current approach.
 
 Keep the answer focused on fixing Step 2 blocked-reason classification and UI feedback. Do not propose full-field autofill or real ServiceNow write actions in this checkpoint.

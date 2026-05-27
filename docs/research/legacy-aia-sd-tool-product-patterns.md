@@ -1,7 +1,7 @@
 # Legacy AIA SD Tool Product Patterns
 
 Issue: #35  
-Source: Alan's local legacy SD Tool package and manuals under `/mnt/d/Documents/SD_Tool`  
+Source: local legacy SD Tool package and manuals kept outside this repository
 Status: sanitized research note — **do not commit source manuals or sensitive values**
 
 ## Why this matters

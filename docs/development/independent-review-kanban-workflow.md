@@ -1,6 +1,6 @@
-# Karpathy + Mavis Kanban Workflow
+# Independent Review Kanban Workflow
 
-This project uses a multi-profile Hermes workflow plus Karpathy-inspired coding discipline.
+This project uses a multi-profile review workflow plus explicit engineering discipline.
 
 ## Why
 
