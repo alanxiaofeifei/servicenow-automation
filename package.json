@@ -9,7 +9,8 @@
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
-    "privacy:scan": "python3 scripts/privacy_scan_tracked.py"
+    "privacy:scan": "python3 scripts/privacy_scan_tracked.py",
+    "release:windows:rc": "bash scripts/packaging/build-windows-rc.sh"
   },
   "devDependencies": {
     "@types/node": "^22.15.29",
