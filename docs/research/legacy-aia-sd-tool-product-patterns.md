@@ -1,7 +1,7 @@
 # Legacy AIA SD Tool Product Patterns
 
 Issue: #35  
-Source: Alan's local legacy SD Tool package and manuals under `/mnt/d/Documents/SD_Tool`  
+Source: local legacy SD Tool package and manuals kept outside this repository
 Status: sanitized research note — **do not commit source manuals or sensitive values**
 
 ## Why this matters
@@ -295,7 +295,7 @@ This demonstrates the legacy tool's best ideas without requiring real mailbox, r
 ### Do not copy directly
 
 1. Stored/shared credentials or auto-login.
-2. Auto Save/Submit/Update/Close against real ServiceNow.
+2. Auto Save/Submit/Update/Resolve/Close against real ServiceNow.
 3. Ungated data sync/API buttons.
 4. Auto-upload real email attachments.
 5. Auto-send notification emails.
@@ -336,7 +336,7 @@ The old AIA SD Tool proves that Alan's strongest story is not “AI writes code.
 
 > Alan understands real Service Desk operations deeply enough to turn repetitive queue handling, ticket drafting, high-severity monitoring, and change workflows into a human-controlled automation product.
 
-The new YAGEO/portable tool should therefore be framed as:
+The new demo customer/portable tool should therefore be framed as:
 
 ```text
 Service Desk workflow cockpit

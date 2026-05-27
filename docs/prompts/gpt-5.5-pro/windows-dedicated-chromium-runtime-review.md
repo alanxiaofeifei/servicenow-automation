@@ -101,7 +101,7 @@ This checkpoint must not approve:
 - screenshot / HAR / trace / video
 - storage-state / cookie / session export
 - field fill
-- Save / Submit / Update / Close
+- Save / Submit / Update / Resolve / Close
 - Create Change / Upload Attachment / Send Email
 - external AI with real ServiceNow content
 - production-shadow

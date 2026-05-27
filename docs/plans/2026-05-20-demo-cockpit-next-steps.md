@@ -38,7 +38,7 @@ For the next stage, continue to forbid:
 - Real ServiceNow URL/login/DOM/page inspection.
 - Browser screenshots / HAR / traces / video / cookie or session export.
 - Real ServiceNow field fill.
-- Save / Submit / Update / Close.
+- Save / Submit / Update / Resolve / Close.
 - Real email send or attachment upload.
 - External AI with real ServiceNow/mailbox/chat content.
 
@@ -57,7 +57,7 @@ Demo data must stay fake/sanitized and visibly labeled.
 1. From WSL, run:
 
    ```bash
-   cd /home/alanxwsl/projects/servicenow-automation
+   cd $HOME/projects/servicenow-automation
    export NVM_DIR="$HOME/.nvm"
    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
    nvm use 24.15.0

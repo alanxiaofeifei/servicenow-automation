@@ -88,7 +88,7 @@ The implementation should satisfy all of these:
 - no page inspection.
 - no browser artifact export.
 - no ticket field fill.
-- no Save / Submit / Update / Close.
+- no Save / Submit / Update / Resolve / Close.
 - no ServiceNow API call.
 ```
 

@@ -35,7 +35,7 @@ Forbidden:
 
 ## Commands
 
-WSL-launched Windows Chrome/Edge executables and Windows drive paths such as `/mnt/c/...` are blocked until the project implements and verifies a Windows-compatible isolated profile path. Do not use Alan's default Windows browser profile for QA/dev launch validation.
+WSL-launched Windows Chrome/Edge executables and Windows drive paths such as `[WSL_MOUNTED_WINDOWS_PATH]` are blocked until the project implements and verifies a Windows-compatible isolated profile path. Do not use Alan's default Windows browser profile for QA/dev launch validation.
 
 Dry-run preview only:
 
@@ -100,7 +100,7 @@ Do not perform this until #25 GPT-5.5 Pro checkpoint is complete.
 6. Alan manually logs in.
 7. Do not open a real Incident ticket unless the page is already a non-sensitive landing page.
 8. Do not type into any ticket field.
-9. Do not click Save/Submit/Update/Close.
+9. Do not click Save/Submit/Update/Resolve/Close.
 10. Close browser.
 11. Reset profile if needed.
 12. Record only non-sensitive observations: reachable/not reachable, login success/fail, browser executable used, timestamp.

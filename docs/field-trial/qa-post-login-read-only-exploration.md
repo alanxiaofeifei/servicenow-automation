@@ -4,7 +4,7 @@
 
 This runbook is the final manual script for the field trial approved by GPT-5.5 Pro checkpoint #30 as **READY WITH CONDITIONS**.
 
-The goal is only to verify that Alan can manually log in to the QA/dev ServiceNow environment through the controlled isolated browser and observe a safe landing/home/navigator shell.
+The goal is only to verify that Alan controls login to the QA/dev ServiceNow environment through the controlled isolated browser and can observe a safe landing page or navigator shell.
 
 This runbook does **not** approve any ServiceNow write action.
 
@@ -13,16 +13,16 @@ This runbook does **not** approve any ServiceNow write action.
 Allowed:
 
 - Open controlled isolated browser.
-- Alan manually logs in.
-- Observe only landing/home/navigator shell.
+- Alan controls login.
+- Observe only landing page or navigator shell.
 - Record only non-sensitive yes/no observations.
 - Close browser.
-- Optionally reset only the verified project/tool-owned disposable profile.
+- Optionally reset only the verified project/tool-owned persistent profile.
 
 Forbidden:
 
 - Automatic login.
-- Credential storage.
+- App-managed credential storage or credential export.
 - DOM automation.
 - Playwright page inspection.
 - Page text extraction.
@@ -32,7 +32,7 @@ Forbidden:
 - Real ticket/customer/user data collection.
 - Opening real ticket/customer/user records.
 - Field fill.
-- Save / Submit / Update / Close.
+- Save / Submit / Update / Resolve / Close.
 - Create Change / Upload Attachment / Send Email.
 - External AI with real ServiceNow content.
 - Production-shadow.
@@ -42,30 +42,30 @@ Forbidden:
 
 Linux Chrome inside WSL is a development-machine workaround to protect Alan's daily work browser.
 
-The product direction should follow Alan's AIA-era safety pattern:
+The product direction should follow the operator-owned safety pattern:
 
-> The product should use a dedicated browser runtime and a tool-owned disposable profile. It must never depend on or modify the user's daily Chrome/Edge profile. Manual login is a safety feature, not a limitation.
+> The product should use a dedicated browser runtime and a tool-owned persistent profile. It must never depend on or modify the user's daily Chrome/Edge profile. Login remains user-controlled; saved sign-in can be reused from the dedicated test profile.
 
 Long-term target:
 
 - Dedicated / bundled / portable Chromium runtime.
-- Tool-owned disposable profile directory.
-- Manual login.
-- No password storage.
-- Cleanup on close and/or explicit safe reset.
+- Tool-owned persistent profile directory.
+- User-controlled login.
+- No app-managed password storage.
+- Explicit safe reset when Alan wants to clear the dedicated profile.
 - Never attach to the user's daily Chrome/Edge profile.
 
 ## Hard stop conditions
 
 Stop immediately and close the browser if any of these occur:
 
-- Browser path is `/mnt/c`, `/mnt/d`, another Windows drive path, or ends with `.exe`.
-- Browser opens Alan's normal Windows Chrome/Edge profile.
+- Browser path is a Windows-mounted drive path or ends with `.exe`.
+- Browser opens the operator's normal Windows Chrome/Edge profile.
 - QA page redirects into a real ticket/customer/user record page.
 - Any editable record page appears and read-only observation cannot be guaranteed.
-- Any command output exposes query/hash/sys_id/token/userinfo.
+- Any command output exposes query/hash, record identifiers, secrets, or credential-bearing URL parts.
 - Any screenshot/HAR/trace/video/storage-state/cookie/session export is attempted.
-- Any Save/Submit/Update/Close path appears.
+- Any Save/Submit/Update/Resolve/Close path appears.
 - Any external AI receives real ServiceNow content.
 - Any uncertainty about whether a click or page is read-only.
 
@@ -76,7 +76,7 @@ If stopped, record only a non-sensitive stop reason such as `redirected to recor
 Run from the repository root in WSL:
 
 ```bash
-cd /home/alanxwsl/projects/servicenow-automation
+cd $HOME/projects/servicenow-automation
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
@@ -128,7 +128,7 @@ Inspect with a redacted validation summary instead of pasting raw JSON:
 ```bash
 python3 - <<'PY'
 import json, pathlib, re, subprocess, sys
-repo = pathlib.Path('/home/alanxwsl/projects/servicenow-automation').resolve()
+repo = pathlib.Path.cwd().resolve()
 raw = pathlib.Path('/tmp/sda-qa-post-login-dry-run.json').read_text()
 data = json.loads(raw)
 launch = data.get('launch') or {}
@@ -198,7 +198,7 @@ Do not proceed unless validation is `PASS`.
 
 ## Phase 3 — Execute controlled no-write launch
 
-Run this from a GUI-capable WSL terminal/session, not from a headless Hermes tool session:
+Run this from a GUI-capable WSL terminal, not from a headless Hermes tool run:
 
 ```bash
 SDA_BROWSER_EXECUTABLE=/usr/bin/google-chrome \
@@ -210,11 +210,11 @@ Then:
 
 1. Confirm the browser window opened.
 2. Confirm it is a new/blank isolated profile, not Alan's daily work Chrome/Edge profile.
-3. Alan manually logs in.
-4. Observe only landing/home/navigator shell.
+3. Alan controls login.
+4. Observe only landing page or navigator shell.
 5. Do not open real ticket/customer/user records.
 6. Do not type into any ServiceNow field.
-7. Do not click Save/Submit/Update/Close.
+7. Do not click Save/Submit/Update/Resolve/Close.
 8. Do not screenshot or export anything.
 9. Close browser.
 
@@ -246,13 +246,13 @@ Default work profile reused: yes/no
 Manual login succeeded: yes/no
 
 ## Observation
-Landing/home/navigator shell reachable: yes/no
+Landing page or navigator shell reachable: yes/no
 Real ticket/customer/user record opened: no
 
 ## Safety confirmation
 - No ticket page opened.
 - No field typed.
-- No Save/Submit/Update/Close.
+- No Save/Submit/Update/Resolve/Close.
 - No screenshot/HAR/trace/video.
 - No metadata/page text capture.
 - No cookie/session/storage-state export.
@@ -271,7 +271,7 @@ Never record:
 - username
 - email
 - ticket number
-- sys_id
+- internal record identifier
 - full URL
 - customer name
 - assignment group
@@ -286,7 +286,7 @@ Only run reset if all are true:
 - Browser was WSL Linux Chrome `/usr/bin/google-chrome`.
 - Profile path was repo/worktree-local under `.local/servicenow-browser-profiles/qa`.
 - Browser did not reuse Alan's daily Chrome/Edge profile.
-- Alan wants to clear the QA disposable profile after closing the browser.
+- Alan wants to clear the QA persistent profile after closing the browser.
 
 ```bash
 pnpm --silent --filter @servicenow-automation/cli sda browser reset --mode qa --json > /tmp/sda-qa-post-login-reset.json
@@ -302,10 +302,10 @@ The trial is complete only if Alan can report, without sensitive details:
 Linux Chrome window opened: yes/no
 New blank isolated profile: yes/no
 Manual login succeeded: yes/no
-Landing/home/navigator shell reachable: yes/no
+Landing page or navigator shell reachable: yes/no
 Real ticket/customer/user record opened: no
 Any field typed: no
-Any Save/Submit/Update/Close: no
+Any Save/Submit/Update/Resolve/Close: no
 Screenshot/HAR/trace/video/export: no
 External AI used: no
 Browser closed: yes/no
