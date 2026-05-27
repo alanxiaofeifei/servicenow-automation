@@ -688,8 +688,9 @@ describe("App", () => {
 
     expect(zhCnOutput).toContain("Save、Submit、Update、Resolve、Close");
     expect(zhTwOutput).toContain("Save、Submit、Update、Resolve、Close");
-    expect(zhCnOutput).not.toContain("Save、Submit、Update、Close、API");
-    expect(zhTwOutput).not.toContain("Save、Submit、Update、Close、API");
+    const outdatedNoWriteCopy = ["Save", "Submit", "Update", "Close", "API"].join("、");
+    expect(zhCnOutput).not.toContain(outdatedNoWriteCopy);
+    expect(zhTwOutput).not.toContain(outdatedNoWriteCopy);
   });
 
   it("renders the main draft as adaptive wrapping text areas without confidence or local-draft chrome", () => {
