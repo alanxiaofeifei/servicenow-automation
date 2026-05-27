@@ -84,7 +84,7 @@ if ($ExposeToWsl -and (($EnvironmentMode -ne "dev") -or -not $ConfirmDevOnlyWslE
       cdpBoundToLoopbackOnly = $true
       wslBridgeRequired = $false
       serviceNowWritePerformed = $false
-      saveSubmitUpdateClosePerformed = $false
+      saveSubmitUpdateResolveClosePerformed = $false
       artifactsCaptured = $false
     }
   } 1
@@ -252,7 +252,7 @@ Write-JsonAndExit @{
     wslBridgeRequired = [bool]$ExposeToWsl
     manualLoginRequired = $true
     serviceNowWritePerformed = $false
-    saveSubmitUpdateClosePerformed = $false
+    saveSubmitUpdateResolveClosePerformed = $false
     artifactsCaptured = $false
   }
 } 0
