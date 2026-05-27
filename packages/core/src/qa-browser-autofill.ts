@@ -96,6 +96,11 @@ export type QaAutofillFixtureElementType = "text" | "textarea" | "select" | "oth
 export type QaAutofillFixtureField = {
   key: QaAutofillFieldKey;
   matchedSelectorCount: number;
+  /**
+   * ServiceNow classic can render duplicate hidden/template controls for the same field.
+   * When present, this is the count of visible controls after the runtime filters hidden duplicates.
+   */
+  visibleSelectorCount?: number;
   elementType: QaAutofillFixtureElementType;
   writable: boolean;
 };
@@ -124,7 +129,7 @@ export type QaAutofillFixtureExecutionResult = {
 };
 
 const stopMessage =
-  "Autofill completed. The tool will not Save, Submit, Update, or Close. Review the QA page manually.";
+  "Autofill completed. The tool will not Save, Submit, Update, Resolve, or Close. Review the QA page manually.";
 
 const fieldDefinitions: Array<QaAutofillFieldDescriptor & { draftField: QaAutofillFieldKey }> = [
   {
@@ -200,8 +205,9 @@ export function buildQaAutofillSelectorVerificationFromEvidence(
     if (matches.length > 1) return "ambiguous";
     const field = matches[0];
     if (!field) return "missing";
-    if (field.matchedSelectorCount > 1) return "ambiguous";
-    return field.matchedSelectorCount === 1 && field.writable && field.elementType === expectedElementTypes[key]
+    const selectorCount = effectiveSelectorCount(field);
+    if (selectorCount > 1) return "ambiguous";
+    return selectorCount === 1 && field.writable && field.elementType === expectedElementTypes[key]
       ? "found"
       : "missing";
   };
@@ -313,7 +319,7 @@ export function executeQaTextFieldAutofillFixture(
       return blockedExecution("selector-mismatch");
     }
     const actualField = matchingFields[0];
-    if (actualField.matchedSelectorCount !== 1) {
+    if (effectiveSelectorCount(actualField) !== 1) {
       return blockedExecution("selector-mismatch");
     }
     if (actualField.elementType !== expectedField.type) {
@@ -360,6 +366,10 @@ function buildAllowedFields(draft: TicketDraft): QaAutofillField[] {
 function normalizeDraftField(field: FieldDraft | undefined): string | undefined {
   const value = field?.value.trim();
   return value ? value : undefined;
+}
+
+function effectiveSelectorCount(field: QaAutofillFixtureField): number {
+  return field.visibleSelectorCount ?? field.matchedSelectorCount;
 }
 
 function blockedPlan(request: QaAutofillPlanRequest, blockedReason: QaAutofillBlockedReason): QaAutofillPlan {
@@ -422,7 +432,7 @@ function safetyFlags(): QaAutofillSafety {
 
 function autofillStopRules(): string[] {
   return [
-    "Stop before Save, Submit, Update, Close, attachment upload, outbound email, notification, API write, or bulk action.",
+    "Stop before Save, Submit, Update, Resolve, Close, attachment upload, outbound email, notification, API write, or bulk action.",
     "Stop if QA/dev isolation or the dedicated/tool-owned Chromium profile is not confirmed immediately before autofill.",
     "Stop if any selector is missing, ambiguous, or points outside the approved text-field allowlist.",
     "Stop if unexpected required fields appear; do not guess reference, select, routing, impact, urgency, priority, state, or status values.",
