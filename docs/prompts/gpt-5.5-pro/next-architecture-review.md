@@ -116,8 +116,7 @@ Demo data already exists:
 - Simple keyword KB search
 - Optional local Markdown KB directory loader
 
-There is an intended local KB test source:
-- `G:\My Drive\90_Archive_历史归档\NoteBookLLM_demo customer_CN`
+There is an intended local KB test source outside the repository.
 
 However, this is only for local/private testing and should not be pushed wholesale to GitHub or exposed publicly.
 
