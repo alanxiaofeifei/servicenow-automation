@@ -833,10 +833,15 @@ details[open] > summary .details-indicator {
 
 .severity-state-buttons button.active,
 .severity-state-buttons button:hover,
-.severity-actions button:hover {
+.severity-actions button:hover:not(:disabled) {
   border-color: #2f756c;
   color: #174f49;
   background: #edf8f2;
+}
+
+.severity-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 .severity-monitor-group-settings {
