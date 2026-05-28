@@ -822,11 +822,19 @@ function summarizeQaIncidentFieldInspection(inspection: QaIncidentFieldRuntimeRe
 }
 
 function parseQaManualFillWriteAction(value: string): QaManualFillWriteAction {
-  const allowedActions: QaManualFillWriteAction[] = ["save_incident", "submit_incident", "update_incident", "close_incident"];
+  const allowedActions: QaManualFillWriteAction[] = [
+    "save_incident",
+    "submit_incident",
+    "update_incident",
+    "resolve_incident",
+    "close_incident"
+  ];
   if (allowedActions.includes(value as QaManualFillWriteAction)) {
     return value as QaManualFillWriteAction;
   }
-  throw new Error("Unsupported QA manual-fill write action. Allowed values: save_incident, submit_incident, update_incident, close_incident.");
+  throw new Error(
+    "Unsupported QA manual-fill write action. Allowed values: save_incident, submit_incident, update_incident, resolve_incident, close_incident."
+  );
 }
 
 function parseRawIntakeSource(value: string): RawIntakeSource {
@@ -881,7 +889,7 @@ function baseSafetyEnvelope() {
     noExcelWrite: true,
     noGraphWrite: true,
     productionWriteAllowed: false,
-    message: "Draft/preview only. The CLI does not submit, save, close, or update real ServiceNow records."
+    message: "Draft/preview only. The CLI does not Save, Submit, Update, Resolve, or Close real ServiceNow records."
   };
 }
 
@@ -920,7 +928,9 @@ function formatBrowserPlan(status: string, browserProfileDirectory: string): str
 function formatBrowserLaunch(status: string, blockedReason?: string): string {
   return [
     `Browser no-write launch: ${status}`,
-    blockedReason ? `Blocked reason: ${blockedReason}` : "Safety: login remains user-controlled; no field fill, submit, update, save, or close."
+    blockedReason
+      ? `Blocked reason: ${blockedReason}`
+      : "Safety: login remains user-controlled; no field fill, Save, Submit, Update, Resolve, or Close."
   ].join("\n");
 }
 
@@ -955,8 +965,8 @@ function formatQaSmokePlan(plan: QaSingleTicketSmokePlan): string {
 
   lines.push(
     plan.status === "ready-for-manual-fill"
-      ? "Ready for manual fill only. No ticket was created, saved, submitted, updated, closed, or written through ServiceNow API."
-      : "Blocked. No ticket was created, saved, submitted, updated, closed, or written through ServiceNow API."
+      ? "Ready for manual fill only. No ticket was created, saved, submitted, updated, resolved, closed, or written through ServiceNow API."
+      : "Blocked. No ticket was created, saved, submitted, updated, resolved, closed, or written through ServiceNow API."
   );
 
   return lines.join("\n");
@@ -1447,10 +1457,10 @@ Commands:
   sda qa autofill --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> --dedicated-profile-confirmation <sentence> --approval-phrase <phrase> [--target-url <url>] [--json]
   sda qa autofill-fixture --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> --dedicated-profile-confirmation <sentence> --approval-phrase <phrase> [--selector-fixture <all-found|missing-work-notes|wrong-description-type|ambiguous-description|non-writable-work-notes|unexpected-required-field>] [--target-url <url>] [--json]
   sda qa autofill-runtime --mode <qa|dev> --template <template> --user <sanitized_user> --summary <sanitized_summary> --cdp-endpoint <local_http_endpoint> --qa-isolation-confirmation <sentence> --dedicated-profile-confirmation <sentence> [--target-url <safe_landing_url>] [--approval-phrase <phrase> --approval-page-fingerprint <hash> --execute] [--json]
-  sda qa manual-fill --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> [--write-action <save_incident|submit_incident|update_incident|close_incident>] [--target-url <url>] [--approval-phrase <phrase>] [--browser-executable <path>] [--execute --confirm-no-write-launch] [--json]
+  sda qa manual-fill --mode <qa|dev|mock|production-shadow> --template <template> --user <sanitized_user> --summary <sanitized_summary> --qa-isolation-confirmation <sentence> [--write-action <save_incident|submit_incident|update_incident|resolve_incident|close_incident>] [--target-url <url>] [--approval-phrase <phrase>] [--browser-executable <path>] [--execute --confirm-no-write-launch] [--json]
   sda run --workflow <workflow_name> --input <json_file> --dry-run [--json]
 
 Safety:
-  Draft/preview only by default. No real ServiceNow API calls, browser DOM automation, submit, update, save, close, upload, or email actions are performed.
+  Draft/preview only by default. No real ServiceNow API calls, browser DOM automation, Save, Submit, Update, Resolve, Close, upload, or email actions are performed.
 `;
 }

@@ -391,6 +391,7 @@ describe("sda CLI", () => {
     expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "submit_incident"));
     expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "save_incident"));
     expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "update_incident"));
+    expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "resolve_incident"));
     expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "close_incident"));
     expect(serialized).not.toContain(sensitiveQueryName);
     expect(serialized).not.toContain(sensitiveTokenName);
@@ -441,6 +442,51 @@ describe("sda CLI", () => {
     expect(payload.plan.writeActionApprovalPhrases).toBeUndefined();
     expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "save_incident"));
     expect(serialized).not.toContain(["approved", "for", "qa", "dev", "write"].join("-"));
+  });
+
+  it("prepares a Resolve-only QA manual-fill gate without enabling ServiceNow writes", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "sda-cli-qa-manual-fill-resolve-only-"));
+    const qaIsolationConfirmation = "QA isolation confirmed: this ticket will not notify production users, customers, or a real support team.";
+
+    const result = await runCli([
+      "qa",
+      "manual-fill",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--write-action",
+      "resolve_incident",
+      "--approval-phrase",
+      getRequiredRealActionApprovalPhrase("qa", "resolve_incident"),
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--json"
+    ], { cwd: projectRoot });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.command).toBe("qa manual-fill");
+    expect(payload.manualFill.status).toBe("ready-for-manual-fill");
+    expect(payload.plan.status).toBe("ready-for-manual-fill");
+    expect(payload.plan.requestedWriteAction).toBe("resolve_incident");
+    expect(payload.plan.manualFillGate).toMatchObject({
+      requestedWriteAction: "resolve_incident",
+      writeActionsEnabled: false,
+      serviceNowWriteApproved: false,
+      sourceGateReason: "manual-fill-gate-redacted"
+    });
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(payload.safety.browserAutomationCalled).toBe(false);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+    expect(payload.plan.requiredApprovalPhrase).toBeUndefined();
+    expect(payload.plan.writeActionApprovalPhrases).toBeUndefined();
+    expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "resolve_incident"));
   });
 
   it("does not echo invalid QA manual-fill write-action values", async () => {
@@ -1346,7 +1392,7 @@ describe("sda CLI", () => {
     const result = await runCli(["browser", "launch", "--mode", "qa"], { cwd: projectRoot });
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Safety: login remains user-controlled; no field fill, submit, update, save, or close.");
+    expect(result.stdout).toContain("Safety: login remains user-controlled; no field fill, Save, Submit, Update, Resolve, or Close.");
     expect(result.stdout).not.toContain(["manual", "login", "only"].join(" "));
   });
 

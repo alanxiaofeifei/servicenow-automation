@@ -1002,7 +1002,7 @@ type UiChromeTranslations = {
     frameAria: string;
     toolbarTitle: string;
     actionbarAria: string;
-    actions: Record<"save" | "submit" | "update" | "close", string>;
+    actions: Record<"save" | "submit" | "update" | "resolve" | "close", string>;
     disabledUnavailable: string;
     tabsAria: string;
     details: string;
@@ -1143,7 +1143,7 @@ const englishChromeTranslations: UiChromeTranslations = {
     frameAria: "Mock ServiceNow Incident new record form fields",
     toolbarTitle: "Incident | New record — Mock preview",
     actionbarAria: "Disabled mock ServiceNow actions",
-    actions: { save: "Save", submit: "Submit", update: "Update", close: "Close" },
+    actions: { save: "Save", submit: "Submit", update: "Update", resolve: "Resolve", close: "Close" },
     disabledUnavailable: "Disabled / unavailable in demo mode",
     tabsAria: "Mock ServiceNow form sections",
     details: "Details",
@@ -1164,7 +1164,7 @@ const englishChromeTranslations: UiChromeTranslations = {
     },
     submitDisabled: "Submit disabled in demo mode",
     finalSubmitCopy:
-      "Final ServiceNow submit must remain a deliberate human action. No real record is saved, submitted, updated, or closed.",
+      "Final ServiceNow submit must remain a deliberate human action. No real record is saved, submitted, updated, resolved, or closed.",
     notSet: "Not set"
   }
 };
@@ -1272,7 +1272,7 @@ const uiChromeTranslations: Record<LanguageCode, UiChromeTranslations> = {
       frameAria: "Mock ServiceNow Incident 新记录表单字段",
       toolbarTitle: "Incident | 新记录 — Mock 预览",
       actionbarAria: "已禁用的 mock ServiceNow 操作",
-      actions: { save: "保存", submit: "提交", update: "更新", close: "关闭" },
+      actions: { save: "保存", submit: "提交", update: "更新", resolve: "解决", close: "关闭" },
       disabledUnavailable: "禁用 / 演示模式不可用",
       tabsAria: "Mock ServiceNow 表单分区",
       details: "详情",
@@ -1292,7 +1292,7 @@ const uiChromeTranslations: Record<LanguageCode, UiChromeTranslations> = {
         workNotes: "工作备注"
       },
       submitDisabled: "演示模式下提交被禁用",
-      finalSubmitCopy: "最终 ServiceNow 提交必须始终是人工有意操作。不会保存、提交、更新或关闭真实记录。",
+      finalSubmitCopy: "最终 ServiceNow 提交必须始终是人工有意操作。不会保存、提交、更新、解决或关闭真实记录。",
       notSet: "未设置"
     }
   },
@@ -4891,7 +4891,7 @@ function buildSafeDraftMarkdown(draft: TicketDraft): string {
     "",
     "## Safety Boundary",
     "- Demo-only local text prepared for manual review.",
-    "- No real ServiceNow record is created, changed, submitted, updated, saved, or closed.",
+    "- No real ServiceNow record is created, changed, submitted, updated, resolved, saved, or closed.",
     "- No real requester identity, ticket number, mailbox, chat, portal, attachment, or production content is included."
   ].join("\n");
 }
@@ -5542,7 +5542,7 @@ function ControlledQaSingleTicketSmokePanel({
         <ul>
           <li>Dry-run first: review the local field mapping and Excel row preview only.</li>
           <li>Manual copy only: the operator copies or types values; the app never fills ServiceNow.</li>
-          <li>Save-only readiness: Submit, Update, and Close remain deferred to a later checkpoint.</li>
+          <li>Save-only readiness: Submit, Update, Resolve, and Close remain deferred to a later checkpoint.</li>
         </ul>
       </section>
 

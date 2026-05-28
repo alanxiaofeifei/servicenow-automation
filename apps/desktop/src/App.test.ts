@@ -683,9 +683,11 @@ describe("App", () => {
   });
 
   it("keeps localized checklist safety copy aligned on Resolve as a blocked write action", () => {
+    const enOutput = renderAppMarkup("en-US");
     const zhCnOutput = renderAppMarkup("zh-CN");
     const zhTwOutput = renderAppMarkup("zh-TW");
 
+    expect(enOutput).toContain("No real ServiceNow field fill, Save, Submit, Update, Resolve, Close");
     expect(zhCnOutput).toContain("Save、Submit、Update、Resolve、Close");
     expect(zhTwOutput).toContain("Save、Submit、Update、Resolve、Close");
     const outdatedNoWriteCopy = ["Save", "Submit", "Update", "Close", "API"].join("、");
