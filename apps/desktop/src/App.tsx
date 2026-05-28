@@ -490,7 +490,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     mockFillButton: "填充 Mock ServiceNow 表单",
     mockReadyStatus: "已准备好 mock 填充",
     mockLockedStatus: "审核确认前锁定填充动作",
-    mockDisabledStatus: "演示模式下 Save / Submit / Update / Close 不可用",
+    mockDisabledStatus: "演示模式下 Save / Submit / Update / Resolve / Close 不可用",
     mockDemoStamp: "MOCK / 仅演示"
   },
   "en-US": {
@@ -555,7 +555,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     mockFillButton: "Fill Mock ServiceNow Form",
     mockReadyStatus: "Ready for mock fill",
     mockLockedStatus: "Fill action locked until review confirmation",
-    mockDisabledStatus: "Save / Submit / Update / Close unavailable in demo mode",
+    mockDisabledStatus: "Save / Submit / Update / Resolve / Close unavailable in demo mode",
     mockDemoStamp: "MOCK / Demo only"
   },
   "zh-TW": {
@@ -618,7 +618,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     mockFillButton: "填入 Mock ServiceNow 表單",
     mockReadyStatus: "已準備好 mock 填入",
     mockLockedStatus: "審核確認前鎖定填入動作",
-    mockDisabledStatus: "示範模式下 Save / Submit / Update / Close 不可用",
+    mockDisabledStatus: "示範模式下 Save / Submit / Update / Resolve / Close 不可用",
     mockDemoStamp: "MOCK / 僅示範"
   },
   "es-ES": {
@@ -683,7 +683,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     mockFillButton: "Rellenar formulario mock de ServiceNow",
     mockReadyStatus: "Listo para relleno mock",
     mockLockedStatus: "Relleno bloqueado hasta confirmar la revisión",
-    mockDisabledStatus: "Save / Submit / Update / Close no disponibles en modo demo",
+    mockDisabledStatus: "Save / Submit / Update / Resolve / Close no disponibles en modo demo",
     mockDemoStamp: "MOCK / Solo demo"
   }
 };
@@ -1002,7 +1002,7 @@ type UiChromeTranslations = {
     frameAria: string;
     toolbarTitle: string;
     actionbarAria: string;
-    actions: Record<"save" | "submit" | "update" | "close", string>;
+    actions: Record<"save" | "submit" | "update" | "resolve" | "close", string>;
     disabledUnavailable: string;
     tabsAria: string;
     details: string;
@@ -1113,7 +1113,7 @@ const englishChromeTranslations: UiChromeTranslations = {
         safetyNotes: [
           "Manual login required. Credentials are never stored in source code.",
           "Browser sessions stay in ignored local runtime folders.",
-          "Any real QA submit requires explicit operator approval."
+          "Any real QA Save/Submit/Update/Resolve/Close action requires explicit operator approval."
         ]
       },
       dev: {
@@ -1123,7 +1123,7 @@ const englishChromeTranslations: UiChromeTranslations = {
         safetyNotes: [
           "Manual login required. Credentials are never stored in source code.",
           "Browser sessions stay in ignored local runtime folders.",
-          "Any real QA submit requires explicit operator approval."
+          "Any real QA Save/Submit/Update/Resolve/Close action requires explicit operator approval."
         ]
       },
       "production-shadow": {
@@ -1143,7 +1143,7 @@ const englishChromeTranslations: UiChromeTranslations = {
     frameAria: "Mock ServiceNow Incident new record form fields",
     toolbarTitle: "Incident | New record — Mock preview",
     actionbarAria: "Disabled mock ServiceNow actions",
-    actions: { save: "Save", submit: "Submit", update: "Update", close: "Close" },
+    actions: { save: "Save", submit: "Submit", update: "Update", resolve: "Resolve", close: "Close" },
     disabledUnavailable: "Disabled / unavailable in demo mode",
     tabsAria: "Mock ServiceNow form sections",
     details: "Details",
@@ -1164,7 +1164,7 @@ const englishChromeTranslations: UiChromeTranslations = {
     },
     submitDisabled: "Submit disabled in demo mode",
     finalSubmitCopy:
-      "Final ServiceNow submit must remain a deliberate human action. No real record is saved, submitted, updated, or closed.",
+      "Final ServiceNow submit must remain a deliberate human action. No real record is saved, submitted, updated, resolved, or closed.",
     notSet: "Not set"
   }
 };
@@ -1272,7 +1272,7 @@ const uiChromeTranslations: Record<LanguageCode, UiChromeTranslations> = {
       frameAria: "Mock ServiceNow Incident 新记录表单字段",
       toolbarTitle: "Incident | 新记录 — Mock 预览",
       actionbarAria: "已禁用的 mock ServiceNow 操作",
-      actions: { save: "保存", submit: "提交", update: "更新", close: "关闭" },
+      actions: { save: "保存", submit: "提交", update: "更新", resolve: "解决", close: "关闭" },
       disabledUnavailable: "禁用 / 演示模式不可用",
       tabsAria: "Mock ServiceNow 表单分区",
       details: "详情",
@@ -1292,7 +1292,7 @@ const uiChromeTranslations: Record<LanguageCode, UiChromeTranslations> = {
         workNotes: "工作备注"
       },
       submitDisabled: "演示模式下提交被禁用",
-      finalSubmitCopy: "最终 ServiceNow 提交必须始终是人工有意操作。不会保存、提交、更新或关闭真实记录。",
+      finalSubmitCopy: "最终 ServiceNow 提交必须始终是人工有意操作。不会保存、提交、更新、解决或关闭真实记录。",
       notSet: "未设置"
     }
   },
@@ -4891,7 +4891,7 @@ function buildSafeDraftMarkdown(draft: TicketDraft): string {
     "",
     "## Safety Boundary",
     "- Demo-only local text prepared for manual review.",
-    "- No real ServiceNow record is created, changed, submitted, updated, saved, or closed.",
+    "- No real ServiceNow record is created, changed, submitted, updated, resolved, saved, or closed.",
     "- No real requester identity, ticket number, mailbox, chat, portal, attachment, or production content is included."
   ].join("\n");
 }
@@ -5306,7 +5306,7 @@ function RiskControlGate({
       <div>
         <p className="eyebrow">Risk Control</p>
         <h3 id="risk-control-title">Automate drafting, not accountability.</h3>
-        <p>The app does not submit, close, or update real tickets automatically.</p>
+        <p>The app does not Save, Submit, Update, Resolve, or Close real tickets automatically.</p>
       </div>
       <ul>
         <li>Confirm human review before fill</li>
@@ -5497,7 +5497,7 @@ function ControlledQaSingleTicketSmokePanel({
           <p className="eyebrow">Manual-fill assisted QA smoke</p>
           <h2 id="qa-smoke-title">Controlled QA single-ticket smoke</h2>
           <p>
-            This does NOT submit, save, update, close, launch browser automation, call ServiceNow APIs, or write
+            This does NOT submit, save, update, resolve, close, launch browser automation, call ServiceNow APIs, or write
             ServiceNow.
           </p>
         </div>
@@ -5542,7 +5542,7 @@ function ControlledQaSingleTicketSmokePanel({
         <ul>
           <li>Dry-run first: review the local field mapping and Excel row preview only.</li>
           <li>Manual copy only: the operator copies or types values; the app never fills ServiceNow.</li>
-          <li>Save-only readiness: Submit, Update, and Close remain deferred to a later checkpoint.</li>
+          <li>Save-only readiness: Submit, Update, Resolve, and Close remain deferred to a later checkpoint.</li>
         </ul>
       </section>
 
@@ -6165,7 +6165,7 @@ function QaTextFieldAutofillPanel({
         </div>
         <div>
           <span>Write actions</span>
-          <strong>No Save / Submit / Update / Close</strong>
+          <strong>No Save / Submit / Update / Resolve / Close</strong>
         </div>
         <div>
           <span>Required approval phrase</span>

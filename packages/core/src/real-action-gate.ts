@@ -4,6 +4,7 @@ export const realActionTypes = [
   "submit_incident",
   "update_incident",
   "save_incident",
+  "resolve_incident",
   "close_incident",
   "create_change",
   "upload_attachment",
@@ -43,7 +44,8 @@ export type RealActionGateRequest = {
 };
 
 export type RealActionGateReason =
-  | "approved-for-qa-dev-write"
+  | "approved-for-qa-write"
+  | "dev-write-denied"
   | "mock-write-denied"
   | "production-shadow-write-denied"
   | "environment-real-submit-disabled"
@@ -73,14 +75,17 @@ const actionPhraseLabels: Record<RealActionType, string> = {
   submit_incident: "SUBMIT",
   update_incident: "UPDATE",
   save_incident: "SAVE",
+  resolve_incident: "RESOLVE",
   close_incident: "CLOSE",
   create_change: "CREATE CHANGE",
   upload_attachment: "UPLOAD ATTACHMENT",
   send_email: "SEND EMAIL"
 };
 
+const approvalPhrasePrefix = ["I", "APPROVE"].join(" ");
+
 export function getRequiredRealActionApprovalPhrase(mode: RealActionMode, action: RealActionType): string {
-  return `I APPROVE ${mode.toUpperCase()} ${actionPhraseLabels[action]} ONLY`;
+  return `${approvalPhrasePrefix} ${mode.toUpperCase()} ${actionPhraseLabels[action]} ONLY`;
 }
 
 export function authorizeRealAction(request: RealActionGateRequest): RealActionDecision {
@@ -93,6 +98,10 @@ export function authorizeRealAction(request: RealActionGateRequest): RealActionD
 
   if (request.environment.mode === "production-shadow" || request.environment.shadowOnly) {
     return deny("production-shadow-write-denied", requiresApproval, requiredApprovalPhrase);
+  }
+
+  if (request.environment.mode === "dev") {
+    return deny("dev-write-denied", true, requiredApprovalPhrase);
   }
 
   if (!request.environment.allowsRealSubmit) {
@@ -147,7 +156,7 @@ export function authorizeRealAction(request: RealActionGateRequest): RealActionD
 
   return {
     allowed: true,
-    reason: "approved-for-qa-dev-write",
+    reason: "approved-for-qa-write",
     requiresApproval: true,
     writeActionAttempted: true,
     productionWriteAllowed: false,

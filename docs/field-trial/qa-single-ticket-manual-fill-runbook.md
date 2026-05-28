@@ -87,6 +87,7 @@ Each write action has its own approval phrase. One phrase never covers another a
 Save:   PRIVATE_APPROVAL_PHRASE
 Submit: PRIVATE_APPROVAL_PHRASE
 Update: PRIVATE_APPROVAL_PHRASE
+Resolve: PRIVATE_APPROVAL_PHRASE
 Close:  PRIVATE_APPROVAL_PHRASE
 ```
 
@@ -94,14 +95,14 @@ Rules:
 
 1. Alan must provide the exact phrase in the current session immediately before the matching action.
 2. The phrase must match the exact action about to be taken.
-3. A Submit approval does not approve Save, Update, or Close.
-4. A Save approval does not approve Submit, Update, or Close.
+3. A Submit approval does not approve Save, Update, Resolve, or Close.
+4. A Save approval does not approve Submit, Update, Resolve, or Close.
 5. If the page changes after approval, ask again before acting.
 6. Do not persist runtime approval evidence in config, cookies, local storage, screenshots, or logs. The static required phrases may be displayed in docs/UI, but Alan's per-action approval must still be freshly provided in the current session.
 
 ## QA isolation confirmation
 
-Before any Save or Submit, Alan must confirm all of the following in plain language:
+Before any Save, Submit, Update, Resolve, or Close, Alan must confirm all of the following in plain language:
 
 ```text
 QA isolation confirmed: this ticket will not notify production users, customers, or a real support team.
@@ -119,8 +120,8 @@ Stop immediately if any of these happen:
 - Any real user, customer, ticket, email, chat, URL, hostname, credential, cookie, session, screenshot, or recording detail appears.
 - QA ticket could notify production users, customers, or a real support team.
 - A page opens a real ticket, real user, real customer, or real assignment queue.
-- Any ServiceNow workflow unexpectedly creates, updates, routes, notifies, escalates, or closes data.
-- Any DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated close/update path appears.
+- Any ServiceNow workflow unexpectedly creates, updates, resolves, routes, notifies, escalates, or closes data.
+- Any DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated update/resolve/close path appears.
 - The app or browser asks to save passwords, cookies, sessions, screenshots, HAR, traces, or storage state.
 - Alan is unsure whether a click is read-only or a write action.
 
@@ -207,9 +208,10 @@ Before Save, Submit, Update, Resolve, or Close:
    - Save requires `PRIVATE_APPROVAL_PHRASE`.
    - Submit requires `PRIVATE_APPROVAL_PHRASE`.
    - Update requires `PRIVATE_APPROVAL_PHRASE`.
+   - Resolve requires `PRIVATE_APPROVAL_PHRASE`.
    - Close requires `PRIVATE_APPROVAL_PHRASE`.
 5. If the phrase is missing, wrong, stale, or for a different action, do not click.
-6. For the first single-ticket trial, prefer Save or Submit only; Update and Close remain blocked unless a separate reviewed scenario explicitly needs them.
+6. For the first single-ticket trial, prefer Save or Submit only; Update, Resolve, and Close remain blocked unless a separate reviewed scenario explicitly needs them.
 
 ### Phase 5 — Sanitized outcome note
 
@@ -225,7 +227,7 @@ vpn-issue / fake VPN issue after password change
 Dry-run only / QA manual-fill only
 
 ## Action attempted
-None / Save / Submit
+None / Save / Submit / Update / Resolve / Close
 
 ## Approval phrase observed
 Not recorded; exact phrase was checked only at runtime.
@@ -260,7 +262,7 @@ The run passes only if:
 - Required field mapping is complete.
 - QA isolation is explicitly confirmed.
 - No real data is captured, committed, or sent to external AI.
-- No DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated update/close is used.
+- No DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated update/resolve/close is used.
 - Every real write action has its exact action-specific approval phrase.
 - Excel output remains dry-run / copy-only.
 - Outcome notes are sanitized.

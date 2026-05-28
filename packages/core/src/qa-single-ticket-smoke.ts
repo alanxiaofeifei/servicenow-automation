@@ -64,12 +64,12 @@ export type QaSingleTicketSmokePlanStatus = "blocked" | "ready-for-manual-fill";
 
 export type QaManualFillWriteAction = Extract<
   RealActionType,
-  "save_incident" | "submit_incident" | "update_incident" | "close_incident"
+  "save_incident" | "submit_incident" | "update_incident" | "resolve_incident" | "close_incident"
 >;
 
 export type QaWriteActionApprovalPhrase = {
   action: QaManualFillWriteAction;
-  label: "Save" | "Submit" | "Update" | "Close";
+  label: "Save" | "Submit" | "Update" | "Resolve" | "Close";
   phrase: string;
 };
 
@@ -183,6 +183,7 @@ function buildWriteActionApprovalPhrases(mode: RealActionMode): QaWriteActionApp
     { action: "save_incident", label: "Save", phrase: getRequiredRealActionApprovalPhrase(mode, "save_incident") },
     { action: "submit_incident", label: "Submit", phrase: getRequiredRealActionApprovalPhrase(mode, "submit_incident") },
     { action: "update_incident", label: "Update", phrase: getRequiredRealActionApprovalPhrase(mode, "update_incident") },
+    { action: "resolve_incident", label: "Resolve", phrase: getRequiredRealActionApprovalPhrase(mode, "resolve_incident") },
     { action: "close_incident", label: "Close", phrase: getRequiredRealActionApprovalPhrase(mode, "close_incident") }
   ];
 }
@@ -193,7 +194,7 @@ function buildStopRules(): string[] {
     "Stop if any real user, real ticket text, real ticket number, credential, cookie, session, screenshot, or recording detail appears.",
     "Stop if the QA ticket could notify production users or a real support team.",
     "Stop if the environment is production or production-shadow, or if QA isolation is not explicitly confirmed.",
-    "Stop if browser DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated close/update appears."
+    "Stop if browser DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated update/resolve/close appears."
   ];
 }
 
