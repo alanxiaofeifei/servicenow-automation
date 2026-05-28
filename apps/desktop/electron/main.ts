@@ -242,6 +242,7 @@ function blockedVerifyResponse(blockedReason: string) {
         realServiceNowApiCalled: false,
         noServiceNowWrite: true,
         noSaveSubmitUpdateClose: true,
+        noSaveSubmitUpdateResolveClose: true,
         artifactsCaptured: false,
         productionWriteAllowed: false
       }
@@ -263,6 +264,7 @@ function blockedAutofillResponse(blockedReason: string) {
         realServiceNowApiCalled: false,
         noServiceNowWrite: true,
         noSaveSubmitUpdateClose: true,
+        noSaveSubmitUpdateResolveClose: true,
         artifactsCaptured: false,
         productionWriteAllowed: false
       }
