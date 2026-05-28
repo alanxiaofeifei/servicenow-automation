@@ -8,6 +8,8 @@ Validate whether the tool helps a Service Desk Agent turn real-world issue conte
 
 This is not a production rollout.
 
+Before any production shadow-mode comparison, complete `docs/field-trial/production-shadow-go-no-go-checklist.md`. If any required checkbox is not true, the verdict is NO-GO.
+
 ## Allowed
 
 - Use issues Alan is authorized to view and handle.
