@@ -18,7 +18,7 @@ ServiceNow Automation v0.1.0-rc.1 is a Windows Operator Preview for supervised l
 - Mock/synthetic desktop workflows:
   - VPN Demo
   - Windows Demo
-  - Account/Login Demo
+  - Mock Account Access Demo — no browser login
 - Draft editing, KB matches, missing info, risk flags, and Mock ServiceNow form mapping.
 - Optional dedicated browser smoke with `about:blank` only.
 

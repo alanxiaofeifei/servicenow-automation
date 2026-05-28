@@ -87,10 +87,10 @@ export const demoManualPasteScenarios: ManualPasteScenario[] = [
   },
   {
     id: "account-login-issue",
-    label: "Account/login demo issue",
-    title: "Login issue after password change",
+    label: "Mock account access demo issue",
+    title: "Fake account access troubleshooting issue",
     rawText:
-      "User cannot login after changing password. MFA prompt appears but authentication fails repeatedly. User can access some services but not the required application."
+      "QA TEST ONLY — Fake account access scenario. A fake requester reports that access is failing after a password change. MFA prompts appear but authentication fails repeatedly. The scenario is mock-only and does not require browser login."
   }
 ];
 

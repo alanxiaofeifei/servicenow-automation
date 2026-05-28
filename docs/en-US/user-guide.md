@@ -12,7 +12,7 @@ The P0 version is intentionally simple and stable: it uses manual paste, local d
 2. Choose one scenario:
    - Load VPN Demo
    - Load Windows Demo
-   - Load Account/Login Demo
+   - Load Mock Account Access Demo — no browser login
 3. Review the captured context.
 4. Review and edit the TicketDraft fields.
 5. Check KB Matches, Missing Info, and Risk Flags.
