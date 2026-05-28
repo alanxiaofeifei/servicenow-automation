@@ -19,6 +19,7 @@ import { buildQaIncidentDefaultRuntimeTextFieldPlan, buildQaIncidentDefaultValue
 import { getServiceNowEnvironmentConfig } from "@servicenow-automation/profiles";
 
 import { resolveOperatorRuntimeRequestGate } from "./operator-ipc-safety";
+import { resolveElectronPreloadPath } from "./preload-path";
 import { resolveDesktopResourcePath, resolveDesktopRuntimePaths } from "./runtime-paths";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -31,7 +32,7 @@ function createMainWindow(): void {
     minHeight: 680,
     title: "ServiceNow Automation",
     webPreferences: {
-      preload: join(__dirname, "../preload/preload.cjs"),
+      preload: resolveElectronPreloadPath(__dirname),
       contextIsolation: true,
       nodeIntegration: false
     }

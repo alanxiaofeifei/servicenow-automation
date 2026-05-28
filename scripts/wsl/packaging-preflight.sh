@@ -92,6 +92,9 @@ function readMainBundleText(root) {
 const rootPackage = readJson("package.json");
 const desktopPackage = readJson("apps/desktop/package.json");
 const desktopMainBundle = readMainBundleText("apps/desktop/out/main");
+const desktopPreloadOutputNames = ["preload.mjs", "preload.cjs"].filter((name) =>
+  fs.existsSync(`apps/desktop/out/preload/${name}`)
+);
 const scripts = { ...(rootPackage.scripts ?? {}), ...(desktopPackage.scripts ?? {}) };
 const desktopBuildConfig = desktopPackage.build;
 const desktopDevDependencies = desktopPackage.devDependencies ?? {};
@@ -139,6 +142,15 @@ if (desktopMainBundle.includes("@servicenow-automation/")) {
   fail("desktop main bundle still imports internal workspace packages instead of bundling them for packaged Electron.");
 } else {
   pass("desktop main bundle does not externalize internal workspace TypeScript packages.");
+}
+
+if (
+  desktopPreloadOutputNames.length > 0 &&
+  desktopPreloadOutputNames.some((name) => desktopMainBundle.includes(`../preload/${name}`))
+) {
+  pass("desktop main bundle references an emitted preload output file.");
+} else {
+  fail("desktop main bundle does not reference any emitted preload output file, so renderer-to-main IPC would be unavailable.");
 }
 
 if (fs.existsSync("scripts/windows/install-cloakbrowser-runtime.ps1") || fs.existsSync("scripts/windows/prepare-chrome-for-testing.ps1")) {
