@@ -1811,7 +1811,8 @@ function fakeQaAutofillRuntimeDriver(
         artifactsCaptured: false,
         serviceNowApiCalled: false,
         browserProcessLaunched: false,
-        stoppedBeforeSaveSubmitUpdateClose: true
+        stoppedBeforeSaveSubmitUpdateClose: true,
+        stoppedBeforeSaveSubmitUpdateResolveClose: true
       };
     }
   };

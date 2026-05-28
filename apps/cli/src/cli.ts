@@ -1014,6 +1014,7 @@ function blockedQaAutofillRuntimeResult(
       realServiceNowApiCalled: false,
       noServiceNowWrite: true,
       noSaveSubmitUpdateClose: true,
+      noSaveSubmitUpdateResolveClose: true,
       artifactsCaptured: false,
       productionWriteAllowed: false
     }

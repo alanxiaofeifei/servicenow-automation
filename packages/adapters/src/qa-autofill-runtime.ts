@@ -35,7 +35,8 @@ export type QaAutofillRuntimeBlockedReason =
   | "selector-mismatch"
   | "unexpected-required-field"
   | "approval-stale-after-page-change"
-  | "plan-not-ready";
+  | "plan-not-ready"
+  | "qa-only-execute";
 
 export type QaAutofillRuntimeInspection = {
   currentUrl: string;
@@ -49,6 +50,7 @@ export type QaAutofillRuntimeFillRequest = {
   descriptors: QaAutofillFieldDescriptor[];
   expectedPageFingerprint: string;
   allowedHost: string;
+  executionEnvironmentMode: "qa";
 };
 
 export type QaAutofillRuntimeFillResult = {
@@ -65,6 +67,7 @@ export type QaAutofillRuntimeFillResult = {
   serviceNowApiCalled: false;
   browserProcessLaunched: false;
   stoppedBeforeSaveSubmitUpdateClose: true;
+  stoppedBeforeSaveSubmitUpdateResolveClose: true;
 };
 
 export type QaAutofillRuntimePageDriver = {
@@ -115,6 +118,7 @@ export type QaIncidentFieldRuntimeResult = {
     realServiceNowApiCalled: false;
     noServiceNowWrite: true;
     noSaveSubmitUpdateClose: true;
+    noSaveSubmitUpdateResolveClose: true;
     artifactsCaptured: false;
     productionWriteAllowed: false;
   };
@@ -125,6 +129,7 @@ export type QaIncidentDefaultFieldRuntimeFillBlockedReason =
   | "execute-flag-required"
   | "plan-not-ready"
   | "approval-page-fingerprint-required"
+  | "qa-only-execute"
   | "runtime-text-fields-only"
   | "approval-stale-after-page-change"
   | "field-control-missing"
@@ -160,6 +165,7 @@ export type QaIncidentDefaultFieldRuntimeFillRequest = {
   >;
   expectedPageFingerprint?: string;
   allowedHost: string;
+  executionEnvironmentMode: "qa";
 };
 
 export type QaIncidentDefaultFieldRuntimeFillResult = {
@@ -177,6 +183,7 @@ export type QaIncidentDefaultFieldRuntimeFillResult = {
   serviceNowApiCalled: false;
   browserProcessLaunched: false;
   stoppedBeforeSaveSubmitUpdateClose: true;
+  stoppedBeforeSaveSubmitUpdateResolveClose: true;
 };
 
 export type QaIncidentDefaultFieldAutofillRuntimeResult = {
@@ -192,6 +199,7 @@ export type QaIncidentDefaultFieldAutofillRuntimeResult = {
     realServiceNowApiCalled: false;
     noServiceNowWrite: true;
     noSaveSubmitUpdateClose: true;
+    noSaveSubmitUpdateResolveClose: true;
     artifactsCaptured: false;
     productionWriteAllowed: false;
   };
@@ -228,6 +236,7 @@ export type QaAutofillRuntimeResult = {
     realServiceNowApiCalled: false;
     noServiceNowWrite: true;
     noSaveSubmitUpdateClose: true;
+    noSaveSubmitUpdateResolveClose: true;
     artifactsCaptured: false;
     productionWriteAllowed: false;
   };
@@ -283,6 +292,9 @@ export async function runQaTextFieldAutofillRuntime(
   const preflightReason = runtimePreflightBlockedReason(request.environment);
   if (preflightReason) {
     return blockedRuntimeResult(preflightReason, false);
+  }
+  if (request.execute && request.environment.mode !== "qa") {
+    return blockedRuntimeResult("qa-only-execute", false);
   }
   if (!request.driver) {
     return blockedRuntimeResult("cdp-endpoint-denied", false);
@@ -393,7 +405,8 @@ export async function runQaTextFieldAutofillRuntime(
       operations: plan.operations,
       descriptors,
       expectedPageFingerprint: beforeFillInspection.pageFingerprint,
-      allowedHost: beforeFillTargetValidation.allowedHost ?? ""
+      allowedHost: beforeFillTargetValidation.allowedHost ?? "",
+      executionEnvironmentMode: "qa"
     });
   } catch (error) {
     execution = blockedFillResult(cdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error");
@@ -501,6 +514,9 @@ export async function runQaIncidentDefaultFieldAutofillRuntime(
   if (preflightReason) {
     return blockedDefaultFieldAutofillRuntimeResult(preflightReason, false);
   }
+  if (request.execute && request.environment.mode !== "qa") {
+    return blockedDefaultFieldAutofillRuntimeResult("qa-only-execute", false);
+  }
   if (!request.driver) {
     return blockedDefaultFieldAutofillRuntimeResult("cdp-endpoint-denied", false);
   }
@@ -560,7 +576,8 @@ export async function runQaIncidentDefaultFieldAutofillRuntime(
     execution = await request.driver.fillIncidentDefaultFields({
       plannedFields: request.plannedFields,
       expectedPageFingerprint,
-      allowedHost: targetValidation.allowedHost
+      allowedHost: targetValidation.allowedHost,
+      executionEnvironmentMode: "qa"
     });
   } catch (error) {
     execution = blockedDefaultFieldFillResult(cdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error");
@@ -745,6 +762,7 @@ function runtimeSafety(browserAutomationCalled: boolean): QaAutofillRuntimeResul
     realServiceNowApiCalled: false,
     noServiceNowWrite: true,
     noSaveSubmitUpdateClose: true,
+    noSaveSubmitUpdateResolveClose: true,
     artifactsCaptured: false,
     productionWriteAllowed: false
   };
@@ -757,6 +775,7 @@ function incidentFieldRuntimeSafety(browserAutomationCalled: boolean): QaInciden
     realServiceNowApiCalled: false,
     noServiceNowWrite: true,
     noSaveSubmitUpdateClose: true,
+    noSaveSubmitUpdateResolveClose: true,
     artifactsCaptured: false,
     productionWriteAllowed: false
   };
@@ -771,6 +790,7 @@ function defaultFieldAutofillRuntimeSafety(
     realServiceNowApiCalled: false,
     noServiceNowWrite: true,
     noSaveSubmitUpdateClose: true,
+    noSaveSubmitUpdateResolveClose: true,
     artifactsCaptured: false,
     productionWriteAllowed: false
   };
@@ -937,7 +957,8 @@ function blockedDefaultFieldFillResult(
     artifactsCaptured: false,
     serviceNowApiCalled: false,
     browserProcessLaunched: false,
-    stoppedBeforeSaveSubmitUpdateClose: true
+    stoppedBeforeSaveSubmitUpdateClose: true,
+    stoppedBeforeSaveSubmitUpdateResolveClose: true
   };
 }
 
@@ -950,7 +971,8 @@ function blockedFillResult(blockedReason: QaAutofillRuntimeBlockedReason): QaAut
     artifactsCaptured: false,
     serviceNowApiCalled: false,
     browserProcessLaunched: false,
-    stoppedBeforeSaveSubmitUpdateClose: true
+    stoppedBeforeSaveSubmitUpdateClose: true,
+    stoppedBeforeSaveSubmitUpdateResolveClose: true
   };
 }
 
@@ -1278,7 +1300,8 @@ function buildIncidentDefaultFieldFillExpression(request: QaIncidentDefaultField
       manualConfirmationRequired: field.manualConfirmationRequired
     })),
     expectedPageFingerprint: request.expectedPageFingerprint,
-    allowedHost: request.allowedHost.toLowerCase()
+    allowedHost: request.allowedHost.toLowerCase(),
+    executionEnvironmentMode: request.executionEnvironmentMode
   };
   return `(${incidentDefaultFieldFillScript})(${JSON.stringify(sanitizedRequest)}, ${JSON.stringify(
     incidentFieldInspectionScript.toString()
@@ -1301,7 +1324,8 @@ function buildFillExpression(request: QaAutofillRuntimeFillRequest): string {
       selectors: descriptor.selectors
     })),
     expectedPageFingerprint: request.expectedPageFingerprint,
-    allowedHost: request.allowedHost.toLowerCase()
+    allowedHost: request.allowedHost.toLowerCase(),
+    executionEnvironmentMode: request.executionEnvironmentMode
   };
   return `(${fillScript})(${JSON.stringify(sanitizedRequest)})`;
 }
@@ -1318,12 +1342,17 @@ const incidentDefaultFieldFillScript = async (
     }>;
     expectedPageFingerprint?: string;
     allowedHost: string;
+    executionEnvironmentMode?: "qa";
   },
   inspectionScriptSource: string
 ): Promise<QaIncidentDefaultFieldRuntimeFillResult> => {
   const expectedPageFingerprint = request.expectedPageFingerprint?.trim();
   if (!expectedPageFingerprint) {
     return blocked("approval-page-fingerprint-required");
+  }
+
+  if (request.executionEnvironmentMode !== "qa") {
+    return blocked("qa-only-execute");
   }
 
   if (!currentPageTargetAllowed(request.allowedHost)) {
@@ -1409,7 +1438,8 @@ const incidentDefaultFieldFillScript = async (
     artifactsCaptured: false,
     serviceNowApiCalled: false,
     browserProcessLaunched: false,
-    stoppedBeforeSaveSubmitUpdateClose: true
+    stoppedBeforeSaveSubmitUpdateClose: true,
+    stoppedBeforeSaveSubmitUpdateResolveClose: true
   };
 
   function blocked(
@@ -1425,7 +1455,8 @@ const incidentDefaultFieldFillScript = async (
       artifactsCaptured: false,
       serviceNowApiCalled: false,
       browserProcessLaunched: false,
-      stoppedBeforeSaveSubmitUpdateClose: true
+      stoppedBeforeSaveSubmitUpdateClose: true,
+      stoppedBeforeSaveSubmitUpdateResolveClose: true
     };
   }
 
@@ -2200,7 +2231,12 @@ const fillScript = async (request: {
   }>;
   expectedPageFingerprint: string;
   allowedHost: string;
+  executionEnvironmentMode?: "qa";
 }): Promise<QaAutofillRuntimeFillResult> => {
+  if (request.executionEnvironmentMode !== "qa") {
+    return blocked("qa-only-execute");
+  }
+
   if (!currentPageTargetAllowed(request.allowedHost)) {
     return blocked("current-page-target-denied");
   }
@@ -2262,7 +2298,8 @@ const fillScript = async (request: {
     artifactsCaptured: false,
     serviceNowApiCalled: false,
     browserProcessLaunched: false,
-    stoppedBeforeSaveSubmitUpdateClose: true
+    stoppedBeforeSaveSubmitUpdateClose: true,
+    stoppedBeforeSaveSubmitUpdateResolveClose: true
   };
 
   function blocked(blockedReason: QaAutofillRuntimeBlockedReason): QaAutofillRuntimeFillResult {
@@ -2274,7 +2311,8 @@ const fillScript = async (request: {
       artifactsCaptured: false,
       serviceNowApiCalled: false,
       browserProcessLaunched: false,
-      stoppedBeforeSaveSubmitUpdateClose: true
+      stoppedBeforeSaveSubmitUpdateClose: true,
+      stoppedBeforeSaveSubmitUpdateResolveClose: true
     };
   }
 

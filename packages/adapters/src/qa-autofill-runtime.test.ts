@@ -38,6 +38,9 @@ import {
 } from "./qa-autofill-runtime";
 
 const qaEnvironment = getServiceNowEnvironmentConfig("qa");
+const devEnvironment = getServiceNowEnvironmentConfig("dev", {
+  dev: "https://dev.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
+});
 const qaApprovalPhrase = getRequiredQaAutofillApprovalPhrase("qa");
 const sensitiveIncidentQueryKey = "sys" + "_id";
 const currentQaIncidentUrl = `https://qa.service-now.example.invalid/nav_to.do?uri=incident.do%3F${sensitiveIncidentQueryKey}%3Dredacted`;
@@ -85,6 +88,7 @@ describe("QA text-field autofill runtime", () => {
       browserAutomationCalled: true,
       noServiceNowWrite: true,
       noSaveSubmitUpdateClose: true,
+      noSaveSubmitUpdateResolveClose: true,
       artifactsCaptured: false
     });
   });
@@ -116,6 +120,28 @@ describe("QA text-field autofill runtime", () => {
     }
   });
 
+  it("blocks live text-field execution for configured dev targets before browser inspection", async () => {
+    const driver = fakeDriver([inspection({ pageFingerprint: "should-not-be-read" })]);
+
+    const result = await runQaTextFieldAutofillRuntime({
+      draft: completeDraft(),
+      environment: devEnvironment,
+      driver,
+      execute: true,
+      approvalPhrase: qaApprovalPhrase,
+      approvalPageFingerprint: "reviewed-page",
+      qaIsolationConfirmed: true,
+      dedicatedProfileConfirmed: true
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(result.blockedReason).toBe("qa-only-execute");
+    expect(result.pageFingerprint).toBeUndefined();
+    expect(result.safety.browserAutomationCalled).toBe(false);
+    expect(driver.inspectCalls).toBe(0);
+    expect(driver.fillCalls).toHaveLength(0);
+  });
+
   it("fills only the three approved text operations after fresh approval", async () => {
     const driver = fakeDriver([
       inspection({ pageFingerprint: "reviewed-page" }),
@@ -140,7 +166,8 @@ describe("QA text-field autofill runtime", () => {
       writeActionsAttempted: false,
       artifactsCaptured: false,
       serviceNowApiCalled: false,
-      stoppedBeforeSaveSubmitUpdateClose: true
+      stoppedBeforeSaveSubmitUpdateClose: true,
+      stoppedBeforeSaveSubmitUpdateResolveClose: true
     });
     expect(driver.fillCalls).toHaveLength(1);
     expect(driver.fillCalls[0].map((operation) => operation.kind)).toEqual(["fill-text", "fill-text", "fill-text"]);
@@ -651,6 +678,7 @@ describe("QA incident default field read-only runtime", () => {
       browserAutomationCalled: true,
       noServiceNowWrite: true,
       noSaveSubmitUpdateClose: true,
+      noSaveSubmitUpdateResolveClose: true,
       artifactsCaptured: false,
       productionWriteAllowed: false
     });
@@ -677,6 +705,28 @@ describe("QA incident default field read-only runtime", () => {
 });
 
 describe("QA incident default field autofill runtime", () => {
+  it("blocks live default-field execution for configured dev targets before browser inspection", async () => {
+    const driver = fakeDefaultFieldDriver(incidentFieldInspection({ pageFingerprint: "should-not-be-read" }));
+
+    const result = await runQaIncidentDefaultFieldAutofillRuntime({
+      environment: devEnvironment,
+      driver,
+      plannedFields: reviewedFullFieldPlannedIncidentDefaultFields(),
+      execute: true,
+      approvalPageFingerprint: "stable-incident-form"
+    });
+
+    expect(result.status).toBe("blocked");
+    expect(result.blockedReason).toBe("qa-only-execute");
+    expect(result.pageFingerprint).toBeUndefined();
+    expect(result.pageFingerprintMatched).toBe(false);
+    expect(result.filledFields).toEqual([]);
+    expect(result.blockedFields).toEqual([]);
+    expect(result.safety.browserAutomationCalled).toBe(false);
+    expect(driver.inspectCalls).toBe(0);
+    expect(driver.fillCalls).toHaveLength(0);
+  });
+
   it("autofills reviewed full-field reference select text and textarea fields after an explicit verify fingerprint", async () => {
     const plannedFields = reviewedFullFieldPlannedIncidentDefaultFields();
     const driver = fakeDefaultFieldDriver(incidentFieldInspection({ pageFingerprint: "stable-incident-form" }));
@@ -723,6 +773,7 @@ describe("QA incident default field autofill runtime", () => {
       browserAutomationCalled: true,
       noServiceNowWrite: true,
       noSaveSubmitUpdateClose: true,
+      noSaveSubmitUpdateResolveClose: true,
       artifactsCaptured: false
     });
   });
@@ -985,7 +1036,8 @@ describe("QA incident default field autofill runtime", () => {
         {
           plannedFields: textOnlyFields,
           expectedPageFingerprint: "verified-page",
-          allowedHost: "qa.service-now.example.invalid"
+          allowedHost: "qa.service-now.example.invalid",
+          executionEnvironmentMode: "qa"
         },
         "async () => { globalThis.__sdaInspectionProbe.calls += 1; return { currentUrl: globalThis.location.href, pageFingerprint: 'verified-page', fields: [] }; }"
       );
@@ -995,6 +1047,36 @@ describe("QA incident default field autofill runtime", () => {
       expect(globals.__sdaInspectionProbe?.calls).toBe(0);
     } finally {
       delete globals.__sdaInspectionProbe;
+      restoreGlobals();
+    }
+  });
+
+  it("blocks the browser-evaluated default-field sink without QA execution mode", async () => {
+    const shortDescriptionControl = fakeIncidentDomControl("input", { name: "incident.short_description" });
+    const restoreGlobals = installFakeBrowserGlobals({
+      controls: [shortDescriptionControl],
+      href: "https://qa.service-now.example.invalid/nav_to.do"
+    });
+
+    try {
+      const result = await qaAutofillRuntimeTestHooks.incidentDefaultFieldFillScript(
+        {
+          plannedFields: [
+            { key: "shortDescription", label: "Short description", value: "safe text", valueLength: "safe text".length }
+          ],
+          expectedPageFingerprint: "verified-page",
+          allowedHost: "qa.service-now.example.invalid"
+        },
+        "async () => ({ currentUrl: globalThis.location.href, pageFingerprint: 'verified-page', fields: [] })"
+      );
+
+      expect(result.status).toBe("blocked");
+      expect(result.blockedReason).toBe("qa-only-execute");
+      expect(result.filledFields).toEqual([]);
+      expect(shortDescriptionControl.value).toBe("");
+      expect(result.writeActionsAttempted).toBe(false);
+      expect(result.stoppedBeforeSaveSubmitUpdateResolveClose).toBe(true);
+    } finally {
       restoreGlobals();
     }
   });
@@ -1013,7 +1095,8 @@ describe("QA incident default field autofill runtime", () => {
         {
           plannedFields: [plannedIncidentDefaultField("requester", "Requester", "Safe requester display", "qa-default-profile")],
           expectedPageFingerprint: "verified-page",
-          allowedHost: "qa.service-now.example.invalid"
+          allowedHost: "qa.service-now.example.invalid",
+          executionEnvironmentMode: "qa"
         },
         "async () => ({ currentUrl: globalThis.location.href, pageFingerprint: 'verified-page', fields: [] })"
       );
@@ -1043,7 +1126,8 @@ describe("QA incident default field autofill runtime", () => {
         {
           plannedFields: [plannedIncidentDefaultField("requester", "Requester", "Safe requester display", "qa-default-profile")],
           expectedPageFingerprint: "verified-page",
-          allowedHost: "qa.service-now.example.invalid"
+          allowedHost: "qa.service-now.example.invalid",
+          executionEnvironmentMode: "qa"
         },
         "async () => ({ currentUrl: globalThis.location.href, pageFingerprint: 'verified-page', fields: [] })"
       );
@@ -1080,7 +1164,8 @@ describe("QA incident default field autofill runtime", () => {
         {
           plannedFields: [plannedIncidentDefaultField("requester", "Requester", rawReferenceValue, "qa-default-profile")],
           expectedPageFingerprint: "verified-page",
-          allowedHost: "qa.service-now.example.invalid"
+          allowedHost: "qa.service-now.example.invalid",
+          executionEnvironmentMode: "qa"
         },
         "async () => ({ currentUrl: globalThis.location.href, pageFingerprint: 'verified-page', fields: [] })"
       );
@@ -1138,7 +1223,8 @@ describe("QA incident default field autofill runtime", () => {
         {
           plannedFields,
           expectedPageFingerprint: "verified-page",
-          allowedHost: "qa.service-now.example.invalid"
+          allowedHost: "qa.service-now.example.invalid",
+          executionEnvironmentMode: "qa"
         },
         "async () => ({ currentUrl: globalThis.location.href, pageFingerprint: 'verified-page', fields: [] })"
       );
@@ -1175,7 +1261,8 @@ describe("QA incident default field autofill runtime", () => {
         {
           plannedFields: [plannedIncidentDefaultField("category", "Category", alanQaIncidentTestDefaults.category, "qa-default-profile")],
           expectedPageFingerprint: "verified-page",
-          allowedHost: "qa.service-now.example.invalid"
+          allowedHost: "qa.service-now.example.invalid",
+          executionEnvironmentMode: "qa"
         },
         "async () => ({ currentUrl: globalThis.location.href, pageFingerprint: 'verified-page', fields: [] })"
       );
@@ -1215,7 +1302,8 @@ describe("QA incident default field autofill runtime", () => {
             plannedIncidentDefaultField("category", "Category", alanQaIncidentTestDefaults.category, "qa-default-profile")
           ],
           expectedPageFingerprint: "verified-page",
-          allowedHost: "qa.service-now.example.invalid"
+          allowedHost: "qa.service-now.example.invalid",
+          executionEnvironmentMode: "qa"
         },
         "async () => ({ currentUrl: globalThis.location.href, pageFingerprint: 'verified-page', fields: [] })"
       );
@@ -1279,7 +1367,8 @@ describe("QA incident default field autofill runtime", () => {
         {
           plannedFields: [{ key: fieldCase.key, label: fieldCase.label, value: "safe text", valueLength: 9 }],
           expectedPageFingerprint: "verified-page",
-          allowedHost: "qa.service-now.example.invalid"
+          allowedHost: "qa.service-now.example.invalid",
+          executionEnvironmentMode: "qa"
         },
         "async () => ({ currentUrl: globalThis.location.href, pageFingerprint: 'verified-page', fields: [] })"
       );
@@ -1314,7 +1403,8 @@ describe("QA incident default field autofill runtime", () => {
         {
           plannedFields: [{ key: "shortDescription", label: "Short description", value: "safe text", valueLength: 9 }],
           expectedPageFingerprint: "verified-page",
-          allowedHost: "qa.service-now.example.invalid"
+          allowedHost: "qa.service-now.example.invalid",
+          executionEnvironmentMode: "qa"
         },
         "async () => ({ currentUrl: globalThis.location.href, pageFingerprint: 'verified-page', fields: [] })"
       );
@@ -1689,7 +1779,8 @@ function fakeDriver(
         artifactsCaptured: false,
         serviceNowApiCalled: false,
         browserProcessLaunched: false,
-        stoppedBeforeSaveSubmitUpdateClose: true
+        stoppedBeforeSaveSubmitUpdateClose: true,
+        stoppedBeforeSaveSubmitUpdateResolveClose: true
       };
     }
   };
@@ -1738,7 +1829,8 @@ function fakeDefaultFieldDriver(
         artifactsCaptured: false,
         serviceNowApiCalled: false,
         browserProcessLaunched: false,
-        stoppedBeforeSaveSubmitUpdateClose: true
+        stoppedBeforeSaveSubmitUpdateClose: true,
+        stoppedBeforeSaveSubmitUpdateResolveClose: true
       };
     }
   };
