@@ -6,7 +6,9 @@
 
 ## 2. 安全声明
 
-这不是自动提交机器人。工具只自动化草稿整理，不转移责任。最终提交仍然必须由人工完成。
+这不是自动提交机器人。工具只自动化草稿整理，不转移责任。最终操作仍然必须由人工完成。演示过程中不要展示真实 ServiceNow 页面、真实工单、真实客户信息、浏览器 endpoint、page fingerprint、cookie、session、HAR、trace、截图或录屏。
+
+本演示明确禁止 Save、Submit、Update、Resolve、Close、upload、email、bulk action 和任何 ServiceNow API write。
 
 ## 3. VPN 场景
 
@@ -26,7 +28,7 @@
 快速切换：
 
 - Windows Demo
-- Account/Login Demo
+- Mock Account Access Issue Demo — no browser login
 
 说明同样流程可以覆盖常见服务台 triage 场景。
 
