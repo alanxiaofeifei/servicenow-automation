@@ -15,27 +15,12 @@ import {
   type QaIncidentDefaultFieldAutofillRuntimePageDriver,
   type QaDedicatedCdpBrowserStartResult
 } from "@servicenow-automation/adapters";
-import {
-  buildQaIncidentDefaultRuntimeTextFieldPlan,
-  buildQaIncidentDefaultValuePlan,
-  type QaIncidentDefaultScenario,
-  type TicketDraft
-} from "@servicenow-automation/core";
-import { getServiceNowEnvironmentConfig, type ServiceNowEnvironmentMode } from "@servicenow-automation/profiles";
+import { buildQaIncidentDefaultRuntimeTextFieldPlan, buildQaIncidentDefaultValuePlan } from "@servicenow-automation/core";
+import { getServiceNowEnvironmentConfig } from "@servicenow-automation/profiles";
+
+import { resolveOperatorRuntimeRequestGate } from "./operator-ipc-safety";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
-
-type OperatorMode = Extract<ServiceNowEnvironmentMode, "qa" | "dev">;
-
-type OperatorRequest = {
-  mode?: OperatorMode;
-  targetUrl?: string;
-  cdpEndpoint?: string;
-  approvalPageFingerprint?: string;
-  draft?: TicketDraft;
-  scenario?: QaIncidentDefaultScenario;
-  routeOutAssignmentGroup?: string;
-};
 
 function createMainWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -59,9 +44,14 @@ function createMainWindow(): void {
 }
 
 function registerOperatorIpc(): void {
-  ipcMain.handle("sda:launch-qa-browser", async (_event, request: OperatorRequest = {}) => {
-    const mode = safeOperatorMode(request.mode);
-    const environment = getServiceNowEnvironmentConfig(mode, targetUrlOverrides(mode, request.targetUrl));
+  ipcMain.handle("sda:launch-qa-browser", async (_event, rawRequest: unknown = {}) => {
+    const gate = resolveOperatorRuntimeRequestGate(rawRequest);
+    if (gate.status === "blocked") {
+      return blockedLaunchResponse(gate.blockedReason);
+    }
+
+    const request = gate.request;
+    const environment = getServiceNowEnvironmentConfig("qa", targetUrlOverrides(request.targetUrl));
     const launch = await createBrowserSessionService({ projectRoot: findProjectRoot() }).startQaDedicatedCdpBrowser(environment, {
       targetUrlOverride: safeTargetUrlOverride(request.targetUrl),
       execute: true,
@@ -74,10 +64,15 @@ function registerOperatorIpc(): void {
     };
   });
 
-  ipcMain.handle("sda:verify-current-incident", async (_event, request: OperatorRequest = {}) => {
+  ipcMain.handle("sda:verify-current-incident", async (_event, rawRequest: unknown = {}) => {
     try {
-      const mode = safeOperatorMode(request.mode);
-      const environment = getServiceNowEnvironmentConfig(mode, targetUrlOverrides(mode, request.targetUrl));
+      const gate = resolveOperatorRuntimeRequestGate(rawRequest);
+      if (gate.status === "blocked") {
+        return blockedVerifyResponse(gate.blockedReason);
+      }
+
+      const request = gate.request;
+      const environment = getServiceNowEnvironmentConfig("qa", targetUrlOverrides(request.targetUrl));
       const endpoint = requireCdpEndpoint(request.cdpEndpoint);
       const driver = createOperatorIncidentRuntimeDriver({ endpoint, targetUrl: environment.url });
       const fieldInspection = await inspectQaIncidentDefaultFieldsRuntime({ environment, driver });
@@ -100,10 +95,15 @@ function registerOperatorIpc(): void {
     }
   });
 
-  ipcMain.handle("sda:autofill-current-incident-defaults", async (_event, request: OperatorRequest = {}) => {
+  ipcMain.handle("sda:autofill-current-incident-defaults", async (_event, rawRequest: unknown = {}) => {
     try {
-      const mode = safeOperatorMode(request.mode);
-      const environment = getServiceNowEnvironmentConfig(mode, targetUrlOverrides(mode, request.targetUrl));
+      const gate = resolveOperatorRuntimeRequestGate(rawRequest);
+      if (gate.status === "blocked") {
+        return blockedAutofillResponse(gate.blockedReason);
+      }
+
+      const request = gate.request;
+      const environment = getServiceNowEnvironmentConfig("qa", targetUrlOverrides(request.targetUrl));
       const endpoint = requireCdpEndpoint(request.cdpEndpoint);
       const approvalPageFingerprint = safeApprovalPageFingerprint(request.approvalPageFingerprint);
       if (!request.draft) {
@@ -143,18 +143,14 @@ function registerOperatorIpc(): void {
   });
 }
 
-function safeOperatorMode(mode: OperatorRequest["mode"]): OperatorMode {
-  return mode === "dev" ? "dev" : "qa";
-}
-
 function safeTargetUrlOverride(value?: string): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
 
-function targetUrlOverrides(mode: OperatorMode, value?: string): Partial<Record<OperatorMode, string>> | undefined {
+function targetUrlOverrides(value?: string): Partial<Record<"qa", string>> | undefined {
   const targetUrl = safeTargetUrlOverride(value);
-  return targetUrl ? { [mode]: targetUrl } : undefined;
+  return targetUrl ? { qa: targetUrl } : undefined;
 }
 
 function requireCdpEndpoint(value?: string): string {
@@ -229,6 +225,22 @@ function toWindowsInteropPath(pathValue: string): string {
   return pathValue;
 }
 
+function blockedLaunchResponse(blockedReason: string) {
+  return {
+    ok: false,
+    launch: {
+      status: "blocked",
+      blockedReason,
+      safety: {
+        browserProcessLaunched: false,
+        cdpEndpointReady: false,
+        noWriteMode: true,
+        noSaveSubmitUpdateResolveClose: true
+      }
+    }
+  };
+}
+
 function blockedVerifyResponse(blockedReason: string) {
   return {
     ok: false,
@@ -242,6 +254,7 @@ function blockedVerifyResponse(blockedReason: string) {
         realServiceNowApiCalled: false,
         noServiceNowWrite: true,
         noSaveSubmitUpdateClose: true,
+        noSaveSubmitUpdateResolveClose: true,
         artifactsCaptured: false,
         productionWriteAllowed: false
       }
@@ -263,6 +276,7 @@ function blockedAutofillResponse(blockedReason: string) {
         realServiceNowApiCalled: false,
         noServiceNowWrite: true,
         noSaveSubmitUpdateClose: true,
+        noSaveSubmitUpdateResolveClose: true,
         artifactsCaptured: false,
         productionWriteAllowed: false
       }

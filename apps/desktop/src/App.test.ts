@@ -206,6 +206,20 @@ describe("App", () => {
     expect(cliSource).not.toContain("buildQaIncidentDefaultRuntimeFullFieldPlan");
   });
 
+  it("keeps Electron IPC runtime entrypoints gated to exact QA mode before browser work", () => {
+    const desktopMainSource = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+    const ipcGateSource = readFileSync(new URL("../electron/operator-ipc-safety.ts", import.meta.url), "utf8");
+
+    expect((desktopMainSource.match(/resolveOperatorRuntimeRequestGate\(rawRequest\)/g) ?? []).length).toBe(3);
+    expect(desktopMainSource).toContain("blockedLaunchResponse(gate.blockedReason)");
+    expect(desktopMainSource).toContain("blockedVerifyResponse(gate.blockedReason)");
+    expect(desktopMainSource).toContain("blockedAutofillResponse(gate.blockedReason)");
+    expect(desktopMainSource).not.toContain("safeOperatorMode");
+    expect(desktopMainSource).not.toContain('mode === "dev" ? "dev" : "qa"');
+    expect(ipcGateSource).toContain('input.mode !== "qa"');
+    expect(ipcGateSource).toContain('"qa-runtime-required"');
+  });
+
   it("keeps runtime actions visible with plain-language disabled reasons", () => {
     const output = renderAppMarkup("en-US", { initialRuntimeRailExpanded: true });
 
@@ -299,6 +313,23 @@ describe("App", () => {
     expect(output).not.toContain("127.0.0.1");
     expect(output).not.toContain("devtools/browser");
     expect(output).not.toContain("sha256:");
+  });
+
+  it("explains QA IPC gate blocks in plain language without exposing the internal reason code", () => {
+    const output = renderAppMarkup("en-US", {
+      initialEnvironmentMode: "qa",
+      initialRuntimeRailExpanded: true,
+      initialOperatorLastResponse: {
+        ok: false,
+        launch: { status: "blocked", blockedReason: "qa-runtime-required" },
+        fieldInspection: { status: "blocked", blockedReason: "qa-runtime-required" },
+        runtime: { status: "blocked", blockedReason: "qa-runtime-required" }
+      }
+    });
+
+    expect(output).toContain("The desktop runtime is locked to QA workspace controls.");
+    expect(output).toContain("No ServiceNow action was taken.");
+    expect(output).not.toContain("qa-runtime-required");
   });
 
   it("keeps collapsed runtime rail quiet and exposes the toggle beside language", () => {
