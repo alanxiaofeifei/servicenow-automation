@@ -1113,7 +1113,7 @@ const englishChromeTranslations: UiChromeTranslations = {
         safetyNotes: [
           "Manual login required. Credentials are never stored in source code.",
           "Browser sessions stay in ignored local runtime folders.",
-          "Any real QA submit requires explicit operator approval."
+          "Any real QA Save/Submit/Update/Resolve/Close action requires explicit operator approval."
         ]
       },
       dev: {
@@ -1123,7 +1123,7 @@ const englishChromeTranslations: UiChromeTranslations = {
         safetyNotes: [
           "Manual login required. Credentials are never stored in source code.",
           "Browser sessions stay in ignored local runtime folders.",
-          "Any real QA submit requires explicit operator approval."
+          "Any real QA Save/Submit/Update/Resolve/Close action requires explicit operator approval."
         ]
       },
       "production-shadow": {
@@ -5306,7 +5306,7 @@ function RiskControlGate({
       <div>
         <p className="eyebrow">Risk Control</p>
         <h3 id="risk-control-title">Automate drafting, not accountability.</h3>
-        <p>The app does not submit, close, or update real tickets automatically.</p>
+        <p>The app does not Save, Submit, Update, Resolve, or Close real tickets automatically.</p>
       </div>
       <ul>
         <li>Confirm human review before fill</li>

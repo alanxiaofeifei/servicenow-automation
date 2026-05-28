@@ -688,6 +688,11 @@ describe("App", () => {
     const zhTwOutput = renderAppMarkup("zh-TW");
 
     expect(enOutput).toContain("No real ServiceNow field fill, Save, Submit, Update, Resolve, Close");
+    const appSource = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
+    expect(appSource).toContain("The app does not Save, Submit, Update, Resolve, or Close real tickets automatically.");
+    expect(appSource).toContain("Any real QA Save/Submit/Update/Resolve/Close action requires explicit operator approval.");
+    expect(appSource).not.toContain("The app does not submit, close, or update real tickets automatically.");
+    expect(appSource).not.toContain("Any real QA submit requires explicit operator approval.");
     expect(zhCnOutput).toContain("Save、Submit、Update、Resolve、Close");
     expect(zhTwOutput).toContain("Save、Submit、Update、Resolve、Close");
     const outdatedNoWriteCopy = ["Save", "Submit", "Update", "Close", "API"].join("、");

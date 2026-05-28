@@ -262,7 +262,7 @@ The run passes only if:
 - Required field mapping is complete.
 - QA isolation is explicitly confirmed.
 - No real data is captured, committed, or sent to external AI.
-- No DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated update/close is used.
+- No DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated update/resolve/close is used.
 - Every real write action has its exact action-specific approval phrase.
 - Excel output remains dry-run / copy-only.
 - Outcome notes are sanitized.
