@@ -5802,6 +5802,8 @@ function operatorRuntimeBlockedReasonDetails(value: string | undefined, fallback
       return "Browser connection is no longer reachable. Click Start test browser again, then open the current Incident form in that test browser. No ServiceNow action was taken.";
     case "cdp-page-selection-denied":
       return "Could not find one unique approved Incident tab in the test browser. Keep exactly one current Incident form tab open, then retry Check current ticket page. No ServiceNow action was taken.";
+    case "qa-runtime-required":
+      return "The desktop runtime is locked to QA workspace controls. Choose QA workspace and restart the browser safety steps. No ServiceNow action was taken.";
     default:
       return sanitizeOperatorDiagnosticText(value, fallback);
   }
@@ -5810,7 +5812,7 @@ function operatorRuntimeBlockedReasonDetails(value: string | undefined, fallback
 function operatorLaunchDetails(response: OperatorRuntimeResponse, fallbackStatus: string): string {
   const baseDetails = response.ok
     ? "The dedicated QA test browser profile is open. Log in manually if needed, open an Incident form, then click Check current ticket page."
-    : sanitizeOperatorDiagnosticText(response.launch?.blockedReason, fallbackStatus);
+    : operatorRuntimeBlockedReasonDetails(response.launch?.blockedReason, fallbackStatus);
   return `${baseDetails}${operatorRuntimeLogDetails(response)}`;
 }
 
@@ -5852,7 +5854,7 @@ function operatorActionCardFeedback(
       ? { tone: "success", text: workbenchCopy.runtime.statusCdpReady }
       : {
           tone: "blocked",
-          text: `${workbenchCopy.runtime.statusBlocked}: ${sanitizeOperatorDiagnosticText(
+          text: `${workbenchCopy.runtime.statusBlocked}: ${operatorRuntimeBlockedReasonDetails(
             response.launch.blockedReason,
             "Browser connection blocked."
           )}${operatorRuntimeLogDetails(response)}`
