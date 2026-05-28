@@ -20,6 +20,7 @@ import { getServiceNowEnvironmentConfig } from "@servicenow-automation/profiles"
 
 import { resolveOperatorRuntimeRequestGate } from "./operator-ipc-safety";
 import { resolveDesktopResourcePath, resolveDesktopRuntimePaths } from "./runtime-paths";
+import { createMainWindowWebPreferences } from "./window-preferences";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -30,11 +31,7 @@ function createMainWindow(): void {
     minWidth: 980,
     minHeight: 680,
     title: "ServiceNow Automation",
-    webPreferences: {
-      preload: join(__dirname, "../preload/preload.cjs"),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
+    webPreferences: createMainWindowWebPreferences(__dirname)
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
