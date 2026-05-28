@@ -1286,6 +1286,7 @@ describe("QA incident default field autofill runtime", () => {
 
   it("does not partially fill earlier default fields when a later select option is missing", async () => {
     const shortDescriptionControl = fakeIncidentDomControl("input", { name: "incident.short_description" });
+    shortDescriptionControl.value = "unchanged-short-description";
     const categoryControl = fakeIncidentDomControl("select", { name: "incident.category" }, [
       { value: "different-option", textContent: "Different safe option" }
     ]);
@@ -1311,7 +1312,7 @@ describe("QA incident default field autofill runtime", () => {
       expect(result.status).toBe("blocked");
       expect(result.blockedReason).toBe("field-option-not-found");
       expect(result.filledFields).toEqual([]);
-      expect(shortDescriptionControl.value).toBe("");
+      expect(shortDescriptionControl.value).toBe("unchanged-short-description");
       expect(categoryControl.value).toBe("");
     } finally {
       restoreGlobals();
