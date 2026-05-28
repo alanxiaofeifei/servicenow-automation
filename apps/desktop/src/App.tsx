@@ -6459,6 +6459,6 @@ function buttonLabelForScenario(id: ManualPasteScenario["id"]): string {
     case "remote-support-teams":
       return "Load Remote Support Demo";
     case "account-login-issue":
-      return "Load Account/Login Demo";
+      return "Load Mock Account Access Demo";
   }
 }

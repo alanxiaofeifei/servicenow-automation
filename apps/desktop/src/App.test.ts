@@ -662,6 +662,13 @@ describe("App", () => {
     expect(primaryMarkup).not.toContain("raw-session-id");
   });
 
+  it("labels the account-access demo as mock-only without implying browser login", () => {
+    const appSource = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
+
+    expect(appSource).toContain("Load Mock Account Access Demo");
+    expect(appSource).not.toContain("Load Account/Login Demo");
+  });
+
   it("preserves first-class Settings with language, environment, URL inputs, and clear-state reasons", () => {
     const output = renderAppMarkup();
     const settingsMarkupText = settingsMarkup(output);

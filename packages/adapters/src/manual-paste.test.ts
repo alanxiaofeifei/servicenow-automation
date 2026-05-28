@@ -61,6 +61,11 @@ describe("ManualPasteAdapter", () => {
     expect(demoManualPasteScenarios.map((scenario) => scenario.label).join("\n")).toContain(
       "Remote support / Teams troubleshooting checklist"
     );
+    const accountAccessScenario = demoManualPasteScenarios.find((scenario) => scenario.id === "account-login-issue");
+    expect(accountAccessScenario?.label).toBe("Mock account access demo issue");
+    expect(accountAccessScenario?.rawText).toContain("QA TEST ONLY");
+    expect(accountAccessScenario?.rawText).toContain("does not require browser login");
+    expect(accountAccessScenario?.label).not.toMatch(/login demo/i);
     expect(demoManualPasteScenarios.every((scenario) => scenario.rawText.length > 40)).toBe(true);
   });
 });

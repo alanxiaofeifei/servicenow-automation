@@ -12,7 +12,7 @@ P0 版本刻意保持简单稳定：Manual Paste、本地 demo KB、deterministi
 2. 选择一个场景：
    - Load VPN Demo
    - Load Windows Demo
-   - Load Account/Login Demo
+   - Load Mock Account Access Demo — no browser login
 3. 查看 Captured Context。
 4. 查看并编辑 TicketDraft 字段。
 5. 查看 KB Matches、Missing Info、Risk Flags。

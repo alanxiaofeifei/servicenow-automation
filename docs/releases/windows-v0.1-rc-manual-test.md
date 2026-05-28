@@ -67,7 +67,7 @@ The WSL startup helper installs workspace dependencies if Electron is missing.
 
    - Load VPN Demo
    - Load Windows Demo
-   - Load Account/Login Demo
+   - Load Mock Account Access Demo — no browser login
    - edit a draft field
    - inspect KB matches / missing info / risk flags
    - inspect Mock ServiceNow form only
