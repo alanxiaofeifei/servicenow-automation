@@ -5,9 +5,15 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
+const internalWorkspacePackages = [
+  "@servicenow-automation/adapters",
+  "@servicenow-automation/core",
+  "@servicenow-automation/profiles"
+];
+
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: internalWorkspacePackages })],
     build: {
       rollupOptions: {
         input: {

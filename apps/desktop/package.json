@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "package:windows": "pnpm build && electron-builder --win zip",
     "start": "electron .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
@@ -26,7 +27,47 @@
     "@types/react": "^19.1.4",
     "@types/react-dom": "^19.1.5",
     "electron": "^35.2.1",
+    "electron-builder": "^26.8.1",
     "electron-vite": "^3.1.0",
     "vite": "^6.3.5"
+  },
+  "build": {
+    "appId": "com.servicenowautomation.operator",
+    "productName": "ServiceNow Automation",
+    "asar": true,
+    "directories": {
+      "output": "dist/windows"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../../scripts/windows",
+        "to": "scripts/windows",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../../scripts/local-cdp-bridge.py",
+        "to": "scripts/local-cdp-bridge.py"
+      },
+      {
+        "from": "../../docs/field-trial/windows-operator-quickstart.md",
+        "to": "docs/windows-operator-quickstart.md"
+      },
+      {
+        "from": "../../docs/releases/windows-v0.1-rc-manual-test.md",
+        "to": "docs/windows-v0.1-rc-manual-test.md"
+      }
+    ],
+    "win": {
+      "target": [
+        "zip"
+      ],
+      "signAndEditExecutable": false
+    }
   }
 }

@@ -8,11 +8,14 @@ Windows host CDP endpoint. It does not inspect or log browser traffic.
 from __future__ import annotations
 
 import argparse
-import selectors
+import ipaddress
 import socket
 import sys
 import threading
 from contextlib import closing
+
+
+RESOLV_CONF_PATH = "/etc/resolv.conf"
 
 
 def pump(src: socket.socket, dst: socket.socket) -> None:
@@ -50,6 +53,53 @@ def handle_client(client: socket.socket, target_host: str, target_port: int) -> 
     threading.Thread(target=pump, args=(upstream, client), daemon=True).start()
 
 
+def allowed_wsl_gateway_hosts_from_resolv_conf(resolv_conf: str) -> set[str]:
+    allowed: set[str] = set()
+    for line in resolv_conf.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        parts = stripped.split()
+        if len(parts) < 2 or parts[0] != "nameserver":
+            continue
+        try:
+            address = ipaddress.ip_address(parts[1])
+        except ValueError:
+            continue
+        if address.is_loopback or address.is_private:
+            allowed.add(str(address))
+    return allowed
+
+
+def read_allowed_wsl_gateway_hosts(path: str = RESOLV_CONF_PATH) -> set[str]:
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return allowed_wsl_gateway_hosts_from_resolv_conf(handle.read())
+    except OSError:
+        return set()
+
+
+def is_allowed_target_host(target_host: str, allowed_wsl_gateway_hosts: set[str]) -> bool:
+    try:
+        address = ipaddress.ip_address(target_host)
+    except ValueError:
+        return False
+
+    if address.is_loopback:
+        return True
+
+    if (
+        address.is_unspecified
+        or address.is_multicast
+        or address.is_global
+        or address.is_reserved
+        or address.is_link_local
+    ):
+        return False
+
+    return str(address) in allowed_wsl_gateway_hosts
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="WSL loopback bridge for supervised Windows Chromium CDP")
     parser.add_argument("--target-host", required=True, help="Windows host IP reachable from WSL")
@@ -59,6 +109,11 @@ def main() -> int:
 
     if args.target_port <= 0 or args.target_port > 65535 or args.listen_port <= 0 or args.listen_port > 65535:
         print("CDP_BRIDGE_BLOCKED: invalid port", file=sys.stderr)
+        return 2
+
+    allowed_wsl_gateways = read_allowed_wsl_gateway_hosts()
+    if not is_allowed_target_host(args.target_host, allowed_wsl_gateways):
+        print("CDP_BRIDGE_BLOCKED: target host denied", file=sys.stderr)
         return 2
 
     listen = ("127.0.0.1", args.listen_port)

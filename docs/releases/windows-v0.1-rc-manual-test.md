@@ -1,10 +1,10 @@
 # Windows v0.1 RC manual test quickstart
 
-This checklist is for supervised local testing of the Windows Operator Preview package.
+This checklist is for supervised local testing of the packaged Windows Operator Preview artifact.
 
 ## Scope
 
-The release-candidate package proves that the local Windows/WSL operator path can start the desktop app and run mock/synthetic workflows.
+The release-candidate package proves that the packaged Windows app can start and run mock/synthetic workflows without relying on a WSL source checkout or dev `node_modules` at runtime.
 
 It does not approve live ServiceNow operation.
 
@@ -23,47 +23,44 @@ Stop immediately if any path asks you to perform or automate:
 
 ## Package contents
 
-The portable zip contains source, scripts, docs, and prebuilt desktop renderer/main/preload outputs. It intentionally does not include:
+The RC zip is a packaged Electron Windows artifact. It should contain the app executable, `resources/app.asar`, and packaged helper resources under `resources/scripts/...`.
 
-- `node_modules/`
+It intentionally does not include:
+
 - `.git/`
 - `.local/` startup logs
-- `dist/`
-- cookies, sessions, HARs, traces, screenshots, or recordings
+- source-tree `private/` notes
+- cookies, sessions, HARs, traces, screenshots, recordings, or storage-state exports
 
-The WSL startup helper installs workspace dependencies if Electron is missing.
+The old WSL source-tree launcher is dev/field-trial fallback only and is not acceptance proof for this packaged artifact.
+
+## Build and checksum
+
+From WSL inside a clean checkout:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm release:windows:rc
+```
+
+The RC wrapper writes:
+
+```text
+dist/release/servicenow-automation-windows-v0.1.0-rc.1.zip
+dist/release/servicenow-automation-windows-v0.1.0-rc.1.zip.sha256
+```
+
+Verify checksum from a trusted shell:
+
+```bash
+sha256sum -c servicenow-automation-windows-v0.1.0-rc.1.zip.sha256
+```
 
 ## Test steps
 
-1. Download the zip and `.sha256` from the Draft GitHub Release.
-2. Verify checksum from WSL:
-
-   ```bash
-   sha256sum -c servicenow-automation-windows-v0.1.0-rc.1.zip.sha256
-   ```
-
-3. Extract into WSL, preferably:
-
-   ```bash
-   mkdir -p "$HOME/projects"
-   unzip servicenow-automation-windows-v0.1.0-rc.1.zip -d "$HOME/projects"
-   mv "$HOME/projects/servicenow-automation-windows-v0.1.0-rc.1" "$HOME/projects/servicenow-automation"
-   cd "$HOME/projects/servicenow-automation"
-   ```
-
-4. Run a no-GUI readiness check:
-
-   ```bash
-   SDA_LAUNCH_DRY_RUN=1 ./scripts/wsl/start-desktop.sh
-   ```
-
-5. From Windows, double-click:
-
-   ```text
-   scripts\windows\Start-ServiceNow-Automation.cmd
-   ```
-
-6. In the desktop app, test mock workflows only:
+1. Extract the RC zip on Windows.
+2. Double-click the packaged `ServiceNow Automation` executable.
+3. In the desktop app, test mock workflows only:
 
    - Load VPN Demo
    - Load Windows Demo
@@ -72,7 +69,7 @@ The WSL startup helper installs workspace dependencies if Electron is missing.
    - inspect KB matches / missing info / risk flags
    - inspect Mock ServiceNow form only
 
-7. Optional dedicated browser smoke:
+4. Optional dedicated browser smoke:
 
    - use `about:blank` only
    - confirm the profile is tool-owned
@@ -83,8 +80,8 @@ The WSL startup helper installs workspace dependencies if Electron is missing.
 
 Report only:
 
-- pass/fail for dry-run
-- pass/fail for Windows launcher opening the desktop app
+- pass/fail for checksum
+- pass/fail for packaged Windows app launch
 - pass/fail for mock demo workflows
 - startup log path if needed
 - sanitized visible error text if needed

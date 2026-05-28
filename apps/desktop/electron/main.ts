@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -19,6 +19,7 @@ import { buildQaIncidentDefaultRuntimeTextFieldPlan, buildQaIncidentDefaultValue
 import { getServiceNowEnvironmentConfig } from "@servicenow-automation/profiles";
 
 import { resolveOperatorRuntimeRequestGate } from "./operator-ipc-safety";
+import { resolveDesktopResourcePath, resolveDesktopRuntimePaths } from "./runtime-paths";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -185,7 +186,9 @@ function createOperatorIncidentRuntimeDriver(input: {
     return createWindowsLocalCdpQaIncidentDefaultFieldAutofillRuntimePageDriver({
       endpoint: input.endpoint,
       targetUrl: input.targetUrl,
-      helperScriptPath: toWindowsInteropPath(join(findProjectRoot(), "scripts", "windows", "evaluate-local-cdp-expression.ps1"))
+      helperScriptPath: toWindowsInteropPath(
+        resolveDesktopResourcePath("scripts/windows/evaluate-local-cdp-expression.ps1", desktopRuntimePaths())
+      )
     });
   }
 
@@ -296,20 +299,16 @@ function sanitizeLaunchForRenderer(launch: QaDedicatedCdpBrowserStartResult): Qa
   };
 }
 
+function desktopRuntimePaths() {
+  return resolveDesktopRuntimePaths({
+    mainDir: __dirname,
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath
+  });
+}
+
 function findProjectRoot(): string {
-  const candidates = [process.cwd(), join(__dirname, "../../../.."), join(__dirname, "../../..")];
-  for (const candidate of candidates) {
-    let current = candidate;
-    for (let depth = 0; depth < 6; depth += 1) {
-      if (existsSync(join(current, "pnpm-workspace.yaml"))) {
-        return current;
-      }
-      const parent = dirname(current);
-      if (parent === current) break;
-      current = parent;
-    }
-  }
-  return process.cwd();
+  return desktopRuntimePaths().projectRoot;
 }
 
 app.whenReady().then(() => {
