@@ -238,6 +238,9 @@ type UiTranslations = {
     monitoredGroupsHelper: string;
     acknowledgedLabel: string;
     mutedLabel: string;
+    announcementCountLabel: string;
+    speechPreviewStatusLabel: string;
+    previewSpeechAction: string;
     acknowledgeAction: string;
     muteAction: string;
   };
@@ -465,6 +468,9 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
       monitoredGroupsHelper: "只有所选监控组内的 P1/P2 事件才会报警；其他组本地抑制，不连接真实 ServiceNow。",
       acknowledgedLabel: "已确认",
       mutedLabel: "演示静音",
+      announcementCountLabel: "本地播报次数",
+      speechPreviewStatusLabel: "本地语音预览状态",
+      previewSpeechAction: "Preview local speech reminder",
       acknowledgeAction: "Acknowledge",
       muteAction: "Mute demo alerts"
     },
@@ -529,6 +535,9 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
       monitoredGroupsHelper: "Only P1/P2 events in selected monitored groups will alert; other groups are suppressed locally with no real ServiceNow polling.",
       acknowledgedLabel: "Acknowledged",
       mutedLabel: "Muted",
+      announcementCountLabel: "Local announcement count",
+      speechPreviewStatusLabel: "Local speech preview status",
+      previewSpeechAction: "Preview local speech reminder",
       acknowledgeAction: "Acknowledge",
       muteAction: "Mute demo alerts"
     },
@@ -593,6 +602,9 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
       monitoredGroupsHelper: "只有所選監控群組內的 P1/P2 事件才會警報；其他群組會在本地抑制，不連線真實 ServiceNow。",
       acknowledgedLabel: "已確認",
       mutedLabel: "示範靜音",
+      announcementCountLabel: "本地播報次數",
+      speechPreviewStatusLabel: "本地語音預覽狀態",
+      previewSpeechAction: "Preview local speech reminder",
       acknowledgeAction: "Acknowledge",
       muteAction: "Mute demo alerts"
     },
@@ -657,6 +669,9 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
       monitoredGroupsHelper: "Solo los eventos P1/P2 en grupos monitoreados seleccionados generan alerta; otros grupos se suprimen localmente sin sondeo real de ServiceNow.",
       acknowledgedLabel: "Reconocido",
       mutedLabel: "Demo silenciada",
+      announcementCountLabel: "Conteo local de anuncios",
+      speechPreviewStatusLabel: "Estado de vista previa de voz local",
+      previewSpeechAction: "Preview local speech reminder",
       acknowledgeAction: "Acknowledge",
       muteAction: "Mute demo alerts"
     },
@@ -892,6 +907,189 @@ export function getHighSeverityVoiceReminder(
     suppressionText: "",
     requiresManualAcknowledge: severity === "p1",
     autoStopAfterAnnouncements: severity === "p2" ? 3 : null
+  };
+}
+
+export type HighSeveritySpeechLocale = "zh-CN" | "zh-TW" | "en-US" | "es-ES";
+
+export type HighSeveritySpeechReminderPolicy = {
+  severity: HighSeverityState;
+  active: boolean;
+  cadenceSeconds: number | null;
+  maxAnnouncements: number | null;
+  requiresManualStop: boolean;
+  autoStops: boolean;
+};
+
+export type HighSeveritySpeechReminderState = {
+  severity: HighSeverityState;
+  announcementCount: number;
+  acknowledged: boolean;
+  muted: boolean;
+};
+
+export type HighSeveritySpeechReminderStatus = "ready" | "stopped" | "unsupported" | "spoken";
+
+export type HighSeveritySpeechReminderDecision = {
+  status: HighSeveritySpeechReminderStatus;
+  locale: HighSeveritySpeechLocale;
+  policy: HighSeveritySpeechReminderPolicy;
+  announcementCount: number;
+  reason: string;
+};
+
+export type HighSeveritySpeechUtteranceLike = {
+  text: string;
+  lang?: string;
+  rate?: number;
+  pitch?: number;
+  volume?: number;
+};
+
+export type HighSeveritySpeechSynthesisLike = {
+  speak: (utterance: HighSeveritySpeechUtteranceLike) => void;
+  cancel?: () => void;
+};
+
+export type HighSeveritySpeechReminderPreviewOptions = {
+  language: LanguageCode;
+  reminder: HighSeverityVoiceReminder;
+  state?: Partial<HighSeveritySpeechReminderState>;
+  speechSynthesis?: HighSeveritySpeechSynthesisLike | null;
+  utteranceFactory?: (text: string) => HighSeveritySpeechUtteranceLike;
+  cancelBeforeSpeak?: boolean;
+};
+
+export function getHighSeveritySpeechLocale(language: LanguageCode): HighSeveritySpeechLocale {
+  return language;
+}
+
+export function getHighSeveritySpeechReminderPolicy(severity: HighSeverityState): HighSeveritySpeechReminderPolicy {
+  switch (severity) {
+    case "p1":
+      return {
+        severity,
+        active: true,
+        cadenceSeconds: 60,
+        maxAnnouncements: null,
+        requiresManualStop: true,
+        autoStops: false
+      };
+    case "p2":
+      return {
+        severity,
+        active: true,
+        cadenceSeconds: 300,
+        maxAnnouncements: 3,
+        requiresManualStop: false,
+        autoStops: true
+      };
+    case "normal":
+      return {
+        severity,
+        active: false,
+        cadenceSeconds: null,
+        maxAnnouncements: 0,
+        requiresManualStop: false,
+        autoStops: true
+      };
+  }
+}
+
+export function getHighSeveritySpeechReminderDecision(
+  reminder: HighSeverityVoiceReminder,
+  language: LanguageCode,
+  state: Partial<HighSeveritySpeechReminderState> = {}
+): HighSeveritySpeechReminderDecision {
+  const policy = getHighSeveritySpeechReminderPolicy(reminder.severity);
+  const announcementCount = state.announcementCount ?? 0;
+  const locale = getHighSeveritySpeechLocale(language);
+
+  if (!policy.active || reminder.severity === "normal") {
+    return { status: "stopped", locale, policy, announcementCount, reason: "No active P1/P2 demo alarm." };
+  }
+  if (!reminder.alarmEnabled) {
+    return {
+      status: "stopped",
+      locale,
+      policy,
+      announcementCount,
+      reason: "The fake event group is not monitored, so no local speech reminder is emitted."
+    };
+  }
+  if (state.acknowledged) {
+    return { status: "stopped", locale, policy, announcementCount, reason: "Reminder acknowledged by the local user." };
+  }
+  if (state.muted) {
+    return { status: "stopped", locale, policy, announcementCount, reason: "Demo reminders are muted locally." };
+  }
+  if (policy.maxAnnouncements !== null && announcementCount >= policy.maxAnnouncements) {
+    return {
+      status: "stopped",
+      locale,
+      policy,
+      announcementCount,
+      reason: `${reminder.severity.toUpperCase()} demo reminder auto-stopped after ${policy.maxAnnouncements} announcements.`
+    };
+  }
+
+  return { status: "ready", locale, policy, announcementCount, reason: reminder.previewSafetyText };
+}
+
+function defaultHighSeveritySpeechUtterance(text: string): HighSeveritySpeechUtteranceLike {
+  if (typeof SpeechSynthesisUtterance === "undefined") {
+    return { text };
+  }
+  return new SpeechSynthesisUtterance(text);
+}
+
+function browserSpeechSynthesis(): HighSeveritySpeechSynthesisLike | null {
+  if (typeof globalThis.speechSynthesis === "undefined") {
+    return null;
+  }
+  return {
+    cancel: () => globalThis.speechSynthesis.cancel(),
+    speak: (utterance) => globalThis.speechSynthesis.speak(utterance as SpeechSynthesisUtterance)
+  };
+}
+
+export function previewHighSeveritySpeechReminder({
+  language,
+  reminder,
+  state = {},
+  speechSynthesis,
+  utteranceFactory = defaultHighSeveritySpeechUtterance,
+  cancelBeforeSpeak = true
+}: HighSeveritySpeechReminderPreviewOptions): HighSeveritySpeechReminderDecision {
+  const decision = getHighSeveritySpeechReminderDecision(reminder, language, state);
+  if (decision.status !== "ready") {
+    return decision;
+  }
+
+  const synthesis = speechSynthesis === undefined ? browserSpeechSynthesis() : speechSynthesis;
+  if (!synthesis || typeof synthesis.speak !== "function") {
+    return {
+      ...decision,
+      status: "unsupported",
+      reason: "Browser speech synthesis is unavailable; show the local reminder text instead."
+    };
+  }
+
+  const utterance = utteranceFactory(reminder.voiceText);
+  utterance.lang = decision.locale;
+  utterance.rate = reminder.severity === "p1" ? 1 : 0.96;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+  if (cancelBeforeSpeak && typeof synthesis.cancel === "function") {
+    synthesis.cancel();
+  }
+  synthesis.speak(utterance);
+
+  return {
+    ...decision,
+    status: "spoken",
+    announcementCount: decision.announcementCount + 1,
+    reason: "Local browser speech preview started from fake demo data only."
   };
 }
 
@@ -2709,6 +2907,8 @@ export function App({
   );
   const [highSeverityAcknowledged, setHighSeverityAcknowledged] = useState(false);
   const [highSeverityMuted, setHighSeverityMuted] = useState(false);
+  const [highSeveritySpeechAnnouncementCount, setHighSeveritySpeechAnnouncementCount] = useState(0);
+  const [highSeveritySpeechPreviewStatus, setHighSeveritySpeechPreviewStatus] = useState("");
   const [selectedTemplatePresetId, setSelectedTemplatePresetId] = useState<DraftTemplatePresetId>(
     defaultDraftTemplatePreset.id
   );
@@ -2951,11 +3151,53 @@ export function App({
     );
   }
 
+  function resetHighSeveritySpeechReminder() {
+    setHighSeveritySpeechAnnouncementCount(0);
+    setHighSeveritySpeechPreviewStatus("");
+  }
+
   function toggleHighSeverityMonitoredGroup(groupId: HighSeverityMonitorGroup) {
     setHighSeverityMonitoredGroups((current) =>
       current.includes(groupId) ? current.filter((id) => id !== groupId) : [...current, groupId]
     );
     setHighSeverityAcknowledged(false);
+    resetHighSeveritySpeechReminder();
+  }
+
+  function selectHighSeverityState(state: HighSeverityState) {
+    setHighSeverityState(state);
+    setHighSeverityAcknowledged(false);
+    setHighSeverityMuted(false);
+    resetHighSeveritySpeechReminder();
+  }
+
+  function acknowledgeHighSeverityReminder() {
+    setHighSeverityAcknowledged(true);
+    setHighSeveritySpeechPreviewStatus("Reminder acknowledged by the local user.");
+  }
+
+  function muteHighSeverityReminder() {
+    setHighSeverityMuted(true);
+    setHighSeveritySpeechPreviewStatus("Demo reminders are muted locally.");
+  }
+
+  function previewHighSeverityReminder() {
+    const reminder = getHighSeverityVoiceReminder(highSeverityState, language, highSeverityMonitoredGroups);
+    const decision = previewHighSeveritySpeechReminder({
+      language,
+      reminder,
+      state: {
+        severity: highSeverityState,
+        announcementCount: highSeveritySpeechAnnouncementCount,
+        acknowledged: highSeverityAcknowledged,
+        muted: highSeverityMuted
+      }
+    });
+
+    setHighSeveritySpeechPreviewStatus(decision.reason);
+    if (decision.status === "spoken") {
+      setHighSeveritySpeechAnnouncementCount(decision.announcementCount);
+    }
   }
 
   function prepareCopyDraft(label: string, text: string) {
@@ -3476,6 +3718,21 @@ export function App({
               status={operatorStatus}
               targetLabel={workbenchEnvironmentLabel}
               workbenchCopy={workbenchCopy}
+            />
+            <HighSeverityMonitorSimulator
+              acknowledged={highSeverityAcknowledged}
+              announcementCount={highSeveritySpeechAnnouncementCount}
+              language={language}
+              monitoredGroupIds={highSeverityMonitoredGroups}
+              muted={highSeverityMuted}
+              onAcknowledge={acknowledgeHighSeverityReminder}
+              onMonitoredGroupToggle={toggleHighSeverityMonitoredGroup}
+              onMute={muteHighSeverityReminder}
+              onPreviewSpeech={previewHighSeverityReminder}
+              onSelectedStateChange={selectHighSeverityState}
+              selectedState={highSeverityState}
+              speechPreviewStatus={highSeveritySpeechPreviewStatus}
+              t={t}
             />
           </aside>
         ) : null}
@@ -4014,29 +4271,41 @@ function RuntimeSafetyPanel({ t }: { t: UiTranslations }) {
 
 function HighSeverityMonitorSimulator({
   acknowledged,
+  announcementCount,
   language,
   monitoredGroupIds,
   muted,
   onAcknowledge,
   onMonitoredGroupToggle,
   onMute,
+  onPreviewSpeech,
   onSelectedStateChange,
   selectedState,
+  speechPreviewStatus,
   t
 }: {
   acknowledged: boolean;
+  announcementCount: number;
   language: LanguageCode;
   monitoredGroupIds: HighSeverityMonitorGroup[];
   muted: boolean;
   onAcknowledge: () => void;
   onMonitoredGroupToggle: (groupId: HighSeverityMonitorGroup) => void;
   onMute: () => void;
+  onPreviewSpeech: () => void;
   onSelectedStateChange: (state: HighSeverityState) => void;
   selectedState: HighSeverityState;
+  speechPreviewStatus: string;
   t: UiTranslations;
 }) {
   const selectedFakeState = highSeveritySimulatorStates[selectedState];
   const voiceReminder = getHighSeverityVoiceReminder(selectedState, language, monitoredGroupIds);
+  const speechDecision = getHighSeveritySpeechReminderDecision(voiceReminder, language, {
+    severity: selectedState,
+    announcementCount,
+    acknowledged,
+    muted
+  });
   const alertStatus =
     selectedState === "normal"
       ? t.highSeverityMonitor.alertInactiveStatus
@@ -4113,6 +4382,14 @@ function HighSeverityMonitorSimulator({
             <dt>{t.highSeverityMonitor.mutedLabel}</dt>
             <dd>{muted ? "On" : "Off"}</dd>
           </div>
+          <div>
+            <dt>{t.highSeverityMonitor.announcementCountLabel}</dt>
+            <dd>{announcementCount}</dd>
+          </div>
+          <div>
+            <dt>{t.highSeverityMonitor.speechPreviewStatusLabel}</dt>
+            <dd>{speechPreviewStatus || speechDecision.reason}</dd>
+          </div>
         </dl>
 
         <div className="severity-actions" aria-label="Fake high severity alert actions">
@@ -4122,13 +4399,16 @@ function HighSeverityMonitorSimulator({
           <button type="button" onClick={onMute}>
             {t.highSeverityMonitor.muteAction}
           </button>
+          <button type="button" disabled={speechDecision.status !== "ready"} onClick={onPreviewSpeech}>
+            {t.highSeverityMonitor.previewSpeechAction}
+          </button>
         </div>
 
         <section className={`severity-voice-preview ${selectedState}`} aria-label="Local high severity voice reminder preview">
           <strong>{voiceReminder.voiceText}</strong>
           <p>{voiceReminder.policyText}</p>
           {voiceReminder.suppressionText ? <small>{voiceReminder.suppressionText}</small> : null}
-          <small>{voiceReminder.previewSafetyText}</small>
+          <small>No ServiceNow polling, API write, or production notification. {voiceReminder.previewSafetyText}</small>
         </section>
       </div>
     </details>

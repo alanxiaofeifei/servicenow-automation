@@ -15,9 +15,12 @@ import {
   draftTemplatePresets,
   getCtrlWheelZoomDelta,
   getDraftTextAreaRows,
+  getHighSeveritySpeechReminderDecision,
+  getHighSeveritySpeechReminderPolicy,
   getHighSeverityVoiceReminder,
   getNextAppZoomPercent,
   getNextEnvironmentUrlOverrideFromDraft,
+  previewHighSeveritySpeechReminder,
   updateQaSmokeWriteActionSelection,
   type AppProps,
   type HighSeverityMonitorGroup,
@@ -1004,6 +1007,120 @@ describe("App", () => {
         expect(reminder.previewSafetyText).toContain("Local browser speech preview only");
       }
     }
+  });
+
+  it("defines local-only P1/P2 speech reminder policies without polling ServiceNow", () => {
+    const p1Policy = getHighSeveritySpeechReminderPolicy("p1");
+    const p2Policy = getHighSeveritySpeechReminderPolicy("p2");
+    const normalPolicy = getHighSeveritySpeechReminderPolicy("normal");
+
+    expect(p1Policy).toMatchObject({
+      active: true,
+      cadenceSeconds: 60,
+      maxAnnouncements: null,
+      requiresManualStop: true,
+      autoStops: false
+    });
+    expect(p2Policy).toMatchObject({
+      active: true,
+      cadenceSeconds: 300,
+      maxAnnouncements: 3,
+      requiresManualStop: false,
+      autoStops: true
+    });
+    expect(normalPolicy.active).toBe(false);
+  });
+
+  it("blocks local speech reminders when the fake event is muted, acknowledged, unmonitored, or auto-stopped", () => {
+    const p1Reminder = getHighSeverityVoiceReminder("p1", "en-US");
+    const p2Reminder = getHighSeverityVoiceReminder("p2", "en-US");
+    const suppressedP2 = getHighSeverityVoiceReminder("p2", "en-US", ["demo-network-operations"]);
+
+    expect(getHighSeveritySpeechReminderDecision(p1Reminder, "en-US", { announcementCount: 12 }).status).toBe(
+      "ready"
+    );
+    expect(getHighSeveritySpeechReminderDecision(p1Reminder, "en-US", { acknowledged: true }).reason).toContain(
+      "acknowledged"
+    );
+    expect(getHighSeveritySpeechReminderDecision(p1Reminder, "en-US", { muted: true }).reason).toContain("muted");
+    expect(getHighSeveritySpeechReminderDecision(p2Reminder, "en-US").status).toBe("ready");
+    expect(getHighSeveritySpeechReminderDecision(p2Reminder, "en-US", { muted: true }).reason).toContain("muted");
+    expect(getHighSeveritySpeechReminderDecision(p2Reminder, "en-US", { acknowledged: true }).reason).toContain(
+      "acknowledged"
+    );
+    expect(getHighSeveritySpeechReminderDecision(suppressedP2, "en-US").reason).toContain("not monitored");
+    expect(getHighSeveritySpeechReminderDecision(p2Reminder, "en-US", { announcementCount: 2 }).status).toBe(
+      "ready"
+    );
+    expect(getHighSeveritySpeechReminderDecision(p2Reminder, "en-US", { announcementCount: 3 }).reason).toContain(
+      "auto-stopped"
+    );
+  });
+
+  it("previews speech through injected browser speech synthesis only and never creates external side effects", () => {
+    const spokenUtterances: { text: string; lang?: string; rate?: number; volume?: number }[] = [];
+    const localeCases: LanguageCode[] = ["zh-CN", "zh-TW", "en-US", "es-ES"];
+
+    for (const language of localeCases) {
+      const reminder = getHighSeverityVoiceReminder("p2", language);
+      const localeUtterances: { text: string; lang?: string; rate?: number; volume?: number }[] = [];
+      const localeDecision = previewHighSeveritySpeechReminder({
+        language,
+        reminder,
+        speechSynthesis: {
+          speak: (utterance) => localeUtterances.push(utterance)
+        },
+        utteranceFactory: (text) => ({ text }),
+        cancelBeforeSpeak: false
+      });
+
+      expect(localeDecision.status).toBe("spoken");
+      expect(localeDecision.locale).toBe(language);
+      expect(localeUtterances).toEqual([
+        expect.objectContaining({ text: reminder.voiceText, lang: language, rate: 0.96, volume: 1 })
+      ]);
+    }
+
+    const p1Reminder = getHighSeverityVoiceReminder("p1", "zh-CN");
+    const decision = previewHighSeveritySpeechReminder({
+      language: "zh-CN",
+      reminder: p1Reminder,
+      speechSynthesis: {
+        cancel: () => spokenUtterances.push({ text: "cancelled" }),
+        speak: (utterance) => spokenUtterances.push(utterance)
+      },
+      utteranceFactory: (text) => ({ text })
+    });
+
+    expect(decision.status).toBe("spoken");
+    expect(decision.locale).toBe("zh-CN");
+    expect(decision.announcementCount).toBe(1);
+    expect(spokenUtterances).toEqual([
+      { text: "cancelled" },
+      expect.objectContaining({ text: p1Reminder.voiceText, lang: "zh-CN", rate: 1, volume: 1 })
+    ]);
+
+    const unsupportedDecision = previewHighSeveritySpeechReminder({
+      language: "en-US",
+      reminder: getHighSeverityVoiceReminder("p2", "en-US"),
+      speechSynthesis: null
+    });
+    expect(unsupportedDecision.status).toBe("unsupported");
+    expect(unsupportedDecision.reason).toContain("speech synthesis is unavailable");
+  });
+
+  it("renders the manual local speech preview simulator only in the expanded runtime rail", () => {
+    const defaultShell = renderAppMarkup("en-US");
+    const expandedRail = renderAppMarkup("en-US", {
+      initialHighSeverityState: "p1",
+      initialRuntimeRailExpanded: true
+    });
+
+    expect(defaultShell).not.toContain("Preview local speech reminder");
+    expect(expandedRail).toContain("High Severity Monitor Simulator");
+    expect(expandedRail).toContain("Preview local speech reminder");
+    expect(expandedRail).toContain("Fake simulator only — no ServiceNow polling or API calls");
+    expect(expandedRail).toContain("No ServiceNow polling, API write, or production notification");
   });
 
   it("applies the default template around generated draft content", () => {
