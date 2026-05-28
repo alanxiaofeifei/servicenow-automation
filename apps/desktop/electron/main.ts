@@ -19,8 +19,8 @@ import { buildQaIncidentDefaultRuntimeTextFieldPlan, buildQaIncidentDefaultValue
 import { getServiceNowEnvironmentConfig } from "@servicenow-automation/profiles";
 
 import { resolveOperatorRuntimeRequestGate } from "./operator-ipc-safety";
-import { resolveElectronPreloadPath } from "./preload-path";
 import { resolveDesktopResourcePath, resolveDesktopRuntimePaths } from "./runtime-paths";
+import { createMainWindowWebPreferences } from "./window-preferences";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -31,11 +31,7 @@ function createMainWindow(): void {
     minWidth: 980,
     minHeight: 680,
     title: "ServiceNow Automation",
-    webPreferences: {
-      preload: resolveElectronPreloadPath(__dirname),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
+    webPreferences: createMainWindowWebPreferences(__dirname)
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
