@@ -1,52 +1,53 @@
 # Windows operator quickstart
 
-Use this for the Windows/operator packaging slice tracked by issue #110.
+Use this for the Windows/operator packaging slice tracked by issue #128.
 
 ## Status
 
-This quickstart covers launcher/runtime readiness only. It does not approve live ServiceNow operation or full-field autofill exposure. Keep the operator path text-only or blocked unless a separate reviewed checkpoint explicitly allows more.
+This quickstart covers packaged Windows artifact and browser-runtime readiness only. It does not approve live ServiceNow operation or full-field autofill exposure. Keep the operator path text-only or blocked unless a separate reviewed checkpoint explicitly allows more.
 
-## Open the app
+The older WSL launcher remains a dev/field-trial fallback only. It is not the release artifact.
 
-From Windows, double-click a launcher that points to:
+## Build the packaged artifact
+
+From WSL inside a clean checkout:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter @servicenow-automation/desktop package:windows
+```
+
+The packaged Windows zip is written under:
+
+```text
+apps/desktop/dist/windows/
+```
+
+For the RC wrapper and checksum:
+
+```bash
+pnpm release:windows:rc
+```
+
+## Open the packaged app
+
+1. Copy or download the RC zip on Windows.
+2. Verify the `.sha256` checksum from a trusted shell.
+3. Extract the zip on Windows.
+4. Double-click the packaged `ServiceNow Automation` executable.
+5. Use mock/demo workflows first.
+
+Do not use the WSL source-tree launcher as proof that the packaged artifact works.
+
+## Dev/field-trial fallback only
+
+If you are debugging the old source-tree launcher, it points to:
 
 ```text
 scripts\windows\Start-ServiceNow-Automation.cmd
 ```
 
-The launcher assumes the repository is available in WSL at:
-
-```text
-$HOME/projects/servicenow-automation
-```
-
-If your checkout lives elsewhere, set this Windows environment variable before launching:
-
-```cmd
-set SDA_WSL_PROJECT_DIR=/path/to/servicenow-automation
-```
-
-Optional distro override:
-
-```cmd
-set SDA_WSL_DISTRO=Ubuntu
-```
-
-Keep the Windows command window open while the app is running. Startup logs are written under `.local/startup-logs/`, which is git-ignored and must not contain ServiceNow URLs, cookies, sessions, HARs, screenshots, ticket data, or real field values.
-
-## Repair path
-
-From WSL inside the repo:
-
-```bash
-./scripts/wsl/repair-env.sh
-```
-
-For a non-GUI dependency check:
-
-```bash
-SDA_LAUNCH_DRY_RUN=1 ./scripts/wsl/start-desktop.sh
-```
+That launcher assumes the repository is available in WSL and may install dev dependencies. It is useful for local diagnosis only; packaged acceptance must use the built Windows artifact.
 
 ## Dedicated browser runtime
 
@@ -88,9 +89,11 @@ Forbidden from this launcher/runtime slice:
 
 ## Manual acceptance checklist
 
-1. Run `SDA_LAUNCH_DRY_RUN=1 ./scripts/wsl/start-desktop.sh` from WSL and confirm dependency/log output only.
-2. Double-click the Windows launcher and confirm the desktop app opens or a startup log path is printed.
-3. Run the dedicated Chromium helper with `about:blank` only.
-4. Confirm the profile is under `%LOCALAPPDATA%\ServiceNowAutomation\Profiles\...`.
-5. Confirm CDP is loopback-only unless the explicit dev-only WSL exposure flags are supplied.
-6. Stop before any real QA login or ServiceNow field interaction unless a separate checkpoint authorizes it.
+1. Build the packaged artifact and checksum.
+2. Extract the packaged Windows zip on Windows.
+3. Double-click the packaged executable and confirm the desktop app opens.
+4. Run mock/demo workflows first.
+5. Run the dedicated Chromium helper with `about:blank` only.
+6. Confirm the profile is under `%LOCALAPPDATA%\ServiceNowAutomation\Profiles\...`.
+7. Confirm CDP is loopback-only unless the explicit dev-only WSL exposure flags are supplied.
+8. Stop before any real QA login or ServiceNow field interaction unless a separate checkpoint authorizes it.
