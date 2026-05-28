@@ -101,7 +101,7 @@ describe("App", () => {
     expect(output).not.toContain('--app-font-scale');
     expect(output).toContain("ServiceNow Automation");
     expect(output).toContain("QA workspace");
-    expect(output).toContain("Target configured");
+    expect(output).toContain("QA target hidden");
     expect(output).toContain("EN / 中文");
     expect(output).toContain('data-active-page="workbench"');
     expect(output).toContain('class="workbench-icon-rail"');
@@ -403,7 +403,7 @@ describe("App", () => {
 
     expect(output).toContain("QA workspace");
     expect(output).toContain("QA workspace");
-    expect(output).toContain("Target configured");
+    expect(output).toContain("QA target hidden");
     expect(buttonAttrs(output, "1 Start test browser")).not.toContain("disabled");
     expect(buttonAttrs(output, "2 Check current ticket page")).toContain("disabled");
     expect(output).toContain("Ready: opens the same dedicated test browser profile for QA; saved sign-in can be reused.");
@@ -895,7 +895,7 @@ describe("App", () => {
     const primaryMarkup = mainMarkupWithoutSettings(output);
     const settingsMarkup = output.slice(output.indexOf('id="app-settings-sidebar"'));
 
-    expect(primaryMarkup).toContain("Target configured");
+    expect(primaryMarkup).toContain("QA target hidden");
     expect(primaryMarkup).not.toContain(rawQaUrl);
     expect(primaryMarkup).not.toContain("qa.service-now.example.invalid");
     expect(settingsMarkup).not.toContain(rawQaUrl);
@@ -954,7 +954,7 @@ describe("App", () => {
 
     expect(output).toContain("操作工作台");
     expect(output).toContain("QA 工作区");
-    expect(output).toContain("目标已配置");
+    expect(output).toContain("QA 目标已隐藏");
     expect(output).not.toContain("已选来源");
     expect(output).toContain("清理摘要");
     expect(output).toContain("Incident 草稿");
