@@ -75,8 +75,23 @@ function pass(message) {
   console.log(`PASS: ${message}`);
 }
 
+function readMainBundleText(root) {
+  if (!fs.existsSync(root)) return "";
+  const chunks = [];
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    const entryPath = `${root}/${entry.name}`;
+    if (entry.isDirectory()) {
+      chunks.push(readMainBundleText(entryPath));
+    } else if (/\.(c?m?js)$/.test(entry.name)) {
+      chunks.push(fs.readFileSync(entryPath, "utf8"));
+    }
+  }
+  return chunks.join("\n");
+}
+
 const rootPackage = readJson("package.json");
 const desktopPackage = readJson("apps/desktop/package.json");
+const desktopMainBundle = readMainBundleText("apps/desktop/out/main");
 const scripts = { ...(rootPackage.scripts ?? {}), ...(desktopPackage.scripts ?? {}) };
 const desktopBuildConfig = desktopPackage.build;
 const desktopDevDependencies = desktopPackage.devDependencies ?? {};
@@ -118,6 +133,12 @@ if (serializedResources.includes("scripts/windows") && serializedResources.inclu
   pass("packaging resources include Windows helpers and the local CDP bridge.");
 } else {
   fail("packaging resources do not include required helper resources.");
+}
+
+if (desktopMainBundle.includes("@servicenow-automation/")) {
+  fail("desktop main bundle still imports internal workspace packages instead of bundling them for packaged Electron.");
+} else {
+  pass("desktop main bundle does not externalize internal workspace TypeScript packages.");
 }
 
 if (fs.existsSync("scripts/windows/install-cloakbrowser-runtime.ps1") || fs.existsSync("scripts/windows/prepare-chrome-for-testing.ps1")) {

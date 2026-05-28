@@ -7,6 +7,7 @@ const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceRoot = resolve(desktopRoot, "../..");
 const desktopPackageJson = JSON.parse(readFileSync(resolve(desktopRoot, "package.json"), "utf8"));
 const rootPackageJson = JSON.parse(readFileSync(resolve(workspaceRoot, "package.json"), "utf8"));
+const electronViteConfigSource = readFileSync(resolve(desktopRoot, "electron.vite.config.ts"), "utf8");
 
 describe("Windows packaging contract", () => {
   it("exposes a real Windows package script and Electron Builder dependency", () => {
@@ -34,6 +35,19 @@ describe("Windows packaging contract", () => {
         expect.objectContaining({ from: "../../scripts/local-cdp-bridge.py", to: "scripts/local-cdp-bridge.py" })
       ])
     );
+  });
+
+  it("bundles internal workspace packages into the Electron main process output", () => {
+    expect(electronViteConfigSource).toMatch(
+      /main:\s*{[\s\S]*plugins:\s*\[externalizeDepsPlugin\(\{\s*exclude:\s*internalWorkspacePackages\s*}\)\]/
+    );
+    for (const workspacePackage of [
+      "@servicenow-automation/adapters",
+      "@servicenow-automation/core",
+      "@servicenow-automation/profiles"
+    ]) {
+      expect(electronViteConfigSource).toContain(workspacePackage);
+    }
   });
 
   it("keeps the root release command delegated to the Windows RC packaging script", () => {
