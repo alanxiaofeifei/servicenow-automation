@@ -119,8 +119,8 @@ Stop immediately if any of these happen:
 - Any real user, customer, ticket, email, chat, URL, hostname, credential, cookie, session, screenshot, or recording detail appears.
 - QA ticket could notify production users, customers, or a real support team.
 - A page opens a real ticket, real user, real customer, or real assignment queue.
-- Any ServiceNow workflow unexpectedly creates, updates, routes, notifies, escalates, or closes data.
-- Any DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated close/update path appears.
+- Any ServiceNow workflow unexpectedly creates, updates, resolves, routes, notifies, escalates, or closes data.
+- Any DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated update/resolve/close path appears.
 - The app or browser asks to save passwords, cookies, sessions, screenshots, HAR, traces, or storage state.
 - Alan is unsure whether a click is read-only or a write action.
 

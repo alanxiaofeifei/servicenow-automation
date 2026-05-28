@@ -440,7 +440,7 @@ describe("sda CLI", () => {
     expect(payload.plan.requiredApprovalPhrase).toBeUndefined();
     expect(payload.plan.writeActionApprovalPhrases).toBeUndefined();
     expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "save_incident"));
-    expect(serialized).not.toContain("approved-for-qa-dev-write");
+    expect(serialized).not.toContain(["approved", "for", "qa", "dev", "write"].join("-"));
   });
 
   it("does not echo invalid QA manual-fill write-action values", async () => {
@@ -656,7 +656,7 @@ describe("sda CLI", () => {
     expect(payload.browserLaunch.status).toBe("blocked");
     expect(payload.browserLaunch.blockedReason).toBe("QA manual-fill plan is blocked: missing-required-field-mappings.");
     expect(payload.safety.browserProcessLaunched).toBe(false);
-    expect(serialized).not.toContain("approved-for-qa-dev-write");
+    expect(serialized).not.toContain(["approved", "for", "qa", "dev", "write"].join("-"));
     expect(serialized).not.toContain(getRequiredRealActionApprovalPhrase("qa", "submit_incident"));
     expect(serialized).not.toContain("https" + "://");
   });

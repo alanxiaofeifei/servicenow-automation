@@ -14,7 +14,7 @@ GPT-5.5 Pro agreed with the local readiness review:
 | CLI/headless dry-run | Ready |
 | BrowserSessionService plan/reset | Ready |
 | QA/dev no-write browser launch | Ready with conditions |
-| QA/dev real submit/update/close | Not ready until `#22` |
+| QA/dev real submit/update/resolve/close | Not ready until `#22` |
 | Production shadow mode | Not ready until `#19` |
 | DeepSeek / external AI | Not ready until `#17` redaction gate |
 

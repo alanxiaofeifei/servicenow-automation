@@ -16,7 +16,7 @@ Mock/manual paste → TicketDraft → KB matches → risk gate → mock form pre
 QA/dev browser session plan → manual login only → capture/context planning only
 ```
 
-The project is **not ready for any real QA submit/update/close workflow** yet.
+The project is **not ready for any real QA submit/update/resolve/close workflow** yet.
 
 Current implementation is safe because no real ServiceNow API call, Playwright browser launch, form submission, close, or update path exists. The next real-write milestone must wait until the submit authorization gate in `#22` exists and is tested.
 
@@ -50,7 +50,7 @@ All passed before this documentation review was written.
 
 `qa` and `dev` environment configs intentionally record `allowsRealSubmit: true` with explicit approval required. That is acceptable as a future target, but risky if future code treats the config boolean itself as authorization.
 
-**Mitigation:** created `#22 Submit authorization gate before real QA/dev workflow` as a field-trial blocker. No real submit/update/close workflow should be implemented before #22.
+**Mitigation:** created `#22 Submit authorization gate before real QA/dev workflow` as a field-trial blocker. No real submit/update/resolve/close workflow should be implemented before #22.
 
 ### 2. QA URL is visible in private source and UI
 
@@ -105,7 +105,7 @@ sda browser plan --mode qa --json
    - `realSubmitAllowed: false`
    - ignored `.local/servicenow-browser-profiles/qa` profile path
 4. If testing with the QA site manually, only use authorized test records and manual login.
-5. Do not submit/update/close from the automation tool.
+5. Do not submit/update/resolve/close from the automation tool.
 6. Record only generic observations in ignored `private/field-tests/` notes.
 
 ## Should-fix before production shadow mode
@@ -185,6 +185,6 @@ Suggested story:
 | CLI/headless dry-run demo | **Go** |
 | QA/dev browser session planning | **Go** |
 | QA/dev no-write manual rehearsal | **Go with caution** |
-| QA/dev real submit/update/close workflow | **No-go until #22** |
+| QA/dev real submit/update/resolve/close workflow | **No-go until #22** |
 | Production shadow mode | **No-go until #19** |
 | DeepSeek/external AI | **No-go until #17 redaction gate** |

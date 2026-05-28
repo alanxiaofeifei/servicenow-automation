@@ -1299,9 +1299,10 @@ function manualFillSafeBlockReason(plan: QaSingleTicketSmokePlan): string {
     case "approval-target-host-mismatch":
     case "approval-phrase-mismatch":
       return "qa-dev-readiness-approval-required";
+    case "dev-write-denied":
     case "environment-real-submit-disabled":
       return "environment-mode-denied";
-    case "approved-for-qa-dev-write":
+    case "approved-for-qa-write":
       return "manual-fill-readiness-blocked";
   }
 }
@@ -1326,7 +1327,7 @@ function sanitizeQaSmokePlan(plan: QaSingleTicketSmokePlan) {
     stopRules: [
       "Stop before every Save/Submit/Update/Resolve/Close; this command never authorizes write actions.",
       "Stop if any real user, real ticket text, real ticket number, credential, cookie, session, screenshot, or recording detail appears.",
-      "Stop if browser DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated close/update appears."
+      "Stop if browser DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated update/resolve/close appears."
     ],
     redactions: {
       targetHost: Boolean(plan.targetHost),
@@ -1356,7 +1357,7 @@ function sanitizeQaManualFillPlan(plan: QaSingleTicketSmokePlan) {
       "Stop before every Save/Submit/Update/Resolve/Close; this command never authorizes write actions.",
       "Stop if any real user, real ticket text, real ticket number, credential, cookie, session, screenshot, or recording detail appears.",
       "Stop if QA isolation is not explicitly confirmed.",
-      "Stop if browser DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated close/update appears."
+      "Stop if browser DOM autofill, ServiceNow API, bulk create, attachment upload, email send, or automated update/resolve/close appears."
     ],
     manualFillGate: {
       requestedWriteAction: plan.requestedWriteAction,

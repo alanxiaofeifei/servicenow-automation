@@ -490,7 +490,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     mockFillButton: "填充 Mock ServiceNow 表单",
     mockReadyStatus: "已准备好 mock 填充",
     mockLockedStatus: "审核确认前锁定填充动作",
-    mockDisabledStatus: "演示模式下 Save / Submit / Update / Close 不可用",
+    mockDisabledStatus: "演示模式下 Save / Submit / Update / Resolve / Close 不可用",
     mockDemoStamp: "MOCK / 仅演示"
   },
   "en-US": {
@@ -555,7 +555,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     mockFillButton: "Fill Mock ServiceNow Form",
     mockReadyStatus: "Ready for mock fill",
     mockLockedStatus: "Fill action locked until review confirmation",
-    mockDisabledStatus: "Save / Submit / Update / Close unavailable in demo mode",
+    mockDisabledStatus: "Save / Submit / Update / Resolve / Close unavailable in demo mode",
     mockDemoStamp: "MOCK / Demo only"
   },
   "zh-TW": {
@@ -618,7 +618,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     mockFillButton: "填入 Mock ServiceNow 表單",
     mockReadyStatus: "已準備好 mock 填入",
     mockLockedStatus: "審核確認前鎖定填入動作",
-    mockDisabledStatus: "示範模式下 Save / Submit / Update / Close 不可用",
+    mockDisabledStatus: "示範模式下 Save / Submit / Update / Resolve / Close 不可用",
     mockDemoStamp: "MOCK / 僅示範"
   },
   "es-ES": {
@@ -683,7 +683,7 @@ const uiTranslations: Record<LanguageCode, UiTranslations> = {
     mockFillButton: "Rellenar formulario mock de ServiceNow",
     mockReadyStatus: "Listo para relleno mock",
     mockLockedStatus: "Relleno bloqueado hasta confirmar la revisión",
-    mockDisabledStatus: "Save / Submit / Update / Close no disponibles en modo demo",
+    mockDisabledStatus: "Save / Submit / Update / Resolve / Close no disponibles en modo demo",
     mockDemoStamp: "MOCK / Solo demo"
   }
 };
@@ -5497,7 +5497,7 @@ function ControlledQaSingleTicketSmokePanel({
           <p className="eyebrow">Manual-fill assisted QA smoke</p>
           <h2 id="qa-smoke-title">Controlled QA single-ticket smoke</h2>
           <p>
-            This does NOT submit, save, update, close, launch browser automation, call ServiceNow APIs, or write
+            This does NOT submit, save, update, resolve, close, launch browser automation, call ServiceNow APIs, or write
             ServiceNow.
           </p>
         </div>
@@ -6165,7 +6165,7 @@ function QaTextFieldAutofillPanel({
         </div>
         <div>
           <span>Write actions</span>
-          <strong>No Save / Submit / Update / Close</strong>
+          <strong>No Save / Submit / Update / Resolve / Close</strong>
         </div>
         <div>
           <span>Required approval phrase</span>
