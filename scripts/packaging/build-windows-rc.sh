@@ -13,6 +13,71 @@ STAGE_DIR="$RELEASE_ROOT/$PACKAGE_NAME"
 ARCHIVE_PATH="$RELEASE_ROOT/$PACKAGE_NAME.zip"
 CHECKSUM_PATH="$ARCHIVE_PATH.sha256"
 
+RSYNC_SAFETY_EXCLUDES=(
+  --exclude '.git'
+  --exclude '.git/'
+  --exclude '.codegraph'
+  --exclude '.codegraph/'
+  --exclude '.local'
+  --exclude '.local/'
+  --exclude '.auth/'
+  --exclude '.env'
+  --exclude '.env.*'
+  --exclude 'node_modules/'
+  --exclude 'dist/'
+  --exclude 'build/'
+  --exclude 'release/'
+  --exclude 'private/'
+  --exclude 'coverage/'
+  --exclude 'logs/'
+  --exclude 'browser-profiles/'
+  --exclude 'servicenow-browser-profiles/'
+  --exclude 'screenshots/'
+  --exclude 'drafts/'
+  --exclude 'field-test-results/'
+  --exclude 'field-test-notes/'
+  --exclude 'playwright-report/'
+  --exclude 'test-results/'
+  --exclude '.local-downloads/'
+  --exclude '.local-screenshots/'
+  --exclude '.local-traces/'
+  --exclude 'storage-state*.json'
+  --exclude 'storageState.json'
+  --exclude '*.cookies.json'
+  --exclude '*.session.json'
+  --exclude '*.har'
+  --exclude '*.trace'
+  --exclude '*.webm'
+  --exclude '*.mp4'
+  --exclude '*.mov'
+  --exclude '*.png'
+  --exclude '*.jpg'
+  --exclude '*.jpeg'
+  --exclude '*.gif'
+  --exclude '*.webp'
+  --exclude '*.zip'
+  --exclude '*.7z'
+  --exclude '*.tar'
+  --exclude '*.gz'
+  --exclude '*.sqlite'
+  --exclude '*.sqlite3'
+  --exclude '*.db'
+  --exclude '*.log'
+  --exclude '*.pem'
+  --exclude '*.key'
+  --exclude '*.pfx'
+  --exclude '*.p12'
+  --exclude '*.wav'
+  --exclude '*.mp3'
+  --exclude '*.m4a'
+  --exclude '*.aac'
+  --exclude '*.flac'
+  --exclude '*.ogg'
+)
+
+FORBIDDEN_ARCHIVE_DIR_PATTERN='(^|/)(\.git|\.local|\.codegraph|\.auth|node_modules|dist|build|release|private|coverage|logs|browser-profiles|servicenow-browser-profiles|screenshots|drafts|field-test-results|field-test-notes|playwright-report|test-results|\.local-downloads|\.local-screenshots|\.local-traces)(/|$)'
+FORBIDDEN_ARCHIVE_FILE_PATTERN='(^|/)(storage-state[^/]*\.json|storageState\.json|[^/]*\.(cookies|session)\.json|[^/]*\.(har|trace|webm|mp4|mov|png|jpg|jpeg|gif|webp|zip|7z|tar|gz|sqlite|sqlite3|db|log|pem|key|pfx|p12|wav|mp3|m4a|aac|flac|ogg))$'
+
 require_command() {
   local name="$1"
   if ! command -v "$name" >/dev/null 2>&1; then
@@ -63,15 +128,15 @@ verify_archive_listing() {
   local listing="$RELEASE_ROOT/$PACKAGE_NAME.zip.listing.txt"
   unzip -Z1 "$archive" > "$listing"
 
-  if grep -E '(^|/)(\.git|\.local|\.codegraph|node_modules|dist|private|coverage)(/|$)' "$listing" >/dev/null; then
+  if grep -E "$FORBIDDEN_ARCHIVE_DIR_PATTERN" "$listing" >/dev/null; then
     echo "ERROR: archive contains forbidden generated/private directories." >&2
-    grep -E '(^|/)(\.git|\.local|\.codegraph|node_modules|dist|private|coverage)(/|$)' "$listing" >&2
+    grep -E "$FORBIDDEN_ARCHIVE_DIR_PATTERN" "$listing" >&2
     return 1
   fi
 
-  if grep -Ei '\.(har|trace|webm|mp4|mov|png|jpg|jpeg|gif|zip|7z|tar|gz|sqlite|db)$' "$listing" >/dev/null; then
+  if grep -Ei "$FORBIDDEN_ARCHIVE_FILE_PATTERN" "$listing" >/dev/null; then
     echo "ERROR: archive contains forbidden binary/media/archive/runtime artifact names." >&2
-    grep -Ei '\.(har|trace|webm|mp4|mov|png|jpg|jpeg|gif|zip|7z|tar|gz|sqlite|db)$' "$listing" >&2
+    grep -Ei "$FORBIDDEN_ARCHIVE_FILE_PATTERN" "$listing" >&2
     return 1
   fi
 
@@ -104,26 +169,7 @@ main() {
     if [ -d "$PROJECT_DIR/$rel" ]; then
       mkdir -p "$STAGE_DIR/$rel"
       rsync -a \
-        --exclude '.git' \
-        --exclude '.git/' \
-        --exclude '.codegraph' \
-        --exclude '.codegraph/' \
-        --exclude '.local/' \
-        --exclude '.env' \
-        --exclude '.env.*' \
-        --exclude 'node_modules/' \
-        --exclude 'dist/' \
-        --exclude 'private/' \
-        --exclude 'coverage/' \
-        --exclude '*.har' \
-        --exclude '*.trace' \
-        --exclude '*.webm' \
-        --exclude '*.mp4' \
-        --exclude '*.mov' \
-        --exclude '*.png' \
-        --exclude '*.jpg' \
-        --exclude '*.jpeg' \
-        --exclude '*.gif' \
+        "${RSYNC_SAFETY_EXCLUDES[@]}" \
         "$PROJECT_DIR/$rel/" "$STAGE_DIR/$rel/"
       return 0
     fi

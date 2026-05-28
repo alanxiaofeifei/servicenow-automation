@@ -1,6 +1,6 @@
 # Windows v0.1 RC manual test quickstart
 
-This checklist is for Alan's supervised local testing of the Windows Operator Preview package.
+This checklist is for supervised local testing of the Windows Operator Preview package.
 
 ## Scope
 
