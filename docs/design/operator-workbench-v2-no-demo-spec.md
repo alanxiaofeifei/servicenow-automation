@@ -334,7 +334,7 @@ Must not contain:
 |---|---|---|---|---|---|
 | First launch | Env default shown; target may be missing | Empty source list + Settings visible | Warm empty card | Start disabled if target missing; Verify/Autofill disabled | `Configure a target or load a source to begin.` |
 | Target missing | `Target: Missing` amber | Todo shows configure target | Draft area available only for local source review | Start disabled | `Start QA Chromium disabled: configure QA or Dev URL in Settings.` |
-| Target configured | `Target: Configured` | Source list active | Source/draft area ready | Start enabled for QA/Dev | `Ready to launch a dedicated QA browser.` |
+| Target configured | `QA target: hidden` | Source list active | Source/draft area ready | Start enabled for QA/Dev | `Ready to launch a dedicated QA browser; raw target stays hidden.` |
 | Source loading | Status: loading | Skeleton source rows | Skeleton source detail | Runtime unchanged | `Loading sanitized source...` |
 | Source selected | Stable status | Selected source highlighted | Source detail + cleaned summary visible | Start depends on target | `Review the source and draft before runtime actions.` |
 | Draft ready | Safety badge unchanged | Todo marks draft review | TicketDraft + field preview visible | Verify/Autofill still gated | `Draft ready for human review.` |

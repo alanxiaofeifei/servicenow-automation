@@ -1630,7 +1630,7 @@ const englishOperatorWorkbenchCopy = {
     production: "Production"
   },
   target: {
-    configured: "Target configured",
+    configured: "QA target hidden",
     missing: "Target missing"
   },
   search: {
@@ -1792,7 +1792,7 @@ const operatorWorkbenchTranslations = {
       expandSidebarShort: "展开"
     },
     environment: { qa: "QA 工作区", production: "生产" },
-    target: { configured: "目标已配置", missing: "目标缺失" },
+    target: { configured: "QA 目标已隐藏", missing: "目标缺失" },
     search: { label: "搜索", aria: "搜索本地工单", placeholder: "搜索工单...", shortcut: "Ctrl K" },
     list: {
       today: "今天",
@@ -1944,7 +1944,7 @@ const operatorWorkbenchTranslations = {
       expandSidebarShort: "展開"
     },
     environment: { qa: "QA 工作區", production: "生產" },
-    target: { configured: "目標已設定", missing: "目標缺失" },
+    target: { configured: "QA 目標已隱藏", missing: "目標缺失" },
     search: { label: "搜尋", aria: "搜尋本地工單", placeholder: "搜尋工單...", shortcut: "Ctrl K" },
     list: {
       today: "今天",
@@ -2096,7 +2096,7 @@ const operatorWorkbenchTranslations = {
       expandSidebarShort: "Expandir"
     },
     environment: { qa: "Entorno QA", production: "Producción" },
-    target: { configured: "Destino configurado", missing: "Destino faltante" },
+    target: { configured: "Destino QA oculto", missing: "Destino faltante" },
     search: { label: "Buscar", aria: "Buscar tickets locales", placeholder: "Buscar tickets...", shortcut: "Ctrl K" },
     list: {
       today: "Hoy",
