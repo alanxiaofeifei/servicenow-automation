@@ -1,5 +1,7 @@
 # Windows v0.1 RC 发布计划
 
+> 本文仅是规划指导，不批准合并任何 PR、发布任何 release，也不批准执行 live ServiceNow、QA 或 production 操作。
+
 ## 结论
 
 完整 Windows 端软件不应直接从当前 Draft PR 发布。正确顺序是：

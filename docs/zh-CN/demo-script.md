@@ -28,7 +28,7 @@
 快速切换：
 
 - Windows Demo
-- Account/Login Demo
+- Mock Account Access Issue Demo — no browser login
 
 说明同样流程可以覆盖常见服务台 triage 场景。
 

@@ -28,7 +28,7 @@ This demo explicitly forbids Save, Submit, Update, Resolve, Close, upload, email
 Briefly switch to:
 
 - Windows Demo
-- Account/Login Demo
+- Mock Account Access Issue Demo — no browser login
 
 Explain that the same flow applies to common service desk triage categories.
 
