@@ -1089,6 +1089,7 @@ async function withCdpClient<T>(endpoint: string, targetUrl: string | undefined,
     throw new QaCdpRuntimeBlockedError("cdp-endpoint-denied");
   }
   try {
+    await client.discoverFormFrameContext();
     return await callback(client);
   } finally {
     client.close();
@@ -1270,11 +1271,16 @@ type CdpResponse = {
 class CdpClient {
   private nextId = 1;
   private pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
+  private events: unknown[] = [];
+  private formUniqueContextId: string | undefined;
 
   private constructor(private readonly socket: WebSocket) {
     this.socket.addEventListener("message", (event) => {
-      const response = JSON.parse(String(event.data)) as CdpResponse;
-      if (!response.id) return;
+      const response = JSON.parse(String(event.data)) as CdpResponse & { method?: string; params?: unknown };
+      if (!response.id) {
+        if (response.method) this.events.push(response);
+        return;
+      }
       const pending = this.pending.get(response.id);
       if (!pending) return;
       this.pending.delete(response.id);
@@ -1302,12 +1308,51 @@ class CdpClient {
     });
   }
 
+  async discoverFormFrameContext(): Promise<void> {
+    try {
+      await this.send("Page.enable", {});
+      const frameTree = await this.send("Page.getFrameTree", {}) as {
+        frameTree?: { frame: { id: string; url: string; name?: string }; childFrames?: unknown[] };
+      };
+
+      const findGsftMain = (node: unknown): string | undefined => {
+        const n = node as { frame?: { id: string; url: string; name?: string }; childFrames?: unknown[] };
+        if (n?.frame?.name === "gsft_main" || n?.frame?.url?.includes("incident.do")) return n.frame.id;
+        for (const child of (n?.childFrames ?? []) as unknown[]) {
+          const found = findGsftMain(child);
+          if (found) return found;
+        }
+        return undefined;
+      };
+      const gsftMainFrameId = frameTree.frameTree ? findGsftMain(frameTree.frameTree) : undefined;
+      if (!gsftMainFrameId) return;
+
+      this.events = [];
+      await this.send("Runtime.enable", {});
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      for (const event of this.events) {
+        const evt = event as { method?: string; params?: { context?: { id: number; uniqueId: string; auxData?: { frameId?: string } } } };
+        if (evt.method === "Runtime.executionContextCreated" && evt.params?.context?.auxData?.frameId === gsftMainFrameId) {
+          this.formUniqueContextId = evt.params.context.uniqueId;
+          break;
+        }
+      }
+    } catch {
+      // Best-effort; fall back to main frame evaluation
+    }
+  }
+
   async evaluate<T>(expression: string): Promise<T> {
-    const result = await this.send("Runtime.evaluate", {
+    const params: Record<string, unknown> = {
       expression,
       awaitPromise: true,
       returnByValue: true
-    });
+    };
+    if (this.formUniqueContextId) {
+      params["uniqueContextId"] = this.formUniqueContextId;
+    }
+    const result = await this.send("Runtime.evaluate", params);
     const runtimeResult = result as { result?: { value?: unknown }; exceptionDetails?: { text?: string; exception?: { description?: string } } };
     if (runtimeResult.exceptionDetails) {
       const details = runtimeResult.exceptionDetails;
