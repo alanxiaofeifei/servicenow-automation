@@ -213,7 +213,7 @@ describe("App", () => {
     const desktopMainSource = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
     const ipcGateSource = readFileSync(new URL("../electron/operator-ipc-safety.ts", import.meta.url), "utf8");
 
-    expect((desktopMainSource.match(/resolveOperatorRuntimeRequestGate\(rawRequest\)/g) ?? []).length).toBe(3);
+    expect((desktopMainSource.match(/resolveOperatorRuntimeRequestGate\(rawRequest\)/g) ?? []).length).toBe(4);
     expect(desktopMainSource).toContain("blockedLaunchResponse(gate.blockedReason)");
     expect(desktopMainSource).toContain("blockedVerifyResponse(gate.blockedReason)");
     expect(desktopMainSource).toContain("blockedAutofillResponse(gate.blockedReason)");
@@ -411,26 +411,23 @@ describe("App", () => {
   });
 
   it("enables page check only after sanitized browser readiness without rendering the raw endpoint", () => {
-    const rawEndpoint = localRuntimeEndpoint(9222, "raw-session-id");
     const output = renderAppMarkup("en-US", {
       initialEnvironmentMode: "qa",
       initialRuntimeRailExpanded: true,
-      initialOperatorCdpEndpoint: rawEndpoint
+      initialOperatorCdpReady: true
     });
 
     expect(output).toContain("Browser connection ready; Check Page enabled");
     expect(buttonAttrs(output, "2 Check current ticket page")).not.toContain("disabled");
     expect(buttonAttrs(output, "3 Autofill allowed fields")).toContain("disabled");
     expect(output).toContain("Disabled: check the current ticket page first.");
-    expect(output).not.toContain(rawEndpoint);
   });
 
   it("shows page-check pass or block feedback directly on the action card", () => {
-    const rawEndpoint = localRuntimeEndpoint(9222, "raw-session-id");
     const blockedOutput = renderAppMarkup("en-US", {
       initialEnvironmentMode: "qa",
       initialRuntimeRailExpanded: true,
-      initialOperatorCdpEndpoint: rawEndpoint,
+      initialOperatorCdpReady: true,
       initialOperatorLastResponse: {
         ok: false,
         fieldInspection: { status: "blocked", blockedReason: "cdp-page-selection-denied" }
@@ -439,7 +436,7 @@ describe("App", () => {
     const successOutput = renderAppMarkup("en-US", {
       initialEnvironmentMode: "qa",
       initialRuntimeRailExpanded: true,
-      initialOperatorCdpEndpoint: rawEndpoint,
+      initialOperatorCdpReady: true,
       initialOperatorVerifiedPageFingerprint: prefixedFingerprintSentinel("do-not-render-page-check-feedback"),
       initialOperatorLastResponse: {
         ok: true,
@@ -459,7 +456,7 @@ describe("App", () => {
     const output = renderAppMarkup("zh-CN", {
       initialEnvironmentMode: "qa",
       initialRuntimeRailExpanded: true,
-      initialOperatorCdpEndpoint: localRuntimeEndpoint(9222, "raw-session-id"),
+      initialOperatorCdpReady: true,
       initialOperatorLastResponse: {
         ok: true,
         runtime: {
@@ -483,7 +480,7 @@ describe("App", () => {
     const output = renderAppMarkup("en-US", {
       initialEnvironmentMode: "qa",
       initialRuntimeRailExpanded: true,
-      initialOperatorCdpEndpoint: localRuntimeEndpoint(9222, "session"),
+      initialOperatorCdpReady: true,
       initialOperatorVerifiedPageFingerprint: rawFingerprint
     });
 
@@ -616,12 +613,11 @@ describe("App", () => {
   });
 
   it("keeps runtime readiness QA-bound when a hidden non-QA mode receives stale runtime markers", () => {
-    const rawEndpoint = localRuntimeEndpoint(9555, "stale-session");
     const rawFingerprint = shaFingerprintSentinel("c");
     const output = renderAppMarkup("en-US", {
       initialEnvironmentMode: "dev",
       initialRuntimeRailExpanded: true,
-      initialOperatorCdpEndpoint: rawEndpoint,
+      initialOperatorCdpReady: true,
       initialOperatorVerifiedPageFingerprint: rawFingerprint
     });
 
@@ -632,7 +628,6 @@ describe("App", () => {
     expect(output).toContain("Waiting for the dedicated test browser profile to connect.");
     expect(output).not.toContain("Browser connection ready; Check Page enabled.");
     expect(output).not.toContain("Current ticket page checked; Autofill can fill allowed text fields only.");
-    expect(output).not.toContain(rawEndpoint);
     expect(output).not.toContain(rawFingerprint);
   });
 

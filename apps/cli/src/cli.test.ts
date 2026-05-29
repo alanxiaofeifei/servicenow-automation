@@ -1012,6 +1012,79 @@ describe("sda CLI", () => {
     expect(serialized).not.toContain("Fake Chat intake");
   });
 
+  it("blocks live CDP autofill-runtime in WSL CLI with a clear diagnostic", async () => {
+    const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
+    const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
+
+    const result = await runCli([
+      "qa",
+      "autofill-runtime",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--cdp-endpoint",
+      localCdpEndpoint(),
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--dedicated-profile-confirmation",
+      dedicatedProfileConfirmation,
+      "--json"
+    ], { cwd, wsl: true });
+    const payload = JSON.parse(result.stdout);
+    const serialized = JSON.stringify(payload);
+
+    expect(result.exitCode).toBe(0);
+    expect(payload.autofillRuntime.status).toBe("blocked");
+    expect(payload.autofillRuntime.blockedReason).toBe("wsl-cli-live-cdp-blocked");
+    expect(payload.safety.browserAutomationCalled).toBe(false);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+    expect(serialized).not.toContain("Fake Chat intake");
+    expect(serialized).not.toContain("VPN connection issue");
+    expect(serialized).not.toContain("127.0.0.1");
+    expect(serialized).not.toContain("cdp-endpoint");
+  });
+
+  it("allows QA autofill-runtime with injected driver in WSL (test-only path)", async () => {
+    const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
+    const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";
+    const driver = fakeQaAutofillRuntimeDriver([qaRuntimeInspection({ pageFingerprint: "wsl-verify" })]);
+
+    const result = await runCli([
+      "qa",
+      "autofill-runtime",
+      "--mode",
+      "qa",
+      "--template",
+      "vpn_issue",
+      "--user",
+      "Demo requester A",
+      "--summary",
+      "Fake Chat intake — VPN connection issue after password or MFA change",
+      "--cdp-endpoint",
+      localCdpEndpoint(),
+      "--qa-isolation-confirmation",
+      qaIsolationConfirmation,
+      "--dedicated-profile-confirmation",
+      dedicatedProfileConfirmation,
+      "--json"
+    ], { cwd, wsl: true, qaAutofillRuntimeDriver: driver });
+    const payload = JSON.parse(result.stdout);
+
+    expect(result.exitCode).toBe(0);
+    // Injected driver bypasses WSL block (test-only path)
+    expect(payload.autofillRuntime.status).toBe("verified");
+    expect(payload.autofillRuntime.selectorVerification).toBeDefined();
+    expect(payload.safety.browserAutomationCalled).toBe(true);
+    expect(payload.safety.browserProcessLaunched).toBe(false);
+    expect(payload.safety.noServiceNowWrite).toBe(true);
+  });
+
   it("returns sanitized runtime blocked output when browser inspection throws", async () => {
     const qaIsolationConfirmation = "QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team.";
     const dedicatedProfileConfirmation = "Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile.";

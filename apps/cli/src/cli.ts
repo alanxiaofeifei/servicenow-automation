@@ -63,6 +63,8 @@ export type RunCliOptions = {
   cwd?: string;
   qaAutofillRuntimeDriver?: QaAutofillRuntimePageDriver;
   qaIncidentFieldInspectionDriver?: QaIncidentFieldRuntimePageDriver;
+  /** Override WSL detection for tests. Default: auto-detect via WSL_INTEROP / WSL_DISTRO_NAME. */
+  wsl?: boolean;
 };
 
 type ParsedFlags = {
@@ -122,9 +124,21 @@ const autofillProhibitedOperatorActions = [
   "Do not call the ServiceNow API, bulk fill, capture browser artifacts, export auth material, or send QA content to external AI."
 ];
 
+function detectWsl(options: RunCliOptions): boolean {
+  if (options.wsl !== undefined) return options.wsl;
+  return process.platform === "linux" && Boolean(
+    process.env.WSL_INTEROP ||
+    process.env.WSL_DISTRO_NAME
+  );
+}
+
+const wslLiveCdpBlockedMessage =
+  "WSL CLI cannot connect to Windows CDP. The WSL 2 NAT barrier means 127.0.0.1 in WSL is not the same as 127.0.0.1 on Windows. Live CDP autofill/inspection requires the Windows-side Electron operator (double-click sda-desktop.cmd). The WSL CLI supports planning, fixture, and dry-run only.";
+
 export async function runCli(argv: string[], options: RunCliOptions = {}): Promise<CliResult> {
   const cwd = options.cwd ?? process.cwd();
   const parsed = parseArgs(argv);
+  const isWslRuntime = detectWsl(options);
 
   try {
     if (parsed.positionals.length === 0 || parsed.positionals[0] === "--help" || parsed.positionals[0] === "help") {
@@ -336,6 +350,18 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
         const environment = getServiceNowEnvironmentConfig(mode, runtimeTargetUrlOverride(mode, parsed.flags["target-url"]));
         let driver = options.qaIncidentFieldInspectionDriver;
         if (!driver && parsed.flags["cdp-endpoint"]) {
+          if (isWslRuntime) {
+            return output(parsed, {
+              command: "qa default-plan",
+              template,
+              scenario,
+              fieldSource,
+              defaultPlan: undefined,
+              blocked: true,
+              blockedReason: "wsl-cli-live-cdp-blocked",
+              safety: safetyEnvelope()
+            }, `${wslLiveCdpBlockedMessage}\n`);
+          }
           try {
             driver = createCdpQaIncidentFieldInspectionRuntimePageDriver({
               endpoint: parsed.flags["cdp-endpoint"],
@@ -539,13 +565,17 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
       let driver = options.qaAutofillRuntimeDriver;
       let runtime: QaAutofillRuntimeResult | undefined;
       if (!driver && parsed.flags["cdp-endpoint"]) {
-        try {
-          driver = createCdpQaAutofillRuntimePageDriver({
-            endpoint: parsed.flags["cdp-endpoint"],
-            targetUrl: environment.url
-          });
-        } catch {
-          runtime = blockedQaAutofillRuntimeResult("cdp-endpoint-denied", false);
+        if (isWslRuntime) {
+          runtime = blockedQaAutofillRuntimeResult("wsl-cli-live-cdp-blocked", false);
+        } else {
+          try {
+            driver = createCdpQaAutofillRuntimePageDriver({
+              endpoint: parsed.flags["cdp-endpoint"],
+              targetUrl: environment.url
+            });
+          } catch {
+            runtime = blockedQaAutofillRuntimeResult("cdp-endpoint-denied", false);
+          }
         }
       }
       if (!runtime) {
@@ -1463,5 +1493,7 @@ Commands:
 
 Safety:
   Draft/preview only by default. No real ServiceNow API calls, browser DOM automation, Save, Submit, Update, Resolve, Close, upload, or email actions are performed.
+
+WSL: The WSL CLI supports planning, fixture, and dry-run only. Live CDP autofill/inspection requires the Windows-side Electron operator (double-click sda-desktop.cmd). The WSL 2 NAT barrier means 127.0.0.1 in WSL is not the same as 127.0.0.1 on Windows.
 `;
 }

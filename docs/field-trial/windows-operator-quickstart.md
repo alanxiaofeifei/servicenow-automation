@@ -87,6 +87,56 @@ Forbidden from this launcher/runtime slice:
 - production write or production-shadow write
 - external AI over real ServiceNow content
 
+## CDP autofill flow — Verify → Approve → Autofill (text-only)
+
+After the operator app opens and the dedicated Chromium runtime is ready, real QA CDP autofill follows this three-phase sequence inside the Windows-side Electron operator:
+
+### Phase 1 — Verify
+
+Click the in-app **Verify current Incident** button. The Electron main process:
+
+1. Connects to the dedicated Chromium CDP endpoint (loopback-only, in-memory — never exposed to the renderer).
+2. Inspects the current page for exactly one visible writable control per allowed text field.
+3. Records a page fingerprint.
+4. Returns a result: all fields verified, or a blocked reason.
+
+Allowed fields for this phase:
+- Short description (text input)
+- Description (textarea)
+- Work notes (textarea)
+
+If any field is missing, ambiguous, non-writable, or the wrong control type, the result is blocked and no Autofill phase can proceed.
+
+### Phase 2 — Approve
+
+If Verify passed, the operator displays the **Approve Autofill** control. Alan must:
+
+- Confirm QA/dev isolation: `"QA isolation confirmed: this autofill test will not notify production users, customers, or a real support team."`
+- Confirm dedicated Chromium profile: `"Dedicated Chromium profile confirmed: this autofill test uses only the ServiceNowAutomation tool-owned profile."`
+- Confirm text-only scope: `"PRIVATE_APPROVAL_PHRASE - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED"`
+
+The approval phrase is valid only for the current page. If the page reloads, tab changes, ticket changes, or the fingerprint changes, approval becomes stale and must be re-requested.
+
+### Phase 3 — Autofill (text-only)
+
+Click the in-app **Autofill text fields** button. The Electron main process:
+
+1. Re-verifies the page fingerprint (freshness check — rejects if changed).
+2. Fills only Short description, Description, and Work notes.
+3. Stops after fill — no Save, Submit, Update, Resolve, or Close.
+4. Reports a sanitized result: `completed`, `blocked`, or `stopped` with a generic reason.
+
+### Safety rules (same as the text-field runbook)
+
+- No Save/Submit/Update/Resolve/Close action, selector, flag, or hidden affordance exists in this flow.
+- No browser artifact capture (screenshot, HAR, trace, video, cookies, sessions, storage-state).
+- No external AI over real QA/ServiceNow content.
+- No production or production-shadow.
+- The renderer never receives the raw CDP endpoint, page fingerprint, or field values.
+- If uncertain, stop. A blocked/stopped result is always safer than a best-effort fill.
+
+For the full execution runbook, see [`qa-dev-text-field-autofill-execution-runbook.md`](qa-dev-text-field-autofill-execution-runbook.md).
+
 ## Manual acceptance checklist
 
 1. Build the packaged artifact and checksum.

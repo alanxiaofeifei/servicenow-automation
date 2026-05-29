@@ -34,6 +34,7 @@ export type QaAutofillRuntimeBlockedReason =
   | "selector-verification-required"
   | "selector-mismatch"
   | "unexpected-required-field"
+  | "wsl-cli-live-cdp-blocked"
   | "approval-stale-after-page-change"
   | "plan-not-ready"
   | "qa-only-execute";
@@ -1191,6 +1192,15 @@ function single<T>(items: T[]): T | undefined {
   return items.length === 1 ? items[0] : undefined;
 }
 
+/**
+ * Validates that a CDP endpoint is a local-loopback URL (localhost/127.0.0.1/::1).
+ *
+ * WSL 2 NAT barrier: `127.0.0.1` in WSL is NOT the same as `127.0.0.1` on Windows.
+ * This function ONLY validates local-loopback syntax and does NOT verify that the
+ * endpoint is reachable. The WSL CLI must NEVER create a live CDP driver from WSL
+ * because the connection will target WSL's own loopback, not the Windows CDP port.
+ * Live CDP execution from WSL requires the Windows-side Electron operator.
+ */
 function validateLocalCdpEndpoint(endpoint: string): void {
   let url: URL;
   try {
