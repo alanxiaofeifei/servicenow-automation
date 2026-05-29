@@ -1332,11 +1332,13 @@ class CdpClient {
 }
 
 function buildInspectionExpression(descriptors: QaAutofillFieldDescriptor[], allowedHost: string): string {
-  return `(${inspectionScript})(${JSON.stringify(descriptors)}, ${JSON.stringify(allowedHost)})`;
+  const preamble = "var __name=(t,v)=>Object.defineProperty(t,\"name\",{value:v,configurable:!0});";
+  return `${preamble}(${inspectionScript})(${JSON.stringify(descriptors)}, ${JSON.stringify(allowedHost)})`;
 }
 
 function buildIncidentFieldInspectionExpression(allowedHost: string): string {
-  return `(${incidentFieldInspectionScript})(${JSON.stringify(allowedHost)})`;
+  const preamble = "var __name=(t,v)=>Object.defineProperty(t,\"name\",{value:v,configurable:!0});";
+  return `${preamble}(${incidentFieldInspectionScript})(${JSON.stringify(allowedHost)})`;
 }
 
 function buildIncidentDefaultFieldFillExpression(request: QaIncidentDefaultFieldRuntimeFillRequest): string {
