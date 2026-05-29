@@ -1383,7 +1383,9 @@ function buildInspectionExpression(descriptors: QaAutofillFieldDescriptor[], all
     "var __esm=(fn,res)=>function(){return fn&&(res=(0,fn[__name](...arguments)),fn=0),res};",
     "var __export=(t,n)=>{for(var p in n)__defProp(t,p,{get:n[p],enumerable:!0})};"
   ].join("");
-  return `${preamble}(${inspectionScript})(${JSON.stringify(descriptors)}, ${JSON.stringify(allowedHost)})`;
+  const fnSource = inspectionScript.toString();
+  const args = `${JSON.stringify(descriptors)}, ${JSON.stringify(allowedHost)}`;
+  return `${preamble}(function(){var a=[${args}];var f=document.querySelector('iframe[name="gsft_main"],iframe[id="gsft_main"]');if(f&&f.contentWindow)return f.contentWindow.eval("("+${JSON.stringify(fnSource)}+")")(a[0],a[1]);return(${inspectionScript})(a[0],a[1])})()`;
 }
 
 function buildIncidentFieldInspectionExpression(allowedHost: string): string {
@@ -1393,7 +1395,8 @@ function buildIncidentFieldInspectionExpression(allowedHost: string): string {
     "var __esm=(fn,res)=>function(){return fn&&(res=(0,fn[__name](...arguments)),fn=0),res};",
     "var __export=(t,n)=>{for(var p in n)__defProp(t,p,{get:n[p],enumerable:!0})};"
   ].join("");
-  return `${preamble}(${incidentFieldInspectionScript})(${JSON.stringify(allowedHost)})`;
+  const fnSource = incidentFieldInspectionScript.toString();
+  return `${preamble}(function(){var a=[${JSON.stringify(allowedHost)}];var f=document.querySelector('iframe[name="gsft_main"],iframe[id="gsft_main"]');if(f&&f.contentWindow)return f.contentWindow.eval("("+${JSON.stringify(fnSource)}+")")(a[0]);return(${incidentFieldInspectionScript})(a[0])})()`;
 }
 
 function buildIncidentDefaultFieldFillExpression(request: QaIncidentDefaultFieldRuntimeFillRequest): string {
@@ -1410,9 +1413,9 @@ function buildIncidentDefaultFieldFillExpression(request: QaIncidentDefaultField
     allowedHost: request.allowedHost.toLowerCase(),
     executionEnvironmentMode: request.executionEnvironmentMode
   };
-  return `(${incidentDefaultFieldFillScript})(${JSON.stringify(sanitizedRequest)}, ${JSON.stringify(
-    incidentFieldInspectionScript.toString()
-  )})`;
+  const fnSource = incidentDefaultFieldFillScript.toString();
+  const inspSource = incidentFieldInspectionScript.toString();
+  return `(function(){var a=[${JSON.stringify(sanitizedRequest)},${JSON.stringify(inspSource)}];var f=document.querySelector('iframe[name="gsft_main"],iframe[id="gsft_main"]');if(f&&f.contentWindow)return f.contentWindow.eval("("+${JSON.stringify(fnSource)}+")")(a[0],a[1]);return(${incidentDefaultFieldFillScript})(a[0],a[1])})()`;
 }
 
 function buildFillExpression(request: QaAutofillRuntimeFillRequest): string {
@@ -1434,7 +1437,8 @@ function buildFillExpression(request: QaAutofillRuntimeFillRequest): string {
     allowedHost: request.allowedHost.toLowerCase(),
     executionEnvironmentMode: request.executionEnvironmentMode
   };
-  return `(${fillScript})(${JSON.stringify(sanitizedRequest)})`;
+  const fnSource = fillScript.toString();
+  return `(function(){var a=[${JSON.stringify(sanitizedRequest)}];var f=document.querySelector('iframe[name="gsft_main"],iframe[id="gsft_main"]');if(f&&f.contentWindow)return f.contentWindow.eval("("+${JSON.stringify(fnSource)}+")")(a[0]);return(${fillScript})(a[0])})()`;
 }
 
 const incidentDefaultFieldFillScript = async (
