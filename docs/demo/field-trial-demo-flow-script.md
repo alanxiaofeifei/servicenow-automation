@@ -115,7 +115,7 @@ Point out:
 
 Say:
 
-"For the first QA field trial, the tool remains manual-fill assisted. It previews the field mapping and requires action-specific approval phrases. A Submit approval does not approve Save, Update, or Close. This prevents accidental writes."
+"For the first QA field trial, the tool remains manual-fill assisted. It previews the field mapping and requires action-specific approval phrases. A Submit approval does not approve Save, Update, Resolve, or Close. This prevents accidental writes."
 
 Show:
 

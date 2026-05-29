@@ -94,7 +94,8 @@ Rules:
 3. Autofill approval does not approve Save.
 4. Autofill approval does not approve Submit.
 5. Autofill approval does not approve Update.
-6. Autofill approval does not approve Close.
+6. Autofill approval does not approve Resolve.
+7. Autofill approval does not approve Close.
 
 ## Planning-gate sequence
 

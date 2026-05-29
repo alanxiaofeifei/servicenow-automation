@@ -114,8 +114,8 @@ Rules:
 
 1. The operator must provide the exact phrase in the current session immediately before the matching action.
 2. The phrase must match the exact action about to be taken.
-3. A Submit approval does not approve Save, Update, or Close.
-4. A Save approval does not approve Submit, Update, or Close.
+3. A Submit approval does not approve Save, Update, Resolve, or Close.
+4. A Save approval does not approve Submit, Update, Resolve, or Close.
 5. If the page changes after approval, ask again before acting.
 6. Do not persist runtime approval evidence in config, cookies, local storage, screenshots, or logs.
 7. Update and Close remain blocked for the first trial unless a later checkpoint explicitly allows them.
