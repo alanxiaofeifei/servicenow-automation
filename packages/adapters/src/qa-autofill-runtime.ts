@@ -306,6 +306,7 @@ export async function runQaTextFieldAutofillRuntime(
   try {
     inspection = await request.driver.inspectAllowedTextFields(descriptors);
   } catch (error) {
+    console.error(`QA text field runtime inspection failed: ${error instanceof Error ? error.message : String(error)}`);
     return blockedRuntimeResult(cdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error", true);
   }
 
@@ -368,6 +369,7 @@ export async function runQaTextFieldAutofillRuntime(
   try {
     beforeFillInspection = await request.driver.inspectAllowedTextFields(descriptors);
   } catch (error) {
+    console.error(`QA text field before-fill inspection failed: ${error instanceof Error ? error.message : String(error)}`);
     return {
       status: "blocked",
       blockedReason: cdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error",
@@ -410,6 +412,7 @@ export async function runQaTextFieldAutofillRuntime(
       executionEnvironmentMode: "qa"
     });
   } catch (error) {
+    console.error(`QA text field fill failed: ${error instanceof Error ? error.message : String(error)}`);
     execution = blockedFillResult(cdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error");
   }
   return {
@@ -532,6 +535,7 @@ export async function runQaIncidentDefaultFieldAutofillRuntime(
   try {
     inspection = await request.driver.inspectIncidentFormFields();
   } catch (error) {
+    console.error(`QA incident default field runtime inspection failed: ${error instanceof Error ? error.message : String(error)}`);
     return blockedDefaultFieldAutofillRuntimeResult(cdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error", true);
   }
 
@@ -581,6 +585,7 @@ export async function runQaIncidentDefaultFieldAutofillRuntime(
       executionEnvironmentMode: "qa"
     });
   } catch (error) {
+    console.error(`QA incident default field fill failed: ${error instanceof Error ? error.message : String(error)}`);
     execution = blockedDefaultFieldFillResult(cdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error");
   }
 
@@ -610,6 +615,7 @@ export async function inspectQaIncidentDefaultFieldsRuntime(
   try {
     inspection = await request.driver.inspectIncidentFormFields();
   } catch (error) {
+    console.error(`QA incident field runtime inspection failed: ${error instanceof Error ? error.message : String(error)}`);
     return blockedIncidentFieldRuntimeResult(cdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error", true);
   }
 
@@ -1302,9 +1308,11 @@ class CdpClient {
       awaitPromise: true,
       returnByValue: true
     });
-    const runtimeResult = result as { result?: { value?: unknown }; exceptionDetails?: unknown };
+    const runtimeResult = result as { result?: { value?: unknown }; exceptionDetails?: { text?: string; exception?: { description?: string } } };
     if (runtimeResult.exceptionDetails) {
-      throw new Error("Browser runtime evaluation failed.");
+      const details = runtimeResult.exceptionDetails;
+      const detailText = details?.text ?? details?.exception?.description ?? "unknown CDP evaluation error";
+      throw new Error(`Browser runtime evaluation failed: ${detailText}`);
     }
     return runtimeResult.result?.value as T;
   }
