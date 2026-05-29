@@ -25,6 +25,19 @@ This runbook does **not** authorize:
 
 Autofill approval authorizes only DOM text-field fill for the three allowed fields listed below, and only after every condition in this runbook passes.
 
+## WSL CLI cannot perform live CDP execution
+
+The WSL 2 NAT barrier means `127.0.0.1` in WSL is NOT the same as `127.0.0.1` on Windows. The WSL CLI (`sda qa autofill-runtime --cdp-endpoint ...` and `sda qa default-plan --cdp-endpoint ...`) is blocked from creating live CDP drivers.
+
+The WSL CLI supports only:
+- planning (`sda qa default-plan --field-source fixture`),
+- fixture (`sda qa autofill-fixture`),
+- dry-run (`sda qa autofill` and `sda qa manual-fill --dry-run`).
+
+Live CDP autofill/inspection requires the **Windows-side Electron operator** (double-click `sda-desktop.cmd`). The Electron main process owns the CDP endpoint in-memory (loopback-only, never exposed to the renderer). It launches the dedicated Chromium runtime on Windows, where `127.0.0.1` correctly points to the Windows CDP debugging port.
+
+Do not attempt to bridge WSL and Windows CDP via `0.0.0.0` binding, gateway IPs, or port forwarding. GPT-5.5 Pro verdict: do not fix the WSL bridge.
+
 ## Allowed fields
 
 Only these fields may be filled:
