@@ -1332,12 +1332,22 @@ class CdpClient {
 }
 
 function buildInspectionExpression(descriptors: QaAutofillFieldDescriptor[], allowedHost: string): string {
-  const preamble = "var __name=(t,v)=>Object.defineProperty(t,\"name\",{value:v,configurable:!0});";
+  const preamble = [
+    "var __name=(t,v)=>Object.defineProperty(t,\"name\",{value:v,configurable:!0});",
+    "var __defProp=Object.defineProperty;",
+    "var __esm=(fn,res)=>function(){return fn&&(res=(0,fn[__name](...arguments)),fn=0),res};",
+    "var __export=(t,n)=>{for(var p in n)__defProp(t,p,{get:n[p],enumerable:!0})};"
+  ].join("");
   return `${preamble}(${inspectionScript})(${JSON.stringify(descriptors)}, ${JSON.stringify(allowedHost)})`;
 }
 
 function buildIncidentFieldInspectionExpression(allowedHost: string): string {
-  const preamble = "var __name=(t,v)=>Object.defineProperty(t,\"name\",{value:v,configurable:!0});";
+  const preamble = [
+    "var __name=(t,v)=>Object.defineProperty(t,\"name\",{value:v,configurable:!0});",
+    "var __defProp=Object.defineProperty;",
+    "var __esm=(fn,res)=>function(){return fn&&(res=(0,fn[__name](...arguments)),fn=0),res};",
+    "var __export=(t,n)=>{for(var p in n)__defProp(t,p,{get:n[p],enumerable:!0})};"
+  ].join("");
   return `${preamble}(${incidentFieldInspectionScript})(${JSON.stringify(allowedHost)})`;
 }
 
