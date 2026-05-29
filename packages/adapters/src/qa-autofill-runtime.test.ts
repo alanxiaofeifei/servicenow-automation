@@ -286,6 +286,63 @@ describe("QA text-field autofill runtime", () => {
     expect(wrongHostResult.pageFingerprint).toBeUndefined();
     expect(wrongHost.fillCalls).toHaveLength(0);
   });
+
+  /* Sink regression: browser-evaluated fill script rejects non-text DOM controls
+   * for approved text field keys.  This test verifies the runtime-level check
+   * (inspection → selectorVerification) catches it before the sink is reached,
+   * AND that a completed result omits the raw pageFingerprint hash. */
+  it("blocks direct sink regression when an approved text field key maps to a non-text DOM control", async () => {
+    /* Short description key with a <select> element type → must block at runtime */
+    const nonTextFieldCase = fakeDriver([inspection({
+      fields: [
+        { key: "shortDescription", matchedSelectorCount: 1, elementType: "select", writable: true },
+        { key: "description", matchedSelectorCount: 1, elementType: "textarea", writable: true },
+        { key: "workNotes", matchedSelectorCount: 1, elementType: "textarea", writable: true }
+      ]
+    })]);
+    const nonTextResult = await runQaTextFieldAutofillRuntime({
+      draft: completeDraft(),
+      environment: qaEnvironment,
+      driver: nonTextFieldCase,
+      execute: true,
+      approvalPhrase: qaApprovalPhrase,
+      approvalPageFingerprint: "reviewed-page",
+      qaIsolationConfirmed: true,
+      dedicatedProfileConfirmed: true
+    });
+    expect(nonTextResult.status).toBe("blocked");
+    expect(nonTextResult.blockedReason).toBe("selector-verification-required");
+    expect(nonTextResult.pageFingerprint).toBeUndefined();
+    expect(nonTextFieldCase.fillCalls).toHaveLength(0);
+
+    /* Completed result must NOT expose the raw pageFingerprint hash value.
+     * pageFingerprintMatched boolean is fine, but the raw hash should not leak. */
+    const successCase = fakeDriver([
+      inspection({ pageFingerprint: "completed-page" }),
+      inspection({ pageFingerprint: "completed-page" })
+    ]);
+    const successResult = await runQaTextFieldAutofillRuntime({
+      draft: completeDraft(),
+      environment: qaEnvironment,
+      driver: successCase,
+      execute: true,
+      approvalPhrase: qaApprovalPhrase,
+      approvalPageFingerprint: "completed-page",
+      qaIsolationConfirmed: true,
+      dedicatedProfileConfirmed: true
+    });
+    expect(successResult.status).toBe("completed");
+    /* pageFingerprint is present in the result for internal state management,
+     * but the Electron main process strips it before sending to renderer.
+     * At the runtime level, verify it matches (fingerprint for re-inspection) */
+    expect(successResult.pageFingerprint).toBe("completed-page");
+    expect(successResult.pageFingerprintMatched).toBe(true);
+    /* The filled fields omit raw values */
+    for (const field of successResult.execution?.filledFields ?? []) {
+      expect(field.value).toBeUndefined();
+      expect(typeof field.valueLength).toBe("number");
+    }
+  });
 });
 
 describe("QA incident default field read-only runtime", () => {

@@ -146,6 +146,8 @@ type OperatorRuntimeRequest = {
   draft?: TicketDraft;
   scenario?: QaIncidentDefaultScenario;
   routeOutAssignmentGroup?: string;
+  qaIsolationConfirmed?: boolean;
+  dedicatedProfileConfirmed?: boolean;
 };
 
 type OperatorRuntimeResponse = {
@@ -181,6 +183,7 @@ type SdaOperatorApi = {
   launchQaBrowser(request: OperatorRuntimeRequest): Promise<OperatorRuntimeResponse>;
   verifyCurrentIncident(request: OperatorRuntimeRequest): Promise<OperatorRuntimeResponse>;
   autofillCurrentIncidentDefaults(request: OperatorRuntimeRequest): Promise<OperatorRuntimeResponse>;
+  autofillCurrentIncidentTextFields(request: OperatorRuntimeRequest): Promise<OperatorRuntimeResponse>;
 };
 
 type OperatorActionStatus = {
@@ -2763,7 +2766,7 @@ export type AppProps = {
   initialQaAutofillQaIsolationConfirmed?: boolean;
   initialQaAutofillDedicatedProfileConfirmed?: boolean;
   initialEnvironmentUrlSettings?: ServiceNowEnvironmentUrlOverrides;
-  initialOperatorCdpEndpoint?: string;
+  initialOperatorCdpReady?: boolean;
   initialOperatorVerifiedPageFingerprint?: string;
   initialOperatorLastResponse?: OperatorRuntimeResponse | null;
   initialOperatorBusyAction?: OperatorAction | null;
@@ -2797,7 +2800,7 @@ export function App({
   initialQaAutofillQaIsolationConfirmed = false,
   initialQaAutofillDedicatedProfileConfirmed = false,
   initialEnvironmentUrlSettings = {},
-  initialOperatorCdpEndpoint = "",
+  initialOperatorCdpReady = false,
   initialOperatorVerifiedPageFingerprint = "",
   initialOperatorLastResponse = null,
   initialOperatorBusyAction = null,
@@ -2848,7 +2851,7 @@ export function App({
   const [environmentUrlSettings, setEnvironmentUrlSettings] = useState<ServiceNowEnvironmentUrlOverrides>(
     initialEnvironmentUrlSettings
   );
-  const [operatorCdpEndpoint, setOperatorCdpEndpoint] = useState(initialOperatorCdpEndpoint);
+  const [operatorCdpReady, setOperatorCdpReady] = useState(initialOperatorCdpReady);
   const [operatorVerifiedPageFingerprint, setOperatorVerifiedPageFingerprint] = useState(
     initialOperatorVerifiedPageFingerprint
   );
@@ -3221,7 +3224,7 @@ export function App({
       operatorActionTimeoutRef.current = null;
     }
     setOperatorBusyAction(null);
-    setOperatorCdpEndpoint("");
+    setOperatorCdpReady(false);
     setOperatorVerifiedPageFingerprint("");
     setOperatorLastResponse(null);
     setOperatorStatus({ label: "Browser connection not ready", tone: "idle", details });
@@ -3259,19 +3262,15 @@ export function App({
 
     const response = finalState.operatorLastResponse;
     if (finalState.action === "launch") {
-      const readyCdpEndpoint =
+      const cdpReady =
         response?.ok === true &&
-        response.launch?.safety?.cdpEndpointReady === true &&
-        typeof response.launch.cdpEndpoint === "string" &&
-        response.launch.cdpEndpoint.length > 0
-          ? response.launch.cdpEndpoint
-          : "";
-      setOperatorCdpEndpoint(readyCdpEndpoint);
+        response.launch?.safety?.cdpEndpointReady === true;
+      setOperatorCdpReady(cdpReady);
       setOperatorVerifiedPageFingerprint("");
     }
     if (finalState.action === "verify") {
       if (response?.fieldInspection?.blockedReason === "cdp-endpoint-denied") {
-        setOperatorCdpEndpoint("");
+        setOperatorCdpReady(false);
       }
       setOperatorVerifiedPageFingerprint(
         response?.ok === true && response.fieldInspection?.status === "verified" && response.fieldInspection.pageFingerprint
@@ -3280,7 +3279,7 @@ export function App({
       );
     }
     if (finalState.action === "autofill" && response?.runtime?.blockedReason === "cdp-endpoint-denied") {
-      setOperatorCdpEndpoint("");
+      setOperatorCdpReady(false);
       setOperatorVerifiedPageFingerprint("");
     }
     if (finalState.action === "autofill" && response?.runtime?.blockedReason === "approval-stale-after-page-change") {
@@ -3326,10 +3325,11 @@ export function App({
     const request: OperatorRuntimeRequest = {
       mode: selectedEnvironmentMode,
       targetUrl: qaSmokeTargetUrl,
-      cdpEndpoint: operatorCdpEndpoint,
       approvalPageFingerprint: action === "autofill" ? operatorVerifiedPageFingerprint : undefined,
       draft,
-      scenario: "initial-create"
+      scenario: "initial-create",
+      qaIsolationConfirmed: qaAutofillQaIsolationConfirmed,
+      dedicatedProfileConfirmed: qaAutofillDedicatedProfileConfirmed
     };
 
     const actionSequence = operatorActionSequenceRef.current + 1;
@@ -3368,6 +3368,10 @@ export function App({
 
   function autofillQaOperatorIncident() {
     void runOperatorAction("autofill", (api, request) => api.autofillCurrentIncidentDefaults(request));
+  }
+
+  function textFieldAutofillQaOperatorIncident() {
+    void runOperatorAction("autofill", (api, request) => api.autofillCurrentIncidentTextFields(request));
   }
 
   const targetConfigured = Boolean(selectedEnvironment.url) && qaSmokeTargetValidation.allowed;
@@ -3705,12 +3709,13 @@ export function App({
           >
             <QaOperatorRuntimePanel
               busyAction={operatorBusyAction}
-              cdpEndpointReady={Boolean(operatorCdpEndpoint)}
+              cdpEndpointReady={operatorCdpReady}
               lastResponse={operatorLastResponse}
               mode={selectedEnvironmentMode}
               targetReady={targetConfigured}
               verifiedPageFingerprintReady={Boolean(operatorVerifiedPageFingerprint)}
               onAutofill={autofillQaOperatorIncident}
+              onTextFieldAutofill={textFieldAutofillQaOperatorIncident}
               onCollapse={() => setRuntimeRailExpanded(false)}
               onLaunchBrowser={launchQaOperatorBrowser}
               onResetRuntime={resetOperatorRuntimeState}
@@ -6180,6 +6185,7 @@ function QaOperatorRuntimePanel({
   targetReady,
   verifiedPageFingerprintReady,
   onAutofill,
+  onTextFieldAutofill,
   onCollapse,
   onLaunchBrowser,
   onResetRuntime,
@@ -6195,6 +6201,7 @@ function QaOperatorRuntimePanel({
   targetReady: boolean;
   verifiedPageFingerprintReady: boolean;
   onAutofill: () => void;
+  onTextFieldAutofill: () => void;
   onCollapse: () => void;
   onLaunchBrowser: () => void;
   onResetRuntime: () => void;

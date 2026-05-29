@@ -14,6 +14,8 @@ export type OperatorRuntimeRequest = {
   draft?: TicketDraft;
   scenario?: QaIncidentDefaultScenario;
   routeOutAssignmentGroup?: string;
+  qaIsolationConfirmed?: boolean;
+  dedicatedProfileConfirmed?: boolean;
 };
 
 export type OperatorRuntimeRequestGateResult =
@@ -34,7 +36,9 @@ export function resolveOperatorRuntimeRequestGate(input: unknown): OperatorRunti
       approvalPageFingerprint: trimmedString(input.approvalPageFingerprint),
       draft: isRecord(input.draft) ? (input.draft as TicketDraft) : undefined,
       scenario: input.scenario === "initial-create" || input.scenario === "route-out" ? input.scenario : undefined,
-      routeOutAssignmentGroup: trimmedString(input.routeOutAssignmentGroup)
+      routeOutAssignmentGroup: trimmedString(input.routeOutAssignmentGroup),
+      qaIsolationConfirmed: typeof input.qaIsolationConfirmed === "boolean" ? input.qaIsolationConfirmed : undefined,
+      dedicatedProfileConfirmed: typeof input.dedicatedProfileConfirmed === "boolean" ? input.dedicatedProfileConfirmed : undefined
     })
   };
 }
@@ -57,5 +61,7 @@ function compactRequest(request: OperatorRuntimeRequest): OperatorRuntimeRequest
   if (request.draft) compacted.draft = request.draft;
   if (request.scenario) compacted.scenario = request.scenario;
   if (request.routeOutAssignmentGroup) compacted.routeOutAssignmentGroup = request.routeOutAssignmentGroup;
+  if (request.qaIsolationConfirmed !== undefined) compacted.qaIsolationConfirmed = request.qaIsolationConfirmed;
+  if (request.dedicatedProfileConfirmed !== undefined) compacted.dedicatedProfileConfirmed = request.dedicatedProfileConfirmed;
   return compacted;
 }

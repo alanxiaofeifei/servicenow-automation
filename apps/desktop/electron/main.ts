@@ -6,16 +6,18 @@ import { fileURLToPath } from "node:url";
 
 import {
   createBrowserSessionService,
+  createCdpQaAutofillRuntimePageDriver,
   createCdpQaIncidentDefaultFieldAutofillRuntimePageDriver,
-  createWindowsLocalCdpQaIncidentDefaultFieldAutofillRuntimePageDriver,
+  createCdpQaIncidentFieldInspectionRuntimePageDriver,
   inspectQaIncidentDefaultFieldsRuntime,
   QaCdpRuntimeBlockedError,
   runQaIncidentDefaultFieldAutofillRuntime,
+  runQaTextFieldAutofillRuntime,
+  type QaAutofillRuntimePageDriver,
   type QaCdpRuntimeBlockedReason,
-  type QaIncidentDefaultFieldAutofillRuntimePageDriver,
   type QaDedicatedCdpBrowserStartResult
 } from "@servicenow-automation/adapters";
-import { buildQaIncidentDefaultRuntimeTextFieldPlan, buildQaIncidentDefaultValuePlan } from "@servicenow-automation/core";
+import { buildQaIncidentDefaultRuntimeTextFieldPlan, buildQaIncidentDefaultValuePlan, getRequiredQaAutofillApprovalPhrase } from "@servicenow-automation/core";
 import { getServiceNowEnvironmentConfig } from "@servicenow-automation/profiles";
 
 import { resolveOperatorRuntimeRequestGate } from "./operator-ipc-safety";
@@ -23,6 +25,24 @@ import { resolveDesktopResourcePath, resolveDesktopRuntimePaths } from "./runtim
 import { createMainWindowWebPreferences } from "./window-preferences";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
+
+/* Main-process-owned CDP endpoint — never exposed to renderer */
+let mainProcessCdpEndpoint: string | undefined;
+
+function storeCdpEndpoint(endpoint: string): void {
+  mainProcessCdpEndpoint = endpoint;
+}
+
+function consumeStoredCdpEndpoint(): string {
+  if (!mainProcessCdpEndpoint) {
+    throw new QaCdpRuntimeBlockedError("cdp-endpoint-denied");
+  }
+  return mainProcessCdpEndpoint;
+}
+
+function clearStoredCdpEndpoint(): void {
+  mainProcessCdpEndpoint = undefined;
+}
 
 function createMainWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -56,6 +76,11 @@ function registerOperatorIpc(): void {
       confirmNoWriteLaunch: true
     });
 
+    if (launch.status === "ready" && launch.cdpEndpoint) {
+      /* Store endpoint in main process memory; strip from renderer response */
+      storeCdpEndpoint(launch.cdpEndpoint);
+    }
+
     return {
       ok: launch.status === "ready",
       launch: sanitizeLaunchForRenderer(launch)
@@ -71,8 +96,8 @@ function registerOperatorIpc(): void {
 
       const request = gate.request;
       const environment = getServiceNowEnvironmentConfig("qa", targetUrlOverrides(request.targetUrl));
-      const endpoint = requireCdpEndpoint(request.cdpEndpoint);
-      const driver = createOperatorIncidentRuntimeDriver({ endpoint, targetUrl: environment.url });
+      const endpoint = consumeStoredCdpEndpoint();
+      const driver = createCdpQaIncidentFieldInspectionRuntimePageDriver({ endpoint, targetUrl: environment.url });
       const fieldInspection = await inspectQaIncidentDefaultFieldsRuntime({ environment, driver });
       const defaultPlan = request.draft
         ? buildQaIncidentDefaultValuePlan({
@@ -89,10 +114,16 @@ function registerOperatorIpc(): void {
         defaultPlan
       };
     } catch (error) {
+      if (error instanceof QaCdpRuntimeBlockedError && error.blockedReason === "cdp-endpoint-denied") {
+        clearStoredCdpEndpoint();
+      }
       return blockedVerifyResponse(operatorCdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error");
     }
   });
 
+  /* Existing full-field autofill handler — kept for backward compatibility when
+   * the renderer passes cdpEndpoint from its own (forwarded) state. Will be
+   * replaced once the text-field-only handler is the sole entrypoint. */
   ipcMain.handle("sda:autofill-current-incident-defaults", async (_event, rawRequest: unknown = {}) => {
     try {
       const gate = resolveOperatorRuntimeRequestGate(rawRequest);
@@ -102,7 +133,7 @@ function registerOperatorIpc(): void {
 
       const request = gate.request;
       const environment = getServiceNowEnvironmentConfig("qa", targetUrlOverrides(request.targetUrl));
-      const endpoint = requireCdpEndpoint(request.cdpEndpoint);
+      const endpoint = consumeStoredCdpEndpoint();
       const approvalPageFingerprint = safeApprovalPageFingerprint(request.approvalPageFingerprint);
       if (!request.draft) {
         return blockedAutofillResponse("plan-not-ready");
@@ -111,7 +142,7 @@ function registerOperatorIpc(): void {
         return blockedAutofillResponse("approval-page-fingerprint-required");
       }
 
-      const driver = createOperatorIncidentRuntimeDriver({ endpoint, targetUrl: environment.url });
+      const driver = createCdpQaIncidentDefaultFieldAutofillRuntimePageDriver({ endpoint, targetUrl: environment.url });
       const fieldInspection = await inspectQaIncidentDefaultFieldsRuntime({ environment, driver });
       const defaultPlan = buildQaIncidentDefaultValuePlan({
         draft: request.draft,
@@ -139,6 +170,50 @@ function registerOperatorIpc(): void {
       return blockedAutofillResponse(operatorCdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error");
     }
   });
+
+  /* NEW: text-field-only autofill handler — main process owns CDP endpoint,
+   * renderer never receives it. Uses runQaTextFieldAutofillRuntime for
+   * fingerprint-verified text-only execution. */
+  ipcMain.handle("sda:text-field-autofill-current-incident", async (_event, rawRequest: unknown = {}) => {
+    try {
+      const gate = resolveOperatorRuntimeRequestGate(rawRequest);
+      if (gate.status === "blocked") {
+        return blockedAutofillResponse(gate.blockedReason);
+      }
+
+      const request = gate.request;
+      const environment = getServiceNowEnvironmentConfig("qa", targetUrlOverrides(request.targetUrl));
+      const endpoint = consumeStoredCdpEndpoint();
+
+      if (!request.draft) {
+        return blockedAutofillResponse("plan-not-ready");
+      }
+
+      const approvalPageFingerprint = safeApprovalPageFingerprint(request.approvalPageFingerprint);
+      const driver = createCdpQaAutofillRuntimePageDriver({ endpoint, targetUrl: environment.url });
+
+      const runtime = await runQaTextFieldAutofillRuntime({
+        draft: request.draft,
+        environment,
+        driver,
+        execute: true,
+        approvalPhrase: getRequiredQaAutofillApprovalPhrase("qa"),
+        approvalPageFingerprint,
+        qaIsolationConfirmed: request.qaIsolationConfirmed ?? false,
+        dedicatedProfileConfirmed: request.dedicatedProfileConfirmed ?? false
+      });
+
+      /* Strip raw pageFingerprint from response to renderer */
+      const { pageFingerprint: _redactedAutofillPageFingerprint, ...sanitizedRuntime } = runtime;
+
+      return {
+        ok: runtime.status === "completed",
+        runtime: sanitizedRuntime
+      };
+    } catch (error) {
+      return blockedAutofillResponse(operatorCdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error");
+    }
+  });
 }
 
 function safeTargetUrlOverride(value?: string): string | undefined {
@@ -149,14 +224,6 @@ function safeTargetUrlOverride(value?: string): string | undefined {
 function targetUrlOverrides(value?: string): Partial<Record<"qa", string>> | undefined {
   const targetUrl = safeTargetUrlOverride(value);
   return targetUrl ? { qa: targetUrl } : undefined;
-}
-
-function requireCdpEndpoint(value?: string): string {
-  const trimmed = value?.trim();
-  if (!trimmed) {
-    throw new QaCdpRuntimeBlockedError("cdp-endpoint-denied");
-  }
-  return trimmed;
 }
 
 function operatorCdpRuntimeBlockedReasonFromError(error: unknown): QaCdpRuntimeBlockedReason | undefined {
@@ -173,56 +240,6 @@ function isOperatorCdpRuntimeBlockedReason(value: unknown): value is QaCdpRuntim
 function safeApprovalPageFingerprint(value?: string): string | undefined {
   const trimmed = value?.trim();
   return trimmed && /^[a-f0-9]{64}$/i.test(trimmed) ? trimmed : undefined;
-}
-
-function createOperatorIncidentRuntimeDriver(input: {
-  endpoint: string;
-  targetUrl?: string;
-}): QaIncidentDefaultFieldAutofillRuntimePageDriver {
-  if (isWslHostedDesktopRuntime()) {
-    return createWindowsLocalCdpQaIncidentDefaultFieldAutofillRuntimePageDriver({
-      endpoint: input.endpoint,
-      targetUrl: input.targetUrl,
-      helperScriptPath: toWindowsInteropPath(
-        resolveDesktopResourcePath("scripts/windows/evaluate-local-cdp-expression.ps1", desktopRuntimePaths())
-      )
-    });
-  }
-
-  return createCdpQaIncidentDefaultFieldAutofillRuntimePageDriver({ endpoint: input.endpoint, targetUrl: input.targetUrl });
-}
-
-function isWslHostedDesktopRuntime(): boolean {
-  return (
-    process.platform === "linux" &&
-    Boolean(
-      process.env.WSL_INTEROP ||
-        process.env.WSL_DISTRO_NAME ||
-        existsSync("/proc/sys/fs/binfmt_misc/WSLInterop") ||
-        existsSync("/mnt/c/Windows/System32/cmd.exe")
-    )
-  );
-}
-
-function toWindowsInteropPath(pathValue: string): string {
-  if (process.platform !== "linux") {
-    return pathValue;
-  }
-
-  try {
-    const convertedPath = execFileSync("wslpath", ["-w", pathValue], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-      timeout: 1000
-    }).trim();
-    if (convertedPath.startsWith("\\\\") || /^[A-Z]:\\/i.test(convertedPath)) {
-      return convertedPath;
-    }
-  } catch {
-    // Fall through to the original path; the helper will fail closed if Windows cannot read it.
-  }
-
-  return pathValue;
 }
 
 function blockedLaunchResponse(blockedReason: string) {
@@ -284,13 +301,15 @@ function blockedAutofillResponse(blockedReason: string) {
   };
 }
 
-function sanitizeLaunchForRenderer(launch: QaDedicatedCdpBrowserStartResult): QaDedicatedCdpBrowserStartResult {
+function sanitizeLaunchForRenderer(launch: QaDedicatedCdpBrowserStartResult): Omit<QaDedicatedCdpBrowserStartResult, "cdpEndpoint"> & { cdpEndpointReady: boolean } {
+  const { cdpEndpoint, ...safe } = launch;
   return {
-    ...launch,
-    commandPreview: launch.commandPreview
+    ...safe,
+    cdpEndpointReady: launch.status === "ready" && Boolean(cdpEndpoint),
+    commandPreview: safe.commandPreview
       ? {
-          ...launch.commandPreview,
-          args: launch.commandPreview.args.map((arg: string) => (arg.startsWith("http") ? "[REDACTED_SERVICE_NOW_TARGET]" : arg))
+          ...safe.commandPreview,
+          args: safe.commandPreview.args.map((arg: string) => (arg.startsWith("http") ? "[REDACTED_SERVICE_NOW_TARGET]" : arg))
         }
       : undefined
   };
