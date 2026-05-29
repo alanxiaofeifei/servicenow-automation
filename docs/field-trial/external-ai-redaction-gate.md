@@ -88,3 +88,74 @@ Stop and do not send externally if:
 - the preview contains residual sensitive patterns;
 - the operator is using real QA/prod content without a separate approval checkpoint;
 - any output would be pasted into a public issue, PR, prompt, or external model without review.
+
+## Demo results (2026-05-29)
+
+Verified the external AI redaction gate with fake sanitized payloads only. No real ServiceNow data, customer text, provider network calls, or API keys were used.
+
+### Test summary
+
+- **34 tests total** (11 original + 23 new) — all pass
+- **3 test files**: `redaction-gate.test.ts`, `deepseek-provider.test.ts`, `mock-ai-provider.test.ts`
+- **Test categories**: pass-through (6), block-sensitive (8), edge cases (9), existing (3), deepseek (4), mock (4)
+- **Zero real network calls** — all provider tests use injected fake transports
+- **Zero gate logic changes** — gate behavior unchanged, only tests added
+
+### Pass-through (sanitized fake data)
+
+All 6 pass-through tests verify that clean, sanitized content with no sensitive patterns passes the gate without modification:
+
+| Test | Input | Result |
+|------|-------|--------|
+| Fake incident description | VPN troubleshooting narrative | PASS — 0 findings, safeToSend=true |
+| Multi-field intake | Short description + description + work notes | PASS — 0 findings, content preserved verbatim |
+| Fake host refs (no scheme) | `fake-portal.example.invalid`, `wiki.example.invalid/kb/faq` | PASS — no URL redaction (no scheme present) |
+| Fake user display names | "Fake Person", "Demo Manager" | PASS — 0 findings |
+| INC without digits | "INC VPN network", "INC support portal" | PASS — not caught as ticket-id (no 5+ digit suffix) |
+
+### Block-sensitive
+
+All 8 block-sensitive tests verify the gate correctly redacts patterns matching the 7 redaction rules:
+
+| Rule | Test input | Findings |
+|------|------------|----------|
+| URL | `https://fake-portal.example.invalid/incidents/active` | [REDACTED_URL] |
+| Email | `fake.user` + `@` + `example.invalid` (dynamic construction) | [REDACTED_EMAIL] |
+| Ticket ID | Dynamically constructed `INC` + 7-digit, `RITM` + 7-digit strings | [REDACTED_TICKET_ID] |
+| sys_id | 32-hex string `ffff...` | [REDACTED_SYS_ID] |
+| Local path (Windows) | `C:\Users\FakeOperator\Documents\case-log.txt` | [REDACTED_PATH] |
+| Local path (Linux) | `/home/fakeuser/logs/case-output.log` | [REDACTED_PATH] |
+| Credential | `token=...`, `api_key: ...`, `secret: ...`, `passwd=...` | [REDACTED_CREDENTIAL] |
+| Phone | `+1 555-123-4567`, `(02) 1234 5678` | [REDACTED_PHONE] |
+
+All redacted outputs were verified NOT to contain the original sensitive values.
+
+### Edge cases
+
+9 edge-case tests cover boundary behavior:
+
+- **Empty input** → fails closed (`redacted-preview-empty`)
+- **Whitespace-only** → fails closed
+- **Stable preview id** → identical inputs produce identical ids
+- **Distinct preview id** → different inputs produce different ids
+- **Content preservation** → non-sensitive content survives multiple redactions
+- **Disclosure present** → every preview includes the disclosure message
+- **Mismatched approval** → rejected with `preview-mismatch`
+- **Wrong acknowledgement** → rejected with `disclosure-not-acknowledged`
+- **Error type guard** → `isExternalAIBlockedError()` correctly identifies the error type
+
+### Not tested (per safety boundaries)
+
+- Real external AI provider network calls (not in scope)
+- Real ServiceNow data, customer text, or internal communications
+- Browser launch, autofill, CDP, or packaging code
+- Production or production-shadow content
+- API keys (never present in code or tests)
+
+### Gate behavior summary
+
+- **Pass-through count**: 6 scenarios verified clean
+- **Block count**: 8 scenarios verified redacted (all 7 rule types)
+- **Edge cases**: 9 boundary behaviors verified
+- **Gate logic**: No bugs found — no separate fix card needed
+- **App.tsx**: No AI-gate status indicator exists — criterion 6 is a documented no-op
