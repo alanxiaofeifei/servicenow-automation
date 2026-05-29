@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { createConnection } from "node:net";
 import { resolve } from "node:path";
 
 import {
@@ -133,7 +134,36 @@ function detectWsl(options: RunCliOptions): boolean {
 }
 
 const wslLiveCdpBlockedMessage =
-  "WSL CLI cannot connect to Windows CDP. The WSL 2 NAT barrier means 127.0.0.1 in WSL is not the same as 127.0.0.1 on Windows. Live CDP autofill/inspection requires the Windows-side Electron operator (double-click sda-desktop.cmd). The WSL CLI supports planning, fixture, and dry-run only.";
+  "WSL CLI cannot connect to Windows CDP. The WSL 2 NAT barrier means 127.0.0.1 in WSL is not the same as 127.0.0.1 on Windows. A TCP reachability check confirmed the CDP endpoint is not reachable from this WSL session — the browser is likely running on Windows. Live CDP autofill/inspection requires the Windows-side Electron operator (double-click sda-desktop.cmd). The WSL CLI supports planning, fixture, and dry-run only.";
+
+/**
+ * Probe whether a CDP endpoint is reachable via TCP.
+ * A successful TCP connect means the endpoint is in the same network namespace (WSL-local Chrome).
+ * A failure means the endpoint is behind WSL 2 NAT (Windows Chrome) or not running at all.
+ */
+async function probeCdpEndpointReachable(endpoint: string, timeoutMs = 2000): Promise<boolean> {
+  try {
+    const url = new URL(endpoint);
+    const host = url.hostname;
+    const port = parseInt(url.port, 10) || 9222;
+    return await new Promise<boolean>((resolve) => {
+      const socket = createConnection({ host, port, timeout: timeoutMs }, () => {
+        socket.destroy();
+        resolve(true);
+      });
+      socket.on("error", () => {
+        socket.destroy();
+        resolve(false);
+      });
+      socket.on("timeout", () => {
+        socket.destroy();
+        resolve(false);
+      });
+    });
+  } catch {
+    return false;
+  }
+}
 
 export async function runCli(argv: string[], options: RunCliOptions = {}): Promise<CliResult> {
   const cwd = options.cwd ?? process.cwd();
@@ -351,16 +381,19 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
         let driver = options.qaIncidentFieldInspectionDriver;
         if (!driver && parsed.flags["cdp-endpoint"]) {
           if (isWslRuntime) {
-            return output(parsed, {
-              command: "qa default-plan",
-              template,
-              scenario,
-              fieldSource,
-              defaultPlan: undefined,
-              blocked: true,
-              blockedReason: "wsl-cli-live-cdp-blocked",
-              safety: safetyEnvelope()
-            }, `${wslLiveCdpBlockedMessage}\n`);
+            const reachable = await probeCdpEndpointReachable(parsed.flags["cdp-endpoint"]);
+            if (!reachable) {
+              return output(parsed, {
+                command: "qa default-plan",
+                template,
+                scenario,
+                fieldSource,
+                defaultPlan: undefined,
+                blocked: true,
+                blockedReason: "wsl-cli-live-cdp-blocked",
+                safety: safetyEnvelope()
+              }, `${wslLiveCdpBlockedMessage}\n`);
+            }
           }
           try {
             driver = createCdpQaIncidentFieldInspectionRuntimePageDriver({
@@ -566,8 +599,12 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
       let runtime: QaAutofillRuntimeResult | undefined;
       if (!driver && parsed.flags["cdp-endpoint"]) {
         if (isWslRuntime) {
-          runtime = blockedQaAutofillRuntimeResult("wsl-cli-live-cdp-blocked", false);
-        } else {
+          const reachable = await probeCdpEndpointReachable(parsed.flags["cdp-endpoint"]);
+          if (!reachable) {
+            runtime = blockedQaAutofillRuntimeResult("wsl-cli-live-cdp-blocked", false);
+          }
+        }
+        if (!driver && !runtime) {
           try {
             driver = createCdpQaAutofillRuntimePageDriver({
               endpoint: parsed.flags["cdp-endpoint"],

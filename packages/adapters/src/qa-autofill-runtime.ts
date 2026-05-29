@@ -1134,10 +1134,42 @@ function selectCdpPageTarget(pageTargets: CdpPageTarget[], targetUrl?: string): 
 
   const configuredHostTargets = pageTargets.filter((target) => pageTargetMatchesHost(target, configuredHost));
   const configuredIncidentTargets = configuredHostTargets.filter(isLikelyIncidentPageTarget);
+
+  /* Sanitized diagnostic: log counts only — no raw URLs, no page titles, no query params */
+  if (configuredHost) {
+    console.warn(
+      `[qa-autofill-runtime] CDP page selection: ${pageTargets.length} total pages, ` +
+      `${configuredHostTargets.length} matching host "${configuredHost}", ` +
+      `${configuredIncidentTargets.length} matching incident.do`
+    );
+  }
+
+  /* Safest path: exactly 1 incident target for the configured host */
   const configuredIncidentTarget = single(configuredIncidentTargets);
   if (configuredIncidentTarget) return configuredIncidentTarget;
+
+  /* If multiple incident targets exist, select the first one with a warning */
+  if (configuredIncidentTargets.length > 1) {
+    console.warn(
+      `[qa-autofill-runtime] Multiple (${configuredIncidentTargets.length}) incident pages found ` +
+      `for host "${configuredHost}", selecting the first one. Close extra tabs to suppress this warning.`
+    );
+    return configuredIncidentTargets[0];
+  }
+
+  /* Second safest: exactly 1 host-matching page (non-incident) */
   const configuredHostTarget = single(configuredHostTargets);
   if (configuredHostTarget) return configuredHostTarget;
+
+  /* If multiple host-matching pages exist (no incident.do), select the first one */
+  if (configuredHostTargets.length > 1) {
+    console.warn(
+      `[qa-autofill-runtime] No incident page found for host "${configuredHost}" — ` +
+      `${configuredHostTargets.length} host-matching pages open, selecting the first one.`
+    );
+    return configuredHostTargets[0];
+  }
+
   return undefined;
 }
 

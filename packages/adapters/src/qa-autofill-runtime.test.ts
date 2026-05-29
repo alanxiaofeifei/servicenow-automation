@@ -415,7 +415,7 @@ describe("QA incident default field read-only runtime", () => {
     }
   });
 
-  it("fails closed with a sanitized page-selection error when multiple configured-host Incident pages are open", async () => {
+  it("selects the first configured-host Incident page when multiple Incident pages are open", async () => {
     const sensitiveQueryKey = "sys" + "_id";
     const restoreFetch = installFakeCdpTargetList([
       {
@@ -431,12 +431,12 @@ describe("QA incident default field read-only runtime", () => {
     ]);
 
     try {
-      await expect(
-        qaAutofillRuntimeTestHooks.resolveCdpPageWebSocketUrl(
-          localCdpHttpEndpoint(),
-          "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
-        )
-      ).rejects.toThrow("cdp-page-selection-denied");
+      const webSocketUrl = await qaAutofillRuntimeTestHooks.resolveCdpPageWebSocketUrl(
+        localCdpHttpEndpoint(),
+        "https://qa.service-now.example.invalid/now/nav/ui/classic/params/target/home_splash.do"
+      );
+
+      expect(webSocketUrl).toBe(localCdpWebSocketUrl("incident-one"));
     } finally {
       restoreFetch();
     }
