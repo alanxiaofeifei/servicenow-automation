@@ -4,9 +4,10 @@
 
 The project goal is to turn support context from manual input, Teams/Web, Outlook/Web, or future adapters into structured ServiceNow-ready ticket drafts, KB-backed troubleshooting steps, and safe form-fill workflows where the human agent remains responsible for final submission.
 
-> Current phase: P0 MVP planning and scaffold.  
+> Current phase: v0.1.0-rc.1 — Windows Operator Preview.  
 > Demo target: 2026-06-05.  
-> Safety rule: AI drafts and fills; humans review and submit.
+> Safety rule: AI drafts and fills; humans review and submit.  
+> Status: All P0 features implemented and tested — intake connectors, ticket drafting, KB matching, support group recommendation, reporting dry-run, and safe mock form fill.
 
 ## Strategic decision
 
@@ -28,20 +29,27 @@ A fully automated ticket submitter
 A tool that bypasses ITSM controls
 ```
 
-## P0 demo flow
+## Demo flow (v0.1.0-rc.1)
 
 ```text
-Input issue context
-→ AI or deterministic mock extraction
-→ local KB/rules suggest troubleshooting steps
-→ TicketDraft JSON is generated
-→ user edits/approves fields
-→ app fills a mock/safe ServiceNow form
-→ final submit remains manual
+Source intake (Teams note / self-service / chat / shared mailbox / manual paste)
+→ Source review (raw vs cleaned context normalization)
+→ Intake source type selection
+→ TicketDraft with field mapping (short desc, desc, work notes, category, etc.)
+→ Knowledge article matching and support group recommendation
+→ Missing info questions and risk flags
+→ Risk Control Gate (stop-before-write)
+→ Mock ServiceNow Incident Preview (submit disabled in demo mode)
+→ Excel dry-run report (CSV / Markdown copy)
+→ Final submit remains manual (always human-in-the-loop)
 ```
 
 ## Documentation
 
+- **Demo script (3-5 min):** [`docs/en-US/demo-script.md`](docs/en-US/demo-script.md) — [`docs/zh-CN/demo-script.md`](docs/zh-CN/demo-script.md) (中文)
+- **Interview / pitch package:** [`docs/interview/service-desk-cockpit-pitch.md`](docs/interview/service-desk-cockpit-pitch.md)
+- **Release notes:** [`docs/releases/windows-v0.1-rc-release-notes.md`](docs/releases/windows-v0.1-rc-release-notes.md)
+- **User guide:** [`docs/en-US/user-guide.md`](docs/en-US/user-guide.md) — [`docs/zh-CN/user-guide.md`](docs/zh-CN/user-guide.md) (中文)
 - Chinese product plan: [`docs/product-plan.zh-CN.md`](docs/product-plan.zh-CN.md)
 - English product plan: [`docs/product-plan.en-US.md`](docs/product-plan.en-US.md)
 - Demo scope: [`docs/demo-scope.md`](docs/demo-scope.md)

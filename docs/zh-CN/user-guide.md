@@ -4,22 +4,23 @@
 
 ServiceNow Automation 帮助服务台工程师把零散的支持上下文整理成结构化、可编辑的 Incident 草稿。
 
-P0 版本刻意保持简单稳定：Manual Paste、本地 demo KB、deterministic MockAIProvider、Mock ServiceNow form。
+v0.1.0-rc.1 版本包含：多渠道接入（Teams note、self-service、chat、shared mailbox、manual paste）、Source Review 提供 raw 和 cleaned 两种上下文字段、可编辑 TicketDraft 含字段映射、本地 demo KB 文章匹配与支持组推荐、Missing Info 和 Risk Flags、Risk Control Gate（stop-before-write）、Mock ServiceNow form、以及 Excel dry-run report（支持 CSV/Markdown 导出）。
 
-## P0 Demo 使用步骤
+## v0.1.0-rc.1 Demo 使用步骤
 
-1. 打开桌面应用。
+1. 打开桌面应用（demo mode ON，auto-submit disabled）。
 2. 选择一个场景：
    - Load VPN Demo
    - Load Windows Demo
    - Load Mock Account Access Demo — no browser login
-3. 查看 Captured Context。
-4. 查看并编辑 TicketDraft 字段。
-5. 查看 KB Matches、Missing Info、Risk Flags。
-6. 阅读 Risk Control Gate。
-7. 在填表前确认已经人工 review。
+3. **Intake Source Review** — 查看 source type（Teams note、self-service 等），对比 raw 和 cleaned context。
+4. **TicketDraft** — 查看并编辑生成字段：Short Description、Description、Work Notes、Category、Subcategory、Assignment Group、Impact、Urgency、Priority。
+5. **KB Matching** — 查看匹配的知识文章、分数、关键词和支持组推荐。
+6. 查看 Missing Info 和 Risk Flags。
+7. 阅读 Risk Control Gate — 确认 stop-before-write。
 8. 使用 Mock ServiceNow form 演示字段映射。
-9. 不要把 Mock form 视为生产提交。
+9. **Excel Dry-Run Report** — 预览报告行，可复制为 CSV 或 Markdown。
+10. 不要把 Mock form 视为生产提交。Submit 在 demo mode 下禁用。
 
 ## 预期输出
 
