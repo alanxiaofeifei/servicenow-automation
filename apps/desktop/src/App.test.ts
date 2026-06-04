@@ -157,6 +157,23 @@ describe("App", () => {
     expect(output.split('aria-label="Use scenario:').length - 1).toBe(6);
   });
 
+  it("renders the guided demo stepper before the ticket draft cards", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Guided demo path");
+    expect(output).toContain("Follow the story without guessing");
+    expect(output).toContain("Choose source");
+    expect(output).toContain("Review cleaned context");
+    expect(output).toContain("Draft TicketDraft");
+    expect(output).toContain("Check KB recommendations");
+    expect(output).toContain("Verify and report");
+    expect(output).toContain("Optional QA/dev text-field assistance");
+    expect(output).toContain('data-step-status="completed"');
+    expect(output).toContain('data-step-status="current"');
+    expect(output).toContain('data-step-status="locked"');
+    expect(output).toContain("AI drafts and fills allowed text fields only. Human reviews and submits in ServiceNow.");
+  });
+
   it("renders rebuilt target-style Inbox, Knowledgebase, History, and Search pages", () => {
     const pageCases = [
       { key: "inbox", label: "Inbox", title: "Inbox triage", panel: "Triage checklist" },

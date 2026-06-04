@@ -3489,6 +3489,61 @@ export function App({
   const workbenchEnvironmentLabel = getWorkbenchEnvironmentChipLabel(selectedEnvironmentMode, workbenchCopy);
   const workbenchTargetStatusLabel = targetConfigured ? workbenchCopy.target.configured : workbenchCopy.target.missing;
   const topbarTargetChipClass = targetConfigured ? "workbench-status-pill success" : "workbench-status-pill warning";
+  const kbMatches = searchKnowledgeArticles(sourceCleanup.normalizedText, demoKnowledgeArticles, { limit: 3 });
+  const guidedDemoSourceReady = sourceCleanup.normalizedText.trim().length > 0;
+  const guidedDemoDraftReady =
+    fieldValue(draft.shortDescription).trim().length > 0 &&
+    fieldValue(draft.description).trim().length > 0 &&
+    fieldValue(draft.workNotes).trim().length > 0;
+  const guidedDemoVerifyReady =
+    targetConfigured &&
+    operatorCdpReady &&
+    Boolean(operatorVerifiedPageFingerprint);
+  const guidedDemoAutofillReady = qaAutofillPlan.status === "ready-for-autofill";
+  const guidedDemoSteps = [
+    {
+      number: "1",
+      title: "Choose source",
+      note: `Selected queue item: ${operatorSafeDisplayText(selectedQueueItem.sourceChannel)}`,
+      status: "completed"
+    },
+    {
+      number: "2",
+      title: "Review cleaned context",
+      note: guidedDemoSourceReady ? `Sanitized text ready (${sourceCleanup.removedLineCount} lines removed)` : "Waiting for cleaned source text",
+      status: guidedDemoSourceReady ? "completed" : "current"
+    },
+    {
+      number: "3",
+      title: "Draft TicketDraft",
+      note: guidedDemoDraftReady ? "Short description, description, and work notes are populated" : "Keep editing the draft fields until the ticket draft is complete",
+      status: guidedDemoDraftReady ? "completed" : "current"
+    },
+    {
+      number: "4",
+      title: "Check KB recommendations",
+      note: kbMatches.length > 0 ? `${kbMatches.length} local KB suggestion${kbMatches.length === 1 ? "" : "s"} matched` : "No local KB match yet; use the sanitized draft context",
+      status: kbMatches.length > 0 ? "completed" : guidedDemoDraftReady ? "current" : "locked"
+    },
+    {
+      number: "5",
+      title: "Verify and report",
+      note: guidedDemoVerifyReady
+        ? "Test browser readiness and page verification are complete; the human still reviews the result"
+        : targetConfigured
+          ? "Wait for browser readiness and a verified page fingerprint before reporting"
+          : "Configure a QA/dev target before verification can run",
+      status: guidedDemoVerifyReady ? "completed" : targetConfigured ? "current" : "locked"
+    },
+    {
+      number: "6",
+      title: "Optional QA/dev text-field assistance",
+      note: guidedDemoAutofillReady
+        ? "Selector-verified, approval-gated text-field autofill is ready"
+        : "This remains optional and stays blocked until the selector-verified plan is ready",
+      status: guidedDemoAutofillReady ? "completed" : guidedDemoVerifyReady ? "current" : "locked"
+    }
+  ] as const;
   const cleanedSummaryRows = [
     { label: workbenchCopy.cards.issue, value: operatorSafeDisplayText(fieldValue(draft.shortDescription)) },
     { label: workbenchCopy.cards.impact, value: operatorSafeDisplayText(selectedQueueItem.bodyPreview) },
@@ -3869,6 +3924,36 @@ export function App({
                 </div>
               ))}
             </div>
+          </section>
+
+          <section className="workbench-card guided-demo-stepper-card" aria-labelledby="guided-demo-stepper-title">
+            <div className="workbench-card-header guided-demo-stepper-header">
+              <div>
+                <p className="eyebrow">Guided review path</p>
+                <h2 id="guided-demo-stepper-title">Guided demo path</h2>
+              </div>
+              <span className="guided-demo-stepper-chip">Choose source → review context → draft ticket → check KB → verify/report → optional QA/dev text-field assistance</span>
+            </div>
+            <p className="guided-demo-stepper-intro">
+              Follow the story without guessing. This is a compact, local-only guide for the operator flow; the human still reviews every change and performs ServiceNow actions manually.
+            </p>
+            <ol className="guided-demo-stepper-list">
+              {guidedDemoSteps.map((step) => (
+                <li key={step.title} className={`guided-demo-stepper-step ${step.status}`} data-step-status={step.status}>
+                  <span className="guided-demo-step-number" aria-hidden="true">{step.number}</span>
+                  <div className="guided-demo-step-body">
+                    <div className="guided-demo-step-topline">
+                      <strong>{step.title}</strong>
+                      <span className={`guided-demo-step-badge ${step.status}`}>{step.status}</span>
+                    </div>
+                    <p>{step.note}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <small className="guided-demo-stepper-footer">
+              AI drafts and fills allowed text fields only. Human reviews and submits in ServiceNow.
+            </small>
           </section>
 
           <section className="workbench-card incident-draft-card" aria-labelledby="incident-draft-title">
