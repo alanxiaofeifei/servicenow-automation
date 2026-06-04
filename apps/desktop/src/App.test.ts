@@ -143,6 +143,7 @@ describe("App", () => {
       { key: "inbox", label: "Inbox", title: "Inbox triage", panel: "Triage checklist" },
       { key: "knowledge", label: "Knowledgebase", title: "Knowledgebase snippets", panel: "Matched keywords" },
       { key: "history", label: "History", title: "History timeline", panel: "Recent outcomes" },
+      { key: "reports", label: "Reports", title: "Dry-run report row", panel: "Export safety" },
       { key: "search", label: "Search", title: "Search workspace", panel: "Search tips" }
     ] as const;
 
@@ -159,6 +160,23 @@ describe("App", () => {
       expect(output).not.toContain("Nothing here yet");
       expect(output).not.toContain("Coming soon");
     }
+  });
+
+  it("renders the Reports page with dry-run report and local export safety", () => {
+    const output = renderAppMarkup("en-US", { initialActivePage: "reports" });
+
+    expect(output).toContain('data-active-page="reports"');
+    expect(output).toContain("Dry-run report row");
+    expect(output).toContain("Team lead report row generated from the current draft");
+    expect(output).toContain("Copy report (CSV)");
+    expect(output).toContain("Copy report (Markdown)");
+    expect(output).toContain("Download XLSX");
+    expect(output).toContain("Export safety");
+    expect(output).toContain("Dry-run only — no external write");
+    expect(output).toContain("QA Trial Result");
+    expect(output).toContain("All data is from the local draft");
+    expect(output).not.toContain("Nothing here yet");
+    expect(output).not.toContain("Coming soon");
   });
 
   it("removes the old demo-first surfaces from the primary workbench", () => {

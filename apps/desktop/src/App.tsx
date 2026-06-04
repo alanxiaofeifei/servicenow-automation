@@ -16,6 +16,9 @@ import {
   CapturedContextSchema,
   IntakeSourceKinds,
   buildExcelDryRunWorkbookArtifact,
+  buildExcelDryRunRowFromDraft,
+  buildExcelDryRunRowMarkdownReport,
+  buildExcelDryRunRowCsvReport,
   buildQaTextFieldAutofillPlan,
   buildServiceDeskWorkflowPreview,
   evaluateQaSingleTicketSmokePlan,
@@ -1125,9 +1128,10 @@ type WorkbenchIconName =
   | "draft"
   | "shield"
   | "globe"
-  | "chevron";
+  | "chevron"
+  | "report";
 
-export type OperatorWorkbenchPageKey = "inbox" | "workbench" | "knowledge" | "history" | "search";
+export type OperatorWorkbenchPageKey = "inbox" | "workbench" | "knowledge" | "history" | "search" | "reports";
 
 type EnvironmentLocalizedCopy = {
   label: string;
@@ -1625,6 +1629,7 @@ const englishOperatorWorkbenchCopy = {
     knowledge: "Knowledgebase",
     history: "History",
     search: "Search",
+    reports: "Reports",
     settings: "Settings",
     collapseSidebar: "Collapse left sidebar",
     expandSidebar: "Expand left sidebar",
@@ -1791,6 +1796,7 @@ const operatorWorkbenchTranslations = {
       knowledge: "知识库",
       history: "历史",
       search: "搜索",
+      reports: "报告",
       settings: "设置",
       collapseSidebar: "折叠左侧栏",
       expandSidebar: "展开左侧栏",
@@ -1943,6 +1949,7 @@ const operatorWorkbenchTranslations = {
       knowledge: "知識庫",
       history: "歷史",
       search: "搜尋",
+      reports: "報告",
       settings: "設定",
       collapseSidebar: "收合左側欄",
       expandSidebar: "展開左側欄",
@@ -2095,6 +2102,7 @@ const operatorWorkbenchTranslations = {
       knowledge: "Conocimiento",
       history: "Historial",
       search: "Buscar",
+      reports: "Informes",
       settings: "Configuración",
       collapseSidebar: "Contraer barra izquierda",
       expandSidebar: "Expandir barra izquierda",
@@ -3401,6 +3409,7 @@ export function App({
     { key: "workbench", label: workbenchCopy.nav.workbench, icon: "workbench" },
     { key: "knowledge", label: workbenchCopy.nav.knowledge, icon: "knowledge" },
     { key: "history", label: workbenchCopy.nav.history, icon: "history" },
+    { key: "reports", label: workbenchCopy.nav.reports, icon: "report" },
     { key: "search", label: workbenchCopy.nav.search, icon: "search" }
   ];
   const activeNavLabel = workbenchNavItems.find((item) => item.key === activePage)?.label ?? workbenchCopy.nav.workbench;
@@ -5517,6 +5526,57 @@ function buildOperatorStaticPageContent({
         contextItems: ["Show status labels, not raw URLs", "Keep page-check details hidden", "Do not imply Save/Submit/Update/Resolve/Close approval"],
         footerNote: "History is a local operator aid, not a ServiceNow audit log."
       };
+    case "reports": {
+      const reportPreview = buildExcelDryRunRowFromDraft(draft, {
+        rawIntakeSource: queueItems.find((item) => item.status === "Drafted")?.sourceChannel === "Phone call"
+          ? "Phone call"
+          : queueItems.find((item) => item.status === "Drafted")?.sourceChannel === "Teams message"
+            ? "Teams message"
+            : "manual_paste",
+        requesterDisplay: operatorSafeDisplayText(queueItems.find((item) => item.status === "Drafted")?.requesterLabel ?? "Local operator"),
+        languageOrServiceDeskTeam: queueItems.find((item) => item.status === "Drafted")
+          ? `${languageDisplayLabel(selectedQueueItem.language)} / Service Desk`
+          : "English / Service Desk"
+      });
+      const row = reportPreview.row;
+      const safeAssignmentGroup = draft.assignmentGroup?.value ?? "Not set";
+      const safeCategory = draft.category?.value ?? "Not set";
+
+      return {
+        eyebrow: workbenchCopy.nav.reports,
+        title: "Dry-run report row",
+        description: "Team lead report row generated from the current draft. XLSX, CSV, and Markdown export are all local — no external write.",
+        icon: "report",
+        sidebarTitle: "Report columns",
+        sidebarItems: [
+          { title: "Intake Source", meta: row["Intake Source"] },
+          { title: "Channel", meta: row["ServiceNow Channel"] },
+          { title: "Category", meta: safeCategory },
+          { title: "Priority", meta: row["Priority"] }
+        ],
+        heroTitle: `Team Lead: ${safeAssignmentGroup}`,
+        heroBody: row["Dry-run Result"],
+        stats: [
+          { label: "Assignment Group", value: safeAssignmentGroup },
+          { label: "QA Trial Result", value: row["QA Trial Result"] },
+          { label: "Dry-run Status", value: "Dry-run only — no external write" },
+          { label: "QA Isolation", value: row["QA Isolation Check"] }
+        ],
+        detailCards: [
+          { title: "Copy report (CSV)", body: buildExcelDryRunRowCsvReport(row) },
+          { title: "Copy report (Markdown)", body: buildExcelDryRunRowMarkdownReport(row) },
+          { title: "Download XLSX", body: "Click to download a local .xlsx dry-run artifact. No Graph, cloud workbook, or ServiceNow write is performed." }
+        ],
+        contextTitle: "Export safety",
+        contextItems: [
+          "XLSX export creates a local file only — no Graph/ServiceNow write",
+          "CSV copy is clipboard-local — no external upload",
+          "Markdown can be pasted into any local document or ticket note",
+          "All data is from the local draft — no raw ServiceNow ticket data"
+        ],
+        footerNote: "Reports are local dry-run only. No Save, Submit, Update, Resolve, or Close automation is performed."
+      };
+    }
     case "search":
       return {
         eyebrow: workbenchCopy.nav.search,
@@ -6755,6 +6815,13 @@ function WorkbenchIcon({ name }: { name: WorkbenchIconName }) {
         <svg {...commonProps}>
           <circle cx="12" cy="12" r="8" />
           <path d="M4 12h16M12 4c2.2 2.3 3.2 4.9 3.2 8s-1 5.7-3.2 8M12 4c-2.2 2.3-3.2 4.9-3.2 8s1 5.7 3.2 8" />
+        </svg>
+      );
+    case "report":
+      return (
+        <svg {...commonProps}>
+          <path d="M5 3.5h9L18.5 8v11.5A1.5 1.5 0 0 1 17 21H5a1.5 1.5 0 0 1-1.5-1.5v-15A1.5 1.5 0 0 1 5 3.5Z" />
+          <path d="M14 3.5V8h4.5M8 12h8M8 15.5h6" />
         </svg>
       );
     case "chevron":

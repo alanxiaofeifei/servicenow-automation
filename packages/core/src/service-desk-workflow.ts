@@ -664,3 +664,52 @@ function summarizeSingleLine(value: string): string {
 function csvEscape(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
 }
+
+/**
+ * Convenience wrapper around buildExcelDryRunRowPreview that fills
+ * defaults from a TicketDraft so the caller only needs to override
+ * what matters for the report.
+ */
+export function buildExcelDryRunRowFromDraft(
+  draft: TicketDraft,
+  overrides: Partial<ExcelDryRunRowPreviewInput> = {}
+): ExcelDryRunRowPreview {
+  const now = new Date().toISOString().replace("T", " ").slice(0, 16);
+  return buildExcelDryRunRowPreview({
+    createdAt: now,
+    rawIntakeSource: "manual_paste",
+    requesterDisplay: "Local operator",
+    languageOrServiceDeskTeam: "English / Service Desk",
+    issueType: "Incident",
+    draft,
+    serviceDeskOwnerTeam: "Service Desk team",
+    finalAssignmentGroup: draftFieldValue(draft.assignmentGroup),
+    workNotesSummary: summarizeSingleLine(draft.workNotes.value),
+    handlingStatus: "New",
+    confirmationState: defaultConfirmationState(),
+    evidenceReviewState: defaultEvidenceReviewState(),
+    qaTrialResult: "Not run - dry-run only.",
+    ...overrides
+  });
+}
+
+/**
+ * Build a markdown report summary from an Excel dry-run row.
+ */
+export function buildExcelDryRunRowMarkdownReport(row: ExcelDryRunRow): string {
+  return [
+    "## Excel Dry-run Report",
+    "",
+    ...excelDryRunRowColumns.map((column) => `- ${column}: ${row[column]}`),
+    "",
+    "_This report is generated locally from the reviewed draft. XLSX export creates a local dry-run file only; no Graph, cloud workbook, or ServiceNow write is performed._"
+  ].join("\n");
+}
+
+/**
+ * Build a CSV report header + single row as a downloadable string.
+ */
+export function buildExcelDryRunRowCsvReport(row: ExcelDryRunRow): string {
+  const header = excelDryRunRowColumns.map((col) => csvEscape(col)).join(",");
+  return `${header}\n${buildCsvRow(row)}`;
+}
