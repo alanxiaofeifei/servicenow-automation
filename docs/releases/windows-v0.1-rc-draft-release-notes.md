@@ -1,6 +1,8 @@
-# Windows v0.1.0-rc.1 Draft Release Notes
+# Windows v0.1.0-rc.1 Release Notes
 
 ServiceNow Automation v0.1.0-rc.1 is a Windows Operator Preview for supervised local testing.
+
+> **Manual validation**: Alan ran Windows app launch + autofill success on 2026-06-05 (commit `20e5cdf`). See `docs/status/next-round-ready-for-alan-review-2026-06-05.md` for full status.
 
 ## What's included
 

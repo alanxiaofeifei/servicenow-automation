@@ -3,6 +3,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { demoManualPasteScenarios } from "@servicenow-automation/adapters/browser";
+import {
+  IntakeSourceKinds,
+  sourceAdapterRegistry,
+} from "@servicenow-automation/core";
 
 import {
   App,
@@ -13,6 +17,8 @@ import {
   buildOperatorActionFinalState,
   clampAppZoomPercent,
   draftTemplatePresets,
+  exportValidationRunsToCsv,
+  exportValidationRunsToMarkdown,
   getCtrlWheelZoomDelta,
   getDraftTextAreaRows,
   getHighSeveritySpeechReminderDecision,
@@ -20,6 +26,8 @@ import {
   getHighSeverityVoiceReminder,
   getNextAppZoomPercent,
   getNextEnvironmentUrlOverrideFromDraft,
+  operatorActionDisplayAction,
+  operatorSanitizeBlockedReason,
   previewHighSeveritySpeechReminder,
   updateQaSmokeWriteActionSelection,
   type AppProps,
@@ -667,6 +675,29 @@ describe("App", () => {
     expect(appSource).not.toContain("Load Account/Login Demo");
   });
 
+  it("keeps labels, status text, and headings free of automation-implying wording for prohibited actions", () => {
+    const output = renderAppMarkup("en-US", { initialEnvironmentMode: "qa", initialRuntimeRailExpanded: true });
+    const primaryMarkup = mainMarkupWithoutSettings(output);
+
+    expect(primaryMarkup).not.toMatch(/<button[^>]*>\s*(Save|Submit|Update|Resolve|Close)\s*<\/button>/);
+    expect(primaryMarkup).not.toContain("automatically saves");
+    expect(primaryMarkup).not.toContain("auto-save");
+    expect(primaryMarkup).not.toContain("auto-submit");
+    expect(primaryMarkup).not.toContain("auto-update");
+    expect(primaryMarkup).not.toContain("will submit");
+    expect(primaryMarkup).not.toContain("will save");
+    expect(primaryMarkup).not.toContain("will update");
+    expect(primaryMarkup).not.toContain("will close");
+    expect(primaryMarkup).not.toContain("can submit");
+    expect(primaryMarkup).not.toContain("can save");
+    expect(primaryMarkup).not.toContain("can update");
+    expect(primaryMarkup).not.toContain("can close");
+    expect(primaryMarkup).not.toContain("saves the ticket");
+    expect(primaryMarkup).not.toContain("submits the ticket");
+    expect(primaryMarkup).not.toContain("updates the ticket");
+    expect(primaryMarkup).not.toContain("closes the ticket");
+  });
+
   it("preserves first-class Settings with language, environment, URL inputs, and clear-state reasons", () => {
     const output = renderAppMarkup();
     const settingsMarkupText = settingsMarkup(output);
@@ -1183,5 +1214,163 @@ describe("App", () => {
       writeAction: "submit_incident",
       approvalPhrase: ""
     });
+  });
+
+  it("renders the intake source type selector in the sidebar", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain('class="workbench-intake-selector"');
+    expect(output).toContain('aria-label="Intake source"');
+    expect(output).toContain('class="workbench-intake-select"');
+    expect(output).toContain('aria-label="Select intake source type"');
+  });
+
+  it("renders all 6 intake source kinds as select options", () => {
+    const output = renderAppMarkup();
+
+    for (const kind of IntakeSourceKinds) {
+      const adapter = sourceAdapterRegistry[kind];
+      expect(output).toContain(`value="${kind}"`);
+      expect(output).toContain(adapter.meta.label);
+    }
+  });
+
+  it("shows the safety notice on the intake selector", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain('class="workbench-intake-safety-notice"');
+    expect(output).toContain("Manual / stub / local only");
+  });
+
+  it("renders a disabled capture button when the textarea is empty", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain('class="workbench-intake-capture-btn"');
+    expect(buttonAttrs(output, "Capture as source")).toContain("disabled");
+  });
+
+  it("shows the paste placeholder on the intake textarea", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Paste content from the selected source type");
+  });
+
+  it("maps operator actions to sanitized display labels", () => {
+    expect(operatorActionDisplayAction("launch")).toBe("Browser launch");
+    expect(operatorActionDisplayAction("verify")).toBe("Page check");
+    expect(operatorActionDisplayAction("autofill")).toBe("Autofill");
+  });
+
+  it("maps internal blocked reason codes to sanitized plain-language descriptions", () => {
+    expect(operatorSanitizeBlockedReason("dedicated-browser-runtime-missing")).toBe(
+      "dedicated browser runtime unavailable"
+    );
+    expect(operatorSanitizeBlockedReason("qa-runtime-required")).toBe(
+      "production mode is read-only; switch to QA workspace"
+    );
+    expect(operatorSanitizeBlockedReason("cdp-endpoint-denied")).toBe(
+      "test browser disconnected; restart browser"
+    );
+    expect(operatorSanitizeBlockedReason("cdp-page-selection-denied")).toBe(
+      "could not find one unique approved Incident tab in the test browser"
+    );
+    expect(operatorSanitizeBlockedReason("no-default-plan")).toBe(
+      "could not build default autofill plan; no fields matched"
+    );
+    expect(operatorSanitizeBlockedReason("browser-step-timeout")).toBe(
+      "operation timed out; no ServiceNow action was taken"
+    );
+    expect(operatorSanitizeBlockedReason("approval-stale-after-page-change")).toBe(
+      "page changed after approval; re-check the current ticket page"
+    );
+  });
+
+  it("sanitizes unknown blocked reason codes to a generic fallback that does not leak internal details", () => {
+    expect(operatorSanitizeBlockedReason("sys_id_mismatch")).toBe(
+      "operation could not complete; retry from the browser action rail"
+    );
+    expect(operatorSanitizeBlockedReason("")).toBe(
+      "operation could not complete; retry from the browser action rail"
+    );
+  });
+
+  it("shows validation run stats on the history page, including zero-run empty state", () => {
+    const output = renderAppMarkup("en-US", { initialActivePage: "history" });
+
+    expect(output).toContain("Validation runs");
+    expect(output).toContain("Passed");
+    expect(output).toContain("Blocked");
+    expect(output).toContain("aria-label=\"History timeline context panel\"");
+  });
+
+  it("keeps the validation run description free of raw ServiceNow identifiers", () => {
+    const output = renderAppMarkup("en-US", { initialActivePage: "history" });
+
+    // The history description should not hint at raw ServiceNow URLs, sys_ids, or ticket IDs
+    const descriptionTagMatch = output.match(/<p[^>]*>([^<]*)history timeline description[^<]*<\/p>/i);
+    // Instead check the page for the expected sanitized description
+    expect(output).not.toContain("sys_id");
+    expect(output).not.toContain("sysId");
+    expect(output).not.toContain("ticket ID");
+    expect(output).not.toContain("ServiceNow URL");
+    expect(output).not.toContain("ServiceNow host");
+    expect(output).not.toContain("assignment group");
+  });
+
+  it("exportValidationRunsToMarkdown returns empty header when there are no runs", () => {
+    const md = exportValidationRunsToMarkdown([]);
+    expect(md).toContain("# Validation Runs");
+    expect(md).toContain("No validation runs recorded.");
+  });
+
+  it("exportValidationRunsToCsv returns header-only when there are no runs", () => {
+    const csv = exportValidationRunsToCsv([]);
+    expect(csv).toBe("Time,Action,Result,Details\n");
+  });
+
+  it("exportValidationRunsToMarkdown renders a table from validation runs", () => {
+    const runs = [
+      { id: "vr-1", timestamp: "2026-06-05 00:00:00", action: "launch" as const, status: "ok" as const, sanitizedSummary: "App launch ok, browser ready" },
+      { id: "vr-2", timestamp: "2026-06-05 00:01:00", action: "verify" as const, status: "blocked" as const, sanitizedSummary: "Page check blocked: could not find one unique approved Incident tab" }
+    ];
+    const md = exportValidationRunsToMarkdown(runs);
+    expect(md).toContain("| Time | Action | Result | Details |");
+    expect(md).toContain("| 2026-06-05 00:01:00 | Page check | BLOCKED | Page check blocked:");
+    expect(md).toContain("| 2026-06-05 00:00:00 | Browser launch | OK | App launch ok, browser ready");
+  });
+
+  it("exportValidationRunsToCsv renders CSV rows from validation runs", () => {
+    const runs = [
+      { id: "vr-1", timestamp: "2026-06-05 00:00:00", action: "launch" as const, status: "ok" as const, sanitizedSummary: "App launch ok, browser ready" },
+      { id: "vr-2", timestamp: "2026-06-05 00:01:00", action: "verify" as const, status: "blocked" as const, sanitizedSummary: "Page check blocked: could not find one unique approved Incident tab" }
+    ];
+    const csv = exportValidationRunsToCsv(runs);
+    expect(csv).toContain("Time,Action,Result,Details");
+    expect(csv).toContain("2026-06-05 00:01:00,Page check,BLOCKED,\"Page check blocked:");
+    expect(csv).toContain("2026-06-05 00:00:00,Browser launch,OK,\"App launch ok; browser ready\"");
+  });
+
+  it("exportValidationRunsToMarkdown does not contain raw ticket metadata", () => {
+    const runs = [
+      { id: "vr-1", timestamp: "2026-06-05 00:00:00", action: "launch" as const, status: "ok" as const, sanitizedSummary: "App launch ok, browser ready" }
+    ];
+    const md = exportValidationRunsToMarkdown(runs);
+    expect(md).not.toContain("sys_id");
+    expect(md).not.toContain("sysId");
+    expect(md).not.toContain("ticket ID");
+    expect(md).not.toContain("ServiceNow URL");
+    expect(md).not.toContain("INC");
+  });
+
+  it("exportValidationRunsToCsv does not contain raw ticket metadata", () => {
+    const runs = [
+      { id: "vr-1", timestamp: "2026-06-05 00:00:00", action: "launch" as const, status: "ok" as const, sanitizedSummary: "App launch ok, browser ready" }
+    ];
+    const csv = exportValidationRunsToCsv(runs);
+    expect(csv).not.toContain("sys_id");
+    expect(csv).not.toContain("sysId");
+    expect(csv).not.toContain("ticket ID");
+    expect(csv).not.toContain("ServiceNow URL");
+    expect(csv).not.toContain("INC");
   });
 });

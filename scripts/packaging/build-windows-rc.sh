@@ -32,9 +32,12 @@ ServiceNow Automation Windows Operator Preview
 This release candidate is for supervised local testing of a packaged Windows artifact.
 It does not approve live ServiceNow operation.
 
-Forbidden during this test:
+## Critical restriction
+No Save / Submit / Update / Resolve / Close automation.
+
+Full forbidden list during this test:
 - automatic login
-- Save / Submit / Update / Resolve / Close
+- Save / Submit / Update / Resolve / Close (repeated for emphasis)
 - upload / email / bulk action
 - ServiceNow API write
 - production or production-shadow write

@@ -14,15 +14,18 @@ import {
 } from "@servicenow-automation/profiles";
 import {
   CapturedContextSchema,
+  IntakeSourceKinds,
   buildExcelDryRunWorkbookArtifact,
   buildQaTextFieldAutofillPlan,
   buildServiceDeskWorkflowPreview,
   evaluateQaSingleTicketSmokePlan,
   getRequiredQaAutofillApprovalPhrase,
   normalizeSourceContextText,
+  sourceAdapterRegistry,
   type CapturedContext,
   type ExcelDryRunWorkbookArtifact,
   type FieldDraft,
+  type IntakeSourceKind,
   type ProjectProfile,
   type QaAutofillPlan,
   type QaIncidentDefaultScenario,
@@ -135,6 +138,16 @@ type PreparedCopyDraft = {
 };
 
 type OperatorAction = "launch" | "verify" | "autofill";
+
+type QaValidationRunEntry = {
+  id: string;
+  timestamp: string;
+  action: OperatorAction;
+  status: "ok" | "blocked" | "timeout" | "error";
+  sanitizedSummary: string;
+  plannedFieldCount?: number;
+  filledFieldCount?: number;
+};
 
 export const OPERATOR_RUNTIME_ACTION_TIMEOUT_MS = 90_000;
 
@@ -2823,6 +2836,9 @@ export function App({
   const leftSidebarHandleSuppressClickRef = useRef(false);
   const [runtimeRailExpanded, setRuntimeRailExpanded] = useState(initialRuntimeRailExpanded);
   const [selectedScenarioId, setSelectedScenarioId] = useState<ManualPasteScenario["id"]>("vpn-issue");
+  const [selectedIntakeKind, setSelectedIntakeKind] = useState<IntakeSourceKind>("manual_paste");
+  const [intakeRawText, setIntakeRawText] = useState("");
+  const [capturedContexts, setCapturedContexts] = useState<CapturedContext[]>([]);
   const [selectedQueueItemId, setSelectedQueueItemId] = useState(demoQueueDefinitions[0].id);
   const [queueStatuses, setQueueStatuses] = useState<Partial<Record<string, DemoQueueStatus>>>({});
   const queueItems = useMemo(() => buildDemoQueueItems(language, queueStatuses), [language, queueStatuses]);
@@ -2871,6 +2887,7 @@ export function App({
   );
   const operatorActionSequenceRef = useRef(0);
   const operatorActionTimeoutRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
+  const [validationRunHistory, setValidationRunHistory] = useState<QaValidationRunEntry[]>([]);
 
   useEffect(() => {
     return () => {
@@ -3286,6 +3303,44 @@ export function App({
       setOperatorVerifiedPageFingerprint("");
     }
     setOperatorStatus(finalState.operatorStatus);
+
+    // Record sanitized validation run entry for the History page
+    if (response) {
+      setValidationRunHistory((prev) => {
+        const runId = `vr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
+        const action = finalState.action;
+        const filledFields = response.runtime?.filledFields;
+        const plannedFields = response.defaultPlan?.plannedFields;
+        const filledCount = filledFields?.length ?? 0;
+        const plannedCount = plannedFields?.length ?? 0;
+        const ok = response.ok === true;
+        const blocked = !ok;
+        let status: QaValidationRunEntry["status"];
+        let summary: string;
+        if (blocked) {
+          status = "blocked";
+          const reason =
+            response.launch?.blockedReason ??
+            response.fieldInspection?.blockedReason ??
+            response.defaultPlan?.blockedReason ??
+            response.runtime?.blockedReason ??
+            "unknown";
+          summary = `${operatorActionDisplayAction(action)} blocked: ${operatorSanitizeBlockedReason(reason)}`;
+        } else {
+          status = "ok";
+          if (action === "launch") {
+            summary = "App launch ok, browser ready";
+          } else if (action === "verify") {
+            summary = `Page inspected${plannedCount > 0 ? `, ${plannedCount} allowed fields planned` : ""}`;
+          } else {
+            summary = `${filledCount} allowed fields filled, no prohibited action`;
+          }
+        }
+        // Keep only the last 20 entries
+        return [...prev.slice(-19), { id: runId, timestamp, action, status, sanitizedSummary: summary, plannedFieldCount: plannedCount || undefined, filledFieldCount: filledCount || undefined }];
+      });
+    }
   }
 
   function finishOperatorAction(actionSequence: number, finalState: OperatorActionFinalState) {
@@ -3553,6 +3608,71 @@ export function App({
               <span>{workbenchCopy.list.recent}</span>
             </div>
 
+            <section className="workbench-intake-selector" aria-label="Intake source">
+              <div className="workbench-intake-selector-row">
+                <select
+                  aria-label="Select intake source type"
+                  className="workbench-intake-select"
+                  value={selectedIntakeKind}
+                  onChange={(event) => {
+                    setSelectedIntakeKind(event.currentTarget.value as IntakeSourceKind);
+                    setIntakeRawText("");
+                  }}
+                >
+                  {IntakeSourceKinds.map((kind) => {
+                    const adapter = sourceAdapterRegistry[kind];
+                    return (
+                      <option key={kind} value={kind}>
+                        {adapter.meta.label}
+                      </option>
+                    );
+                  })}
+                </select>
+                <textarea
+                  aria-label="Paste or type intake content"
+                  className="workbench-intake-textarea"
+                  placeholder="Paste content from the selected source type…"
+                  value={intakeRawText}
+                  onChange={(event) => setIntakeRawText(event.currentTarget.value)}
+                  rows={2}
+                />
+                <div className="workbench-intake-actions">
+                  <span className="workbench-intake-safety-notice">{sourceAdapterRegistry[selectedIntakeKind].meta.safetyNotice}</span>
+                  <button
+                    type="button"
+                    className="workbench-intake-capture-btn"
+                    disabled={intakeRawText.trim().length === 0}
+                    onClick={() => {
+                      const adapter = sourceAdapterRegistry[selectedIntakeKind];
+                      const ctx = adapter.capture({ rawText: intakeRawText.trim() });
+                      setCapturedContexts((prev) => [ctx, ...prev]);
+                      setIntakeRawText("");
+                    }}
+                  >
+                    Capture as source
+                  </button>
+                </div>
+              </div>
+              {capturedContexts.length > 0 && (
+                <div className="workbench-captured-contexts">
+                  <span className="workbench-captured-count">
+                    {capturedContexts.length} captured
+                  </span>
+                  {capturedContexts.slice(0, 3).map((ctx) => (
+                    <div key={ctx.id} className="workbench-captured-item">
+                      <small>
+                        {sourceAdapterRegistry[ctx.sourceType as IntakeSourceKind]?.meta.label ?? ctx.sourceType}
+                        {" · "}
+                        {ctx.rawText.length > 80
+                          ? ctx.rawText.slice(0, 80) + "…"
+                          : ctx.rawText}
+                      </small>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
             <section className="workbench-source-list-shell" aria-labelledby="source-list-title">
               <div className="workbench-list-heading">
                 <h3 id="source-list-title">{workbenchCopy.list.today}</h3>
@@ -3697,6 +3817,7 @@ export function App({
               targetConfigured={targetConfigured}
               workbenchCopy={workbenchCopy}
               workbenchEnvironmentLabel={workbenchEnvironmentLabel}
+              validationRunHistory={validationRunHistory}
             />
           )}
         </section>
@@ -5313,6 +5434,7 @@ type OperatorStaticPageContent = {
   heroBody: string;
   stats: { label: string; value: string }[];
   detailCards: { title: string; body: string }[];
+  validationRuns?: QaValidationRunEntry[];
   contextTitle: string;
   contextItems: string[];
   footerNote: string;
@@ -5325,7 +5447,8 @@ function buildOperatorStaticPageContent({
   selectedQueueItem,
   targetConfigured,
   workbenchCopy,
-  workbenchEnvironmentLabel
+  workbenchEnvironmentLabel,
+  validationRunHistory
 }: {
   draft: TicketDraft;
   page: Exclude<OperatorWorkbenchPageKey, "workbench">;
@@ -5334,6 +5457,7 @@ function buildOperatorStaticPageContent({
   targetConfigured: boolean;
   workbenchCopy: OperatorWorkbenchCopy;
   workbenchEnvironmentLabel: string;
+  validationRunHistory: QaValidationRunEntry[];
 }): OperatorStaticPageContent {
   switch (page) {
     case "inbox":
@@ -5391,11 +5515,14 @@ function buildOperatorStaticPageContent({
         contextItems: ["Do not paste raw KB exports", "Keep customer-facing notes concise", "Use Work Notes for internal checks"],
         footerNote: "Knowledgebase is local reference copy; it does not fetch ServiceNow articles."
       };
-    case "history":
+    case "history": {
+      const validationRuns = validationRunHistory.slice(-10).reverse();
+      const okRuns = validationRunHistory.filter((r) => r.status === "ok").length;
+      const blockedRuns = validationRunHistory.filter((r) => r.status === "blocked").length;
       return {
         eyebrow: workbenchCopy.nav.history,
         title: "History timeline",
-        description: "A quiet local timeline for recent reviewed copies and skipped sources.",
+        description: "A quiet local timeline for recent reviewed copies, skipped sources, and validation runs.",
         icon: "history",
         sidebarTitle: "Recent activity",
         sidebarItems: queueItems.slice(0, 5).map((item) => ({
@@ -5407,16 +5534,21 @@ function buildOperatorStaticPageContent({
         stats: [
           { label: "Reviewed", value: String(queueItems.filter((item) => item.status === "Done" || item.status === "Drafted").length) },
           { label: "Waiting", value: String(queueItems.filter((item) => item.status === "Reviewed").length) },
-          { label: "Skipped", value: String(queueItems.filter((item) => item.status === "Skipped").length) }
+          { label: "Skipped", value: String(queueItems.filter((item) => item.status === "Skipped").length) },
+          { label: "Validation runs", value: String(validationRunHistory.length) },
+          { label: "Passed", value: String(okRuns) },
+          { label: "Blocked", value: String(blockedRuns) }
         ],
         detailCards: [
           { title: "Latest draft", body: operatorSafeDisplayText(draft.shortDescription.value) },
           { title: "Browser evidence", body: "Browser rail remains the source of truth for Start, Check Page, and Autofill readiness." }
         ],
+        validationRuns: validationRuns.length > 0 ? validationRuns : undefined,
         contextTitle: "Recent outcomes",
         contextItems: ["Show status labels, not raw URLs", "Keep page-check details hidden", "Do not imply Save/Submit/Update/Resolve/Close approval"],
         footerNote: "History is a local operator aid, not a ServiceNow audit log."
       };
+    }
     case "search":
       return {
         eyebrow: workbenchCopy.nav.search,
@@ -5455,7 +5587,8 @@ function OperatorStaticPage({
   selectedQueueItem,
   targetConfigured,
   workbenchCopy,
-  workbenchEnvironmentLabel
+  workbenchEnvironmentLabel,
+  validationRunHistory
 }: {
   draft: TicketDraft;
   page: Exclude<OperatorWorkbenchPageKey, "workbench">;
@@ -5464,6 +5597,7 @@ function OperatorStaticPage({
   targetConfigured: boolean;
   workbenchCopy: OperatorWorkbenchCopy;
   workbenchEnvironmentLabel: string;
+  validationRunHistory: QaValidationRunEntry[];
 }) {
   const content = buildOperatorStaticPageContent({
     draft,
@@ -5472,7 +5606,8 @@ function OperatorStaticPage({
     selectedQueueItem,
     targetConfigured,
     workbenchCopy,
-    workbenchEnvironmentLabel
+    workbenchEnvironmentLabel,
+    validationRunHistory
   });
   const titleId = `${page}-page-title`;
 
@@ -5525,6 +5660,51 @@ function OperatorStaticPage({
             </section>
           ))}
         </div>
+        {content.validationRuns ? (
+          <section className="workbench-page-validation-runs" aria-labelledby="validation-runs-title">
+            <div className="validation-runs-header-row">
+              <h3 id="validation-runs-title">Validation / Run History</h3>
+              <div className="validation-runs-export-group">
+                <button
+                  className="workbench-secondary-button"
+                  type="button"
+                  onClick={() => {
+                    const md = exportValidationRunsToMarkdown(content.validationRuns ?? []);
+                    triggerStringDownload(md, `sna-validation-runs-${new Date().toISOString().slice(0, 10)}.md`, "text/markdown");
+                  }}
+                >
+                  Export MD
+                </button>
+                <button
+                  className="workbench-secondary-button"
+                  type="button"
+                  onClick={() => {
+                    const csv = exportValidationRunsToCsv(content.validationRuns ?? []);
+                    triggerStringDownload(csv, `sna-validation-runs-${new Date().toISOString().slice(0, 10)}.csv`, "text/csv");
+                  }}
+                >
+                  Export CSV
+                </button>
+              </div>
+            </div>
+            <div className="validation-runs-table" role="list">
+              <div className="validation-runs-header" role="row">
+                <span>Time</span>
+                <span>Action</span>
+                <span>Result</span>
+                <span>Details</span>
+              </div>
+              {content.validationRuns.map((run) => (
+                <div key={run.id} className={`validation-run-row ${run.status}`} role="listitem">
+                  <span className="validation-run-time">{run.timestamp}</span>
+                  <span className="validation-run-action">{operatorActionDisplayAction(run.action)}</span>
+                  <span className={`validation-run-status ${run.status}`}>{run.status.toUpperCase()}</span>
+                  <span className="validation-run-summary">{run.sanitizedSummary}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </article>
 
       <aside className="workbench-page-context-panel" aria-label={`${content.title} context panel`}>
@@ -5930,6 +6110,87 @@ function operatorActionLabel(action: OperatorAction): string {
     case "autofill":
       return "Autofill allowed fields";
   }
+}
+
+export function operatorActionDisplayAction(action: OperatorAction): string {
+  switch (action) {
+    case "launch":
+      return "Browser launch";
+    case "verify":
+      return "Page check";
+    case "autofill":
+      return "Autofill";
+  }
+}
+
+export function operatorSanitizeBlockedReason(reason: string): string {
+  // Map internal reason codes to sanitized plain-language descriptions
+  switch (reason) {
+    case "dedicated-browser-runtime-missing":
+      return "dedicated browser runtime unavailable";
+    case "qa-runtime-required":
+      return "production mode is read-only; switch to QA workspace";
+    case "cdp-endpoint-denied":
+      return "test browser disconnected; restart browser";
+    case "cdp-page-selection-denied":
+      return "could not find one unique approved Incident tab in the test browser";
+    case "no-default-plan":
+      return "could not build default autofill plan; no fields matched";
+    case "browser-step-timeout":
+      return "operation timed out; no ServiceNow action was taken";
+    case "approval-stale-after-page-change":
+      return "page changed after approval; re-check the current ticket page";
+    default:
+      // Use a generic sanitized fallback that doesn't leak internal codes
+      return "operation could not complete; retry from the browser action rail";
+  }
+}
+
+export function exportValidationRunsToMarkdown(runs: QaValidationRunEntry[]): string {
+  if (runs.length === 0) {
+    return "# Validation Runs\n\nNo validation runs recorded.\n";
+  }
+  const header = "| Time | Action | Result | Details |";
+  const separator = "|------|--------|--------|---------|";
+  const rows = runs
+    .slice()
+    .reverse()
+    .map(
+      (run) =>
+        `| ${run.timestamp} | ${operatorActionDisplayAction(run.action)} | ${run.status.toUpperCase()} | ${run.sanitizedSummary} |`
+    );
+  return ["# Validation Runs\n", header, separator, ...rows, ""].join("\n");
+}
+
+export function exportValidationRunsToCsv(runs: QaValidationRunEntry[]): string {
+  if (runs.length === 0) {
+    return "Time,Action,Result,Details\n";
+  }
+  const header = "Time,Action,Result,Details";
+  const rows = runs
+    .slice()
+    .reverse()
+    .map((run) => {
+      const time = run.timestamp.replace(/,/g, " ");
+      const action = operatorActionDisplayAction(run.action).replace(/,/g, " ");
+      const status = run.status.toUpperCase();
+      const summary = run.sanitizedSummary.replace(/,/g, ";").replace(/"/g, '""');
+      return `${time},${action},${status},"${summary}"`;
+    });
+  return [header, ...rows, ""].join("\n");
+}
+
+function triggerStringDownload(content: string, filename: string, mimeType: string): void {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
 }
 
 function operatorActionWorkingDetails(action: OperatorAction): string {

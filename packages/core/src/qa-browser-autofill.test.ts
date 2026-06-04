@@ -481,6 +481,36 @@ describe("QA browser-assisted text-field autofill gate", () => {
       fields: [{ ...fields[0], visibleSelectorCount: 2 }, fields[1], fields[2]]
     }).blockedReason).toBe("selector-mismatch");
   });
+
+  it("strips evidence and field values from output (sanitized evidence mode)", () => {
+    const plan = readyPlan();
+    const serialized = JSON.stringify(plan);
+    const fixtureResult = executeQaTextFieldAutofillFixture(plan, {
+      fields: [
+        { key: "shortDescription", matchedSelectorCount: 1, elementType: "text", writable: true },
+        { key: "description", matchedSelectorCount: 1, elementType: "textarea", writable: true },
+        { key: "workNotes", matchedSelectorCount: 1, elementType: "textarea", writable: true }
+      ],
+      unexpectedRequiredFieldCount: 0
+    });
+    const fixtureSerialized = JSON.stringify(fixtureResult);
+
+    expect(plan.status).toBe("ready-for-autofill");
+    expect(serialized).not.toContain("evidence");
+    expect(fixtureResult.status).toBe("completed");
+    expect(fixtureResult.filledFields.every((field) => field.value === undefined)).toBe(true);
+    expect(fixtureResult.writeActionsAttempted).toBe(false);
+    expect(fixtureResult.artifactsCaptured).toBe(false);
+    expect(fixtureSerialized).not.toContain("VPN access issue after MFA change");
+    expect(fixtureSerialized).not.toContain("Fake sanitized VPN issue details");
+    expect(fixtureSerialized).not.toContain("Save");
+    expect(fixtureSerialized).not.toContain("Submit");
+    expect(fixtureSerialized).not.toContain("Update");
+    expect(fixtureSerialized).not.toContain("Resolve");
+    expect(fixtureSerialized).not.toContain("Close");
+    expect(fixtureSerialized).not.toContain("click()");
+    expect(fixtureSerialized).not.toContain("submit()");
+  });
 });
 
 function readyPlan() {
