@@ -1149,6 +1149,19 @@ describe("App", () => {
     expect(expandedRail).toContain("No ServiceNow polling, API write, or production notification");
   });
 
+  it("renders the What Changed panel toggle in the expanded runtime rail", () => {
+    const defaultShell = renderAppMarkup("en-US");
+    const expandedRail = renderAppMarkup("en-US", {
+      initialRuntimeRailExpanded: true
+    });
+
+    expect(defaultShell).not.toContain("What changed in this round");
+    expect(expandedRail).toContain("What changed in this round");
+    expect(expandedRail).toContain("runtime-what-changed");
+    expect(expandedRail).toContain("what-changed-toggle");
+    expect(expandedRail).not.toContain('id="what-changed-content"');
+  });
+
   it("applies the default template around generated draft content", () => {
     const queueItem = buildDemoQueueItems("en-US")[0];
     const draft = buildDraftForQueueItem(queueItem);

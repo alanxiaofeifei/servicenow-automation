@@ -2,42 +2,86 @@
 
 ## Purpose
 
-ServiceNow Automation helps a service desk agent convert scattered support context into a structured, editable Incident draft.
+ServiceNow Automation helps a service desk agent turn scattered support context into a structured, editable Incident draft.
 
-The P0 version is intentionally simple and stable: it uses manual paste, local demo knowledge articles, deterministic mock AI extraction, and a mock ServiceNow form.
+The current local demo is intentionally simple and stable: it uses manual paste, local demo knowledge articles, deterministic mock extraction, and a mock ServiceNow form. The workbench is organized as a warm-light three-column interface so the demo story is easy to follow.
 
-## How to use the P0 demo
+## Workbench map
+
+Left column
+- source / loading information feed
+- intake queue
+- todo list
+- history
+- mode / function switching
+- bottom-left settings access
+
+Center column
+- selected source detail
+- cleaned / normalized source text
+- generated TicketDraft
+- ServiceNow required / common field preview
+- autofill plan
+- KB / recommendation detail when selected
+
+Right column
+- runtime actions
+- Start QA Chromium
+- Verify current Incident
+- Autofill current Incident
+- templates / settings
+- CDP readiness status
+- safety boundary
+- environment controls
+- recent run evidence
+
+## How to use the local demo
 
 1. Open the desktop app.
-2. Choose one scenario:
-   - Load VPN Demo
-   - Load Windows Demo
-   - Load Mock Account Access Demo — no browser login
-3. Review the captured context.
-4. Review and edit the TicketDraft fields.
-5. Check KB Matches, Missing Info, and Risk Flags.
-6. Read the Risk Control Gate.
-7. Confirm human review before fill.
-8. Use the mock ServiceNow form to rehearse how fields would map.
-9. Do not treat the mock form as production submission.
+2. Configure the settings if needed:
+   - QA URL
+   - Dev URL
+   - Production URL
+   - default environment
+   - safety state
+3. Choose one fake scenario from the intake queue.
+4. Review the selected source and the cleaned source.
+5. Review the TicketDraft and the field preview.
+6. Check the KB / recommendation detail.
+7. Use the runtime rail in order:
+   - Start QA Chromium
+   - Verify current Incident
+   - Autofill current Incident
+8. Read the recent run evidence before handing control back to the human.
+9. Keep the final ServiceNow action manual.
 
 ## Expected output
 
 The tool should show:
 
-- Short Description
-- Description
-- Work Notes
-- Category
-- Subcategory
-- Assignment Group
-- Impact
-- Urgency
-- Priority
-- KB Matches
-- Missing Info questions
-- Risk Flags
-- Mock ServiceNow Incident form
+- source / loading feed
+- intake queue
+- todo list
+- history
+- selected source detail
+- cleaned source
+- TicketDraft
+- required / common field preview
+- autofill plan
+- KB recommendation detail
+- runtime controls
+- CDP readiness
+- safety boundary
+- recent run evidence
+
+## Safety notes
+
+- Manual review remains required.
+- Fake, local-only demo data only.
+- No external writes.
+- No Save / Submit / Update / Resolve / Close automation.
+- No ServiceNow API writes.
+- No real ServiceNow URLs, ticket IDs, sys_ids, cookies, sessions, or page fingerprints in the demo.
 
 ## QA/dev testing note
 

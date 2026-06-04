@@ -3865,6 +3865,99 @@ body {
   margin-top: 4px;
 }
 
+.runtime-what-changed {
+  background: #f8f6f0;
+  border: 1px solid rgba(220, 215, 200, 0.7);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.what-changed-toggle {
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--sna-text);
+  cursor: pointer;
+  display: flex;
+  font-size: 13px;
+  gap: 8px;
+  padding: 10px 11px;
+  text-align: left;
+  width: 100%;
+}
+
+.what-changed-toggle > .workbench-svg-icon {
+  color: var(--sna-muted);
+  flex-shrink: 0;
+  height: 16px;
+  transition: transform 0.18s ease;
+  width: 16px;
+}
+
+.what-changed-toggle[aria-expanded="true"] > .workbench-svg-icon {
+  transform: rotate(90deg);
+}
+
+.what-changed-toggle h3 {
+  font-size: 13px;
+  font-weight: 500;
+  margin: 0;
+}
+
+.what-changed-content {
+  border-top: 1px solid rgba(220, 215, 200, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 11px 12px;
+}
+
+.what-changed-content > p {
+  color: var(--sna-text);
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 8px 0 0;
+}
+
+.what-changed-section {
+  color: var(--sna-text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.what-changed-limits {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.what-changed-limits li {
+  color: var(--sna-muted);
+  font-size: 12px;
+  line-height: 1.38;
+  padding-left: 12px;
+  position: relative;
+}
+
+.what-changed-limits li::before {
+  content: "•";
+  left: 0;
+  position: absolute;
+}
+
+.what-changed-footer {
+  color: var(--sna-green-dark);
+  font-size: 12px;
+  font-weight: 500;
+  margin: 0;
+}
+
 .settings-sidebar {
   background: rgba(255, 253, 248, 0.98);
   border: 1px solid rgba(230, 218, 199, 0.95);

@@ -2,40 +2,40 @@
 
 ## 1. Opening
 
-Service desk agents spend time turning scattered support context into clean ServiceNow tickets. This demo shows a human-in-the-loop workbench that converts pasted issue context into an editable Incident draft, matches local knowledge articles, and fills a safe mock ServiceNow form.
+Service desk agents spend time turning scattered support context into clean ServiceNow tickets. This demo shows a local-only operator workbench that turns pasted issue context into an editable TicketDraft, keeps the current work visible in three columns, and preserves the human-in-the-loop safety boundary.
 
 ## 2. Safety statement
 
-This is not an auto-submitter. The tool automates drafting, not accountability. Final operation remains manual. Do not show real ServiceNow pages, real tickets, customer data, browser endpoints, page fingerprints, cookies, sessions, HARs, traces, screenshots, or recordings during the demo.
+This is manual, fake, and local only. The demo drafts and fills allowed text fields, but the human still reviews and submits in ServiceNow. Do not show real ServiceNow pages, real tickets, customer data, browser endpoints, page fingerprints, cookies, sessions, HARs, traces, screenshots, or recordings during the demo.
 
-This demo explicitly forbids Save, Submit, Update, Resolve, Close, upload, email, bulk action, and any ServiceNow API write.
+Never present Save, Submit, Update, Resolve, Close, upload, email, bulk action, or any ServiceNow API write as part of the product.
 
-## 3. VPN scenario
+## 3. Walkthrough narrative
 
-1. Click **Load VPN Demo**.
-2. Show the raw pasted context.
-3. Show the generated TicketDraft.
-4. Point out Short Description, Description, Work Notes, Category, Subcategory, Assignment Group, and Priority.
-5. Show the VPN KB match.
-6. Edit one draft field to prove the agent remains in control.
-7. Read the Risk Control Gate.
-8. Confirm human review before fill.
-9. Show the mock ServiceNow Incident form.
-10. Point out that submit is disabled in demo mode.
+1. Start in the left column and show the intake queue, todo list, and history.
+2. Pick one fake source item and point to the source / loading feed.
+3. Move to the center column and show the selected source detail, cleaned source, and TicketDraft.
+4. Explain the field preview: required fields, common fields, and the autofill plan.
+5. Open the KB / recommendation area and show why the draft is being suggested.
+6. Move to the right column and show the runtime actions: Start QA Chromium, Verify current Incident, and Autofill current Incident.
+7. Point out the CDP readiness status and the plain-language disabled reasons.
+8. Expand the What changed panel and say what was improved in this round.
+9. Show the recent run evidence area as a sanitized, local-only log of progress.
+10. Close by explaining that the human still reviews and submits in ServiceNow.
 
 ## 4. Quick second and third scenarios
 
 Briefly switch to:
 
-- Windows Demo
-- Mock Account Access Issue Demo — no browser login
+- Windows issue demo
+- Account access / login issue demo — still fake and local only
 
-Explain that the same flow applies to common service desk triage categories.
+Explain that the same intake → cleaned source → TicketDraft → KB recommendation → evidence story applies to common service desk triage categories.
 
 ## 5. Business value line
 
-The value is reduced repetitive ticket writing, more consistent field selection, better work notes, and safer handoff to support teams.
+The value is less repetitive ticket writing, clearer reviewable drafts, stronger safety boundaries, and a demo that reads like a real operator workflow instead of a vertical stack of unrelated panels.
 
-## 6. Interview closing line
+## 6. Closing line
 
-This project demonstrates how I combine real service desk workflow understanding with practical AI-assisted automation design while respecting ITSM control boundaries.
+This project demonstrates a warm-light, human-in-the-loop ServiceNow workbench where AI helps draft and fill allowed fields, while the human remains in control of the actual ServiceNow record.

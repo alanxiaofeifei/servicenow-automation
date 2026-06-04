@@ -1736,7 +1736,21 @@ const englishOperatorWorkbenchCopy = {
     sanitizedEvidence: "Sanitized browser status evidence available.",
     noEvidence: "No browser status evidence yet; only sanitized status is shown.",
     safetyTitle: "Safety note",
-    safetyNote: "AI drafts and fills allowed text fields only. Human reviews and handles the record in ServiceNow. No Save, Submit, Update, Resolve, Close, upload, email, or ServiceNow API is automated."
+    safetyNote: "AI drafts and fills allowed text fields only. Human reviews and handles the record in ServiceNow. No Save, Submit, Update, Resolve, Close, upload, email, or ServiceNow API is automated.",
+    whatChanged: {
+      title: "What changed in this round",
+      summary: "This workbench has been hardened through multiple rounds of automated checks and manual validation since the last release. Every test of the automation proves it is safe and visible before any fill action.",
+      whyRepeatedValidation: "Manual checks are repeated because every ServiceNow session, browser profile, and ticket page is different. The app always validates the current page before any fill, so a stolen session or wrong window cannot trigger accidental data entry.",
+      whatIsAutomated: "Automated: browser launch, page verification, text-field checks, and autofill of allowed Short description, Description, and Work notes fields.",
+      whatIsHumanOnly: "Human-only: reading the ticket, judging its severity, typing not-allowed fields, saving, submitting, updating, resolving, closing, emailing, attachments, and any ServiceNow API write.",
+      doesNotDo: [
+        "This app does NOT save, submit, update, resolve, or close any ServiceNow record.",
+        "It does NOT upload attachments, send emails, or trigger ServiceNow API writes.",
+        "It does NOT access production data — it reads only the visible QA page in a dedicated browser profile.",
+        "All automated actions are limited to text-field fills after a verified page check."
+      ],
+      footer: "Human reviews and manually submits in ServiceNow."
+    }
   },
   settings: {
     ariaLabel: "Workbench settings",
@@ -1891,7 +1905,21 @@ const operatorWorkbenchTranslations = {
       sanitizedEvidence: "仅显示已清理的浏览器状态证据。",
       noEvidence: "暂无浏览器状态证据；仅显示已清理状态。",
       safetyTitle: "安全说明",
-      safetyNote: "AI 仅起草并填入允许的文本字段。人工审核并在 ServiceNow 中处理记录。"
+      safetyNote: "AI 仅起草并填入允许的文本字段。人工审核并在 ServiceNow 中处理记录。",
+      whatChanged: {
+        title: "本轮更新内容",
+        summary: "自上次发布以来，该工作台已通过多轮自动化检查和手动验证不断完善。每次自动化测试都证明在填充前的安全性和可见性。",
+        whyRepeatedValidation: "每次 ServiceNow 会话、浏览器 Profile 和工单页面都不同，因此必须重复手动检查。应用始终在填充前验证当前页面，防止被盗会话或错误窗口触发意外数据录入。",
+        whatIsAutomated: "已自动化：启动浏览器、页面验证、文本字段检查、允许字段（短描述、描述、工作备注）的自动填充。",
+        whatIsHumanOnly: "仅人工操作：阅读工单、判断严重级别、输入不允许字段、保存、提交、更新、解决、关闭、发送邮件、附件以及任何 ServiceNow API 写入。",
+        doesNotDo: [
+          "此应用不会保存、提交、更新、解决或关闭任何 ServiceNow 记录。",
+          "不会上传附件、发送邮件或触发 ServiceNow API 写入。",
+          "不会访问生产数据——仅读取专用浏览器 Profile 中可见的 QA 页面。",
+          "所有自动化操作仅限于页面验证后的文本字段填充。"
+        ],
+        footer: "由人工审核并在 ServiceNow 中手动提交。"
+      }
     },
     settings: {
       ariaLabel: "工作台设置",
@@ -2043,7 +2071,21 @@ const operatorWorkbenchTranslations = {
       sanitizedEvidence: "僅顯示已清理的瀏覽器狀態證據。",
       noEvidence: "尚無瀏覽器狀態證據；僅顯示已清理狀態。",
       safetyTitle: "安全說明",
-      safetyNote: "AI 僅起草並填入允許的文字欄位。人工審核並在 ServiceNow 中處理記錄。"
+      safetyNote: "AI 僅起草並填入允許的文字欄位。人工審核並在 ServiceNow 中處理記錄。",
+      whatChanged: {
+        title: "本輪更新內容",
+        summary: "自上次發佈以來，該工作臺已透過多輪自動化檢查和手動驗證不斷完善。每次自動化測試都證明了填入前的安全性和可見性。",
+        whyRepeatedValidation: "每次 ServiceNow 會話、瀏覽器 Profile 和工單頁面都不同，因此必須重複手動檢查。應用始終在填入前驗證目前頁面，防止被盜會話或錯誤視窗觸發意外資料录入。",
+        whatIsAutomated: "已自動化：啟動瀏覽器、頁面驗證、文字欄位檢查、允許欄位（短描述、描述、工作備註）的自動填入。",
+        whatIsHumanOnly: "僅人工操作：閱讀工單、判斷嚴重級別、輸入不允許欄位、儲存、提交、更新、解決、關閉、發送郵件、附件以及任何 ServiceNow API 寫入。",
+        doesNotDo: [
+          "此應用不會儲存、提交、更新、解決或關閉任何 ServiceNow 記錄。",
+          "不會上傳附件、發送郵件或觸發 ServiceNow API 寫入。",
+          "不會存取生產資料——僅讀取專用瀏覽器 Profile 中可見的 QA 頁面。",
+          "所有自動化操作僅限於頁面驗證後的文字欄位填入。"
+        ],
+        footer: "由人工審核並在 ServiceNow 中手動提交。"
+      }
     },
     settings: {
       ariaLabel: "工作臺設定",
@@ -2195,7 +2237,21 @@ const operatorWorkbenchTranslations = {
       sanitizedEvidence: "Solo evidencia depurada del estado del navegador.",
       noEvidence: "Sin evidencia del estado del navegador; solo se muestra estado depurado.",
       safetyTitle: "Nota de seguridad",
-      safetyNote: "La IA redacta y rellena solo campos de texto permitidos. El humano revisa y maneja el registro en ServiceNow."
+      safetyNote: "La IA redacta y rellena solo campos de texto permitidos. El humano revisa y maneja el registro en ServiceNow.",
+      whatChanged: {
+        title: "Qué cambió en esta ronda",
+        summary: "Este banco de trabajo se ha reforzado a través de múltiples rondas de comprobaciones automatizadas y validación manual desde la última versión. Cada prueba de la automatización demuestra que es segura y visible antes de cualquier acción de relleno.",
+        whyRepeatedValidation: "Las comprobaciones manuales se repiten porque cada sesión de ServiceNow, perfil de navegador y página de ticket es diferente. La aplicación siempre valida la página actual antes de rellenar, por lo que una sesión robada o una ventana incorrecta no pueden desencadenar una entrada de datos accidental.",
+        whatIsAutomated: "Automatizado: lanzamiento del navegador, verificación de página, comprobaciones de campos de texto y autocompletado de los campos permitidos Descripción corta, Descripción y Notas de trabajo.",
+        whatIsHumanOnly: "Solo humano: leer el ticket, juzgar su gravedad, escribir campos no permitidos, guardar, enviar, actualizar, resolver, cerrar, enviar correos electrónicos, adjuntos y cualquier escritura de API de ServiceNow.",
+        doesNotDo: [
+          "Esta aplicación NO guarda, envía, actualiza, resuelve ni cierra ningún registro de ServiceNow.",
+          "No carga archivos adjuntos, envía correos electrónicos ni activa escrituras de API de ServiceNow.",
+          "No accede a datos de producción: solo lee la página QA visible en un perfil de navegador dedicado.",
+          "Todas las acciones automatizadas se limitan al relleno de campos de texto después de una verificación de página."
+        ],
+        footer: "El humano revisa y envía manualmente en ServiceNow."
+      }
     },
     settings: {
       ariaLabel: "Configuración del banco de trabajo",
@@ -6471,6 +6527,7 @@ function QaOperatorRuntimePanel({
   targetLabel: string;
   workbenchCopy: OperatorWorkbenchCopy;
 }) {
+  const [whatChangedExpanded, setWhatChangedExpanded] = useState(false);
   const canUseRuntime = isQaWorkbenchMode(mode);
   const qaBoundCdpEndpointReady = canUseRuntime && cdpEndpointReady;
   const qaBoundVerifiedPageFingerprintReady = qaBoundCdpEndpointReady && verifiedPageFingerprintReady;
@@ -6644,6 +6701,39 @@ function QaOperatorRuntimePanel({
           <h3 id="runtime-safety-title">{workbenchCopy.runtime.safetyTitle}</h3>
           <p>{workbenchCopy.runtime.safetyNote}</p>
         </div>
+      </section>
+
+      <section className="runtime-what-changed" aria-labelledby="what-changed-title">
+        <button
+          aria-expanded={whatChangedExpanded}
+          aria-controls="what-changed-content"
+          className="what-changed-toggle"
+          type="button"
+          onClick={() => setWhatChangedExpanded((current) => !current)}
+        >
+          <WorkbenchIcon name="chevron" />
+          <h3 id="what-changed-title">{workbenchCopy.runtime.whatChanged.title}</h3>
+        </button>
+        {whatChangedExpanded && (
+          <div id="what-changed-content" className="what-changed-content">
+            <p>{workbenchCopy.runtime.whatChanged.summary}</p>
+            <div className="what-changed-section">
+              <strong>{workbenchCopy.runtime.whatChanged.whatIsAutomated}</strong>
+            </div>
+            <div className="what-changed-section">
+              <strong>{workbenchCopy.runtime.whatChanged.whatIsHumanOnly}</strong>
+            </div>
+            <div className="what-changed-section">
+              <strong>{workbenchCopy.runtime.whatChanged.whyRepeatedValidation}</strong>
+            </div>
+            <ul className="what-changed-limits">
+              {workbenchCopy.runtime.whatChanged.doesNotDo.map((item, i) => (
+                <li key={i}>{item}</li>
+              ))}
+            </ul>
+            <p className="what-changed-footer">{workbenchCopy.runtime.whatChanged.footer}</p>
+          </div>
+        )}
       </section>
     </section>
   );
