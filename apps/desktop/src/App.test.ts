@@ -19,6 +19,7 @@ import {
   draftTemplatePresets,
   exportValidationRunsToCsv,
   exportValidationRunsToMarkdown,
+  exportProductReviewReport,
   getCtrlWheelZoomDelta,
   getDraftTextAreaRows,
   getHighSeveritySpeechReminderDecision,
@@ -140,6 +141,20 @@ describe("App", () => {
     expect(output).not.toContain("Current work item");
     expect(output).not.toContain("Operator Control Center");
     expect(output).not.toContain("Environment missing");
+  });
+
+  it("shows the Demo Scenario Library with demo-only labeled presets", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain('class="workbench-demo-library"');
+    expect(output).toContain("Demo Scenario Library");
+    expect(output).toContain("Demo only");
+    // Section renders with safety text and scenario meta
+    expect(output).toContain("Fake/local/demo data only");
+    expect(output).toContain("DEMO");
+    expect(output).toContain('aria-label="Use scenario:');
+    // All 6 demo manual paste scenarios render as clickable items
+    expect(output.split('aria-label="Use scenario:').length - 1).toBe(6);
   });
 
   it("renders rebuilt target-style Inbox, Knowledgebase, History, and Search pages", () => {
@@ -1385,5 +1400,77 @@ describe("App", () => {
     expect(csv).not.toContain("ticket ID");
     expect(csv).not.toContain("ServiceNow URL");
     expect(csv).not.toContain("INC");
+  });
+
+  it("exportProductReviewReport produces a complete Markdown report with all required sections", () => {
+    const queueItem = buildDemoQueueItems("en-US")[0];
+    const draft = buildDraftForQueueItem(queueItem);
+    const runs = [
+      { id: "vr-1", timestamp: "2026-06-05 00:00:00", action: "launch" as const, status: "ok" as const, sanitizedSummary: "App launch ok, browser ready" },
+      { id: "vr-2", timestamp: "2026-06-05 00:01:00", action: "verify" as const, status: "ok" as const, sanitizedSummary: "Page inspected, 8 allowed fields planned" },
+      { id: "vr-3", timestamp: "2026-06-05 00:02:00", action: "autofill" as const, status: "blocked" as const, sanitizedSummary: "Autofill blocked: approval phrase required" }
+    ];
+    const report = exportProductReviewReport(queueItem, draft, runs);
+
+    // Required sections
+    expect(report).toContain("# Product-Review Report");
+    expect(report).toContain("## Demo Scenario");
+    expect(report).toContain("## TicketDraft Summary");
+    expect(report).toContain("## KB / Support Recommendation");
+    expect(report).toContain("## Safety Boundary");
+    expect(report).toContain("## Validation Run Summary");
+    expect(report).toContain("## What This Proves");
+    expect(report).toContain("## What Remains Human-Only");
+    expect(report).toContain("## Export Safety Notice");
+
+    // Scenario info
+    expect(report).toContain(queueItem.scenarioId);
+    expect(report).toContain(queueItem.sourceChannel);
+
+    // Draft content
+    expect(report).toContain(draft.shortDescription.value);
+    expect(report).toContain("Local-only execution");
+    expect(report).toContain("No real ServiceNow write");
+
+    // Validation run data
+    expect(report).toContain("3"); // total runs
+    expect(report).toContain("2"); // passed
+    expect(report).toContain("1"); // blocked
+    expect(report).toContain("App launch ok, browser ready");
+
+    // Human-only language
+    expect(report).toContain("Final review of the TicketDraft");
+    expect(report).toContain("Save / Submit / Update / Resolve / Close in ServiceNow");
+    expect(report).toContain("Live ServiceNow configuration");
+
+    // Safety
+    expect(report).toContain("Blob download");
+    expect(report).toContain("no cloud write");
+  });
+
+  it("exportProductReviewReport handles empty validation runs gracefully", () => {
+    const queueItem = buildDemoQueueItems("en-US")[0];
+    const draft = buildDraftForQueueItem(queueItem);
+    const report = exportProductReviewReport(queueItem, draft, []);
+
+    expect(report).toContain("# Product-Review Report");
+    expect(report).toContain("Total runs");
+    expect(report).toContain("0");
+    expect(report).toContain("No validation runs recorded.");
+  });
+
+  it("exportProductReviewReport does not contain raw live identifiers", () => {
+    const queueItem = buildDemoQueueItems("en-US")[0];
+    const draft = buildDraftForQueueItem(queueItem);
+    const runs: { id: string; timestamp: string; action: "launch" | "verify" | "autofill"; status: "ok" | "blocked"; sanitizedSummary: string }[] = [];
+    const report = exportProductReviewReport(queueItem, draft, runs);
+
+    // The safety notice uses words like "credentials", "sys_ids", "password" to describe what's NOT included
+    // — those are acceptable in denial-of-presence context. Check only for actual prohibited patterns:
+    expect(report).not.toContain(".service-now.com");
+    expect(report).not.toContain("your-instance");
+    expect(report).not.toContain("admin");
+    expect(report).not.toContain("api_key");
+    expect(report).not.toContain("Bearer");
   });
 });

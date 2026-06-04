@@ -3729,6 +3729,42 @@ export function App({
               )}
             </section>
 
+            <details className="workbench-demo-library" aria-label="Demo Scenario Library">
+              <summary>
+                <span className="workbench-demo-library-heading">Demo Scenario Library</span>
+                <span className="workbench-demo-library-badge">Demo only</span>
+                <span aria-hidden="true" className="details-indicator">
+                  <WorkbenchIcon name="chevron" />
+                </span>
+              </summary>
+              <div className="workbench-demo-library-list">
+                {demoManualPasteScenarios.map((scenario) => {
+                  const isActive = selectedScenarioId === scenario.id;
+                  const scenarioChannel = sourceChannelForScenario(scenario.id);
+                  return (
+                    <button
+                      key={scenario.id}
+                      aria-current={isActive ? "true" : undefined}
+                      aria-label={`Use scenario: ${scenario.label}`}
+                      className={isActive ? "workbench-demo-item selected" : "workbench-demo-item"}
+                      type="button"
+                      onClick={() => selectScenario(scenario.id)}
+                    >
+                      <span className="workbench-demo-item-dot" aria-hidden="true" />
+                      <span className="workbench-demo-item-title">{scenario.label}</span>
+                      <span className="workbench-demo-item-meta">
+                        <span className="workbench-demo-item-channel">{scenarioChannel}</span>
+                        <span className="workbench-demo-item-tag">DEMO</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <small className="workbench-demo-library-safety">
+                Fake/local/demo data only. No real ServiceNow, Teams, mailbox, phone, or API connection.
+              </small>
+            </details>
+
             <section className="workbench-source-list-shell" aria-labelledby="source-list-title">
               <div className="workbench-list-heading">
                 <h3 id="source-list-title">{workbenchCopy.list.today}</h3>
@@ -5741,6 +5777,16 @@ function OperatorStaticPage({
                 >
                   Export CSV
                 </button>
+                <button
+                  className="workbench-secondary-button"
+                  type="button"
+                  onClick={() => {
+                    const report = exportProductReviewReport(selectedQueueItem, draft, content.validationRuns ?? []);
+                    triggerStringDownload(report, `sna-product-review-${new Date().toISOString().slice(0, 10)}.md`, "text/markdown");
+                  }}
+                >
+                  Export Product-Review Report
+                </button>
               </div>
             </div>
             <div className="validation-runs-table" role="list">
@@ -6234,6 +6280,137 @@ export function exportValidationRunsToCsv(runs: QaValidationRunEntry[]): string 
       return `${time},${action},${status},"${summary}"`;
     });
   return [header, ...rows, ""].join("\n");
+}
+
+export function exportProductReviewReport(
+  queueItem: DemoQueueItem,
+  draft: TicketDraft,
+  validationRuns: QaValidationRunEntry[],
+  style: "markdown" = "markdown"
+): string {
+  const okRuns = validationRuns.filter((r) => r.status === "ok").length;
+  const blockedRuns = validationRuns.filter((r) => r.status !== "ok").length;
+  const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
+
+  const draftDescription = operatorSafeDisplayText(draft.shortDescription.value);
+  const draftCategory = draft.category?.value ?? "(not set)";
+  const draftSubcategory = draft.subcategory?.value ?? "(not set)";
+  const draftPriority = draft.priority?.value ?? "(not set)";
+
+  return [
+    "# Product-Review Report",
+    "",
+    `Generated: ${timestamp}`,
+    `Demo mode: Yes — all data is local, sanitized, and deterministic.`,
+    "",
+    "---",
+    "",
+    "## Demo Scenario",
+    "",
+    `| Field | Value |`,
+    `|-------|-------|`,
+    `| Scenario ID | ${queueItem.scenarioId} |`,
+    `| Subject | ${operatorSafeDisplayText(queueItem.subject)} |`,
+    `| Source channel | ${queueItem.sourceChannel} |`,
+    `| Language | ${queueItem.sourceLanguage} |`,
+    `| Status | ${queueItem.status} |`,
+    `| Requester label | ${queueItem.requesterLabel} |`,
+    "",
+    "---",
+    "",
+    "## TicketDraft Summary",
+    "",
+    `| Field | Value |`,
+    `|-------|-------|`,
+    `| Short Description | ${draftDescription} |`,
+    `| Category | ${draftCategory} |`,
+    `| Subcategory | ${draftSubcategory} |`,
+    `| Priority | ${draftPriority} |`,
+    "",
+    "**Description preview:**",
+    "",
+    `> ${operatorSafeDisplayText(draft.description.value).slice(0, 500)}`,
+    "",
+    "---",
+    "",
+    "## KB / Support Recommendation",
+    "",
+    "The TicketDraft was built from the selected demo source using category mapping rules and demo knowledge-article matching. In a live ServiceNow environment, matching would query the configured KB sources. In this demo run, the matching used local deterministic mock knowledge articles.",
+    "",
+    "Category assigned via keyword matching on the source body and subject. Assignment group was derived from the category/issue mapping in the project profile. No real ServiceNow KB, assignment rules, or escalation logic were queried.",
+    "",
+    "---",
+    "",
+    "## Safety Boundary",
+    "",
+    "| Constraint | Status |",
+    "|------------|--------|",
+    "| Local-only execution | Active — no network calls, no cloud writes, no ServiceNow API |",
+    "| No real ServiceNow write | Enforced — Save, Submit, Update, Resolve, Close are absent or disabled in demo mode |",
+    "| No browser automation beyond Start / Check Page / Autofill | Enforced — runtime is constrained to approved actions only |",
+    "| No screenshots, HAR, traces, cookies, sessions, or storage export | Confirmed — validation entries track counts and sanitized summaries only |",
+    "| No real ticket identifiers | Confirmed — all data is demo/fake |",
+    "| No Excel / Graph / cloud workbook write | Confirmed — export uses browser Blob download only |",
+    "",
+    "---",
+    "",
+    "## Validation Run Summary",
+    "",
+    `| Metric | Count |`,
+    `|--------|-------|`,
+    `| Total runs | ${validationRuns.length} |`,
+    `| Passed | ${okRuns} |`,
+    `| Blocked / Error | ${blockedRuns} |`,
+    "",
+    validationRuns.length > 0
+      ? [
+          "**Recent runs (reverse-chronological):**",
+          "",
+          "| Time | Action | Result | Details |",
+          "|------|--------|--------|---------|",
+          ...validationRuns
+            .slice()
+            .reverse()
+            .slice(0, 10)
+            .map(
+              (run) =>
+                `| ${run.timestamp} | ${operatorActionDisplayAction(run.action)} | ${run.status.toUpperCase()} | ${run.sanitizedSummary} |`
+            ),
+          ""
+        ].join("\n")
+      : "No validation runs recorded.\n",
+    "---",
+    "",
+    "## What This Proves",
+    "",
+    "This report demonstrates that during this demo session:",
+    "",
+    "- The Service Desk intake-to-TicketDraft pipeline processed a source message and produced a structured incident draft (Short Description, Description, Work Notes, Category, Subcategory, Priority) deterministically from local mock data.",
+    "- The app applied category/assignment-group keyword mappings from a project profile — the same mappings that would be configured for a real ServiceNow deployment.",
+    "- The app matched the source text against a demo knowledge-article index and surfaced article titles relevant to the issue.",
+    "- Operator runtime actions (browser launch, page check, autofill) ran within the approved boundary: no prohibited actions were executed, no real ServiceNow writes occurred.",
+    "- All validation events were recorded as sanitized entries visible in the History page and exported here — proving the operator workflow completed without unauthorized side effects.",
+    "",
+    "---",
+    "",
+    "## What Remains Human-Only",
+    "",
+    "The following decisions and actions are NOT automated by this app and remain the responsibility of the human operator:",
+    "",
+    "1. **Final review of the TicketDraft** — the operator must read the generated Short Description, Description, and Work Notes, and edit them for accuracy before any real ServiceNow submission.",
+    "2. **Save / Submit / Update / Resolve / Close in ServiceNow** — these actions are not performed by the app. The operator manually submits the final ticket in the ServiceNow UI.",
+    "3. **Live KB / escalation check** — the app provides demo KB matches and category-based assignment groups  but does not resolve the ticket or make a final escalation decision. The operator must verify routing and KB articles against the live environment.",
+    "4. **Verification of real browser output** — the app inspects the page for approved fields and simulates fill, but the operator must visually confirm the data landed correctly in ServiceNow.",
+    "5. **Screenshots, evidence capture, HAR, traces** — the app does not capture or store any of these. The operator is responsible for gathering session evidence outside the app if needed.",
+    "6. **Live ServiceNow configuration** — the operator must configure the environment URL, profile mappings, and KB sources before any real run. The demo mode ships with mock data only.",
+    "",
+    "---",
+    "",
+    "## Export Safety Notice",
+    "",
+    "This report was generated locally from in-memory demo state. No real ServiceNow data, ticket numbers, sys_ids, credentials, URLs, or customer PII are included. The file was downloaded via browser Blob — no cloud write, no external API call, no Excel/Graph write.",
+    ""
+  ].join("\n");
 }
 
 function triggerStringDownload(content: string, filename: string, mimeType: string): void {
