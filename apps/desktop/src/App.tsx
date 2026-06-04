@@ -2,7 +2,7 @@ import { type CSSProperties, type PointerEvent as ReactPointerEvent, type WheelE
 
 import { demoManualPasteScenarios, type ManualPasteScenario } from "@servicenow-automation/adapters/browser";
 import { generateMockTicketDraft } from "@servicenow-automation/ai";
-import { demoKnowledgeArticles, searchKnowledgeArticles } from "@servicenow-automation/kb/browser";
+import { demoKnowledgeArticles, recommendSupportGroup, searchKnowledgeArticles } from "@servicenow-automation/kb/browser";
 import {
   getServiceNowEnvironmentConfig,
   serviceNowEnvironmentConfigs,
@@ -5433,35 +5433,64 @@ function buildOperatorStaticPageContent({
         contextItems: ["Confirm requester and source channel", "Check impact and urgency before routing", "Keep customer-visible comments separate from internal Work Notes"],
         footerNote: "Inbox is local and sanitized; it does not save or update ServiceNow."
       };
-    case "knowledge":
+    case "knowledge": {
+      const searchQuery = draft.shortDescription.value;
+      const kbMatches = searchKnowledgeArticles(searchQuery, demoKnowledgeArticles, { limit: 3 });
+      const supportGroups = recommendSupportGroup(kbMatches, demoKnowledgeArticles, profile.assignmentMappings);
+      const bestMatch = kbMatches[0];
+      const bestArticle = bestMatch
+        ? demoKnowledgeArticles.find((a) => a.id === bestMatch.articleId)
+        : undefined;
+
       return {
         eyebrow: workbenchCopy.nav.knowledge,
         title: "Knowledgebase snippets",
         description: "Small, page-like reference cards for the operator; no external KB query is performed from this UI.",
         icon: "knowledge",
-        sidebarTitle: "Pinned folders",
-        sidebarItems: [
-          { title: "VPN troubleshooting", meta: "3 local snippets" },
-          { title: "Password and MFA", meta: "2 local snippets" },
-          { title: "Windows endpoint", meta: "2 local snippets" },
-          { title: "Routing defaults", meta: workbenchEnvironmentLabel }
-        ],
-        heroTitle: "Suggested snippets for selected source",
-        heroBody: `Suggested context for: ${operatorSafeDisplayText(draft.shortDescription.value)}`,
+        sidebarTitle: kbMatches.length > 0 ? "Matched articles" : "No matches",
+        sidebarItems: kbMatches.length > 0
+          ? kbMatches.map((match) => ({
+              title: match.title,
+              meta: `score ${Math.round(match.score * 100)}% · ${match.matchedKeywords.join(", ")}`
+            }))
+          : [
+              { title: "VPN troubleshooting", meta: "No current match" },
+              { title: "Windows endpoint", meta: "No current match" },
+              { title: "Account/login", meta: "No current match" }
+            ],
+        heroTitle: supportGroups.length > 0
+          ? `Recommended: ${supportGroups[0].assignmentGroup}`
+          : "No support group recommendation",
+        heroBody: supportGroups.length > 0
+          ? `Confidence: ${Math.round(supportGroups[0].confidence * 100)}% · Evidence: ${supportGroups[0].evidence.join(", ")}`
+          : `Suggested context for: ${operatorSafeDisplayText(draft.shortDescription.value)}`,
         stats: [
-          { label: "Source language", value: languageDisplayLabel(selectedQueueItem.language) },
-          { label: "Mode", value: "local preview" },
-          { label: "Runtime", value: "manual verify required" }
+          ...supportGroups.slice(0, 2).map((g) => ({
+            label: `Route: ${g.assignmentGroup}`,
+            value: `${Math.round(g.confidence * 100)}% · ${g.evidence.join(", ")}`
+          })),
+          { label: "Source language", value: languageDisplayLabel(selectedQueueItem.language) }
         ],
-        detailCards: [
-          { title: "VPN connectivity troubleshooting", body: "Check password/MFA timing, VPN client error text, network reachability, and affected scope." },
-          { title: "Account and login troubleshooting", body: "Confirm recent password change, MFA prompt loop, lockout status, and user contact path." },
-          { title: "Windows endpoint troubleshooting", body: "Use only after confirming the issue is endpoint-specific rather than account or VPN service-wide." }
-        ],
-        contextTitle: "Suggested knowledge",
-        contextItems: ["Do not paste raw KB exports", "Keep customer-facing notes concise", "Use Work Notes for internal checks"],
+        detailCards: bestArticle
+          ? [
+              { title: `Handling steps: ${bestMatch!.title}`, body: bestArticle.checks.join(". ") },
+              { title: "Escalation criteria", body: bestArticle.escalationCriteria.join(". ") },
+              { title: "Response template", body: bestArticle.responseTemplate }
+            ]
+          : [
+              { title: "VPN connectivity troubleshooting", body: "Check password/MFA timing, VPN client error text, network reachability, and affected scope." },
+              { title: "Account and login troubleshooting", body: "Confirm recent password change, MFA prompt loop, lockout status, and user contact path." },
+              { title: "Windows endpoint troubleshooting", body: "Use only after confirming the issue is endpoint-specific rather than account or VPN service-wide." }
+            ],
+        contextTitle: "Matched keywords & evidence",
+        contextItems: kbMatches.length > 0
+          ? kbMatches.flatMap((m) =>
+              m.matchedKeywords.map((kw) => `"${kw}" in "${m.title}" (${Math.round(m.score * 100)}%)`)
+            )
+          : ["No keywords matched the current draft text"],
         footerNote: "Knowledgebase is local reference copy; it does not fetch ServiceNow articles."
       };
+    }
     case "history":
       return {
         eyebrow: workbenchCopy.nav.history,

@@ -141,7 +141,7 @@ describe("App", () => {
   it("renders rebuilt target-style Inbox, Knowledgebase, History, and Search pages", () => {
     const pageCases = [
       { key: "inbox", label: "Inbox", title: "Inbox triage", panel: "Triage checklist" },
-      { key: "knowledge", label: "Knowledgebase", title: "Knowledgebase snippets", panel: "Suggested knowledge" },
+      { key: "knowledge", label: "Knowledgebase", title: "Knowledgebase snippets", panel: "Matched keywords" },
       { key: "history", label: "History", title: "History timeline", panel: "Recent outcomes" },
       { key: "search", label: "Search", title: "Search workspace", panel: "Search tips" }
     ] as const;
