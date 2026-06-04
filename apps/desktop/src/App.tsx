@@ -14,15 +14,18 @@ import {
 } from "@servicenow-automation/profiles";
 import {
   CapturedContextSchema,
+  IntakeSourceKinds,
   buildExcelDryRunWorkbookArtifact,
   buildQaTextFieldAutofillPlan,
   buildServiceDeskWorkflowPreview,
   evaluateQaSingleTicketSmokePlan,
   getRequiredQaAutofillApprovalPhrase,
   normalizeSourceContextText,
+  sourceAdapterRegistry,
   type CapturedContext,
   type ExcelDryRunWorkbookArtifact,
   type FieldDraft,
+  type IntakeSourceKind,
   type ProjectProfile,
   type QaAutofillPlan,
   type QaIncidentDefaultScenario,
@@ -2823,6 +2826,9 @@ export function App({
   const leftSidebarHandleSuppressClickRef = useRef(false);
   const [runtimeRailExpanded, setRuntimeRailExpanded] = useState(initialRuntimeRailExpanded);
   const [selectedScenarioId, setSelectedScenarioId] = useState<ManualPasteScenario["id"]>("vpn-issue");
+  const [selectedIntakeKind, setSelectedIntakeKind] = useState<IntakeSourceKind>("manual_paste");
+  const [intakeRawText, setIntakeRawText] = useState("");
+  const [capturedContexts, setCapturedContexts] = useState<CapturedContext[]>([]);
   const [selectedQueueItemId, setSelectedQueueItemId] = useState(demoQueueDefinitions[0].id);
   const [queueStatuses, setQueueStatuses] = useState<Partial<Record<string, DemoQueueStatus>>>({});
   const queueItems = useMemo(() => buildDemoQueueItems(language, queueStatuses), [language, queueStatuses]);
@@ -3552,6 +3558,71 @@ export function App({
               <span>{workbenchCopy.list.waiting}</span>
               <span>{workbenchCopy.list.recent}</span>
             </div>
+
+            <section className="workbench-intake-selector" aria-label="Intake source">
+              <div className="workbench-intake-selector-row">
+                <select
+                  aria-label="Select intake source type"
+                  className="workbench-intake-select"
+                  value={selectedIntakeKind}
+                  onChange={(event) => {
+                    setSelectedIntakeKind(event.currentTarget.value as IntakeSourceKind);
+                    setIntakeRawText("");
+                  }}
+                >
+                  {IntakeSourceKinds.map((kind) => {
+                    const adapter = sourceAdapterRegistry[kind];
+                    return (
+                      <option key={kind} value={kind}>
+                        {adapter.meta.label}
+                      </option>
+                    );
+                  })}
+                </select>
+                <textarea
+                  aria-label="Paste or type intake content"
+                  className="workbench-intake-textarea"
+                  placeholder="Paste content from the selected source type…"
+                  value={intakeRawText}
+                  onChange={(event) => setIntakeRawText(event.currentTarget.value)}
+                  rows={2}
+                />
+                <div className="workbench-intake-actions">
+                  <span className="workbench-intake-safety-notice">{sourceAdapterRegistry[selectedIntakeKind].meta.safetyNotice}</span>
+                  <button
+                    type="button"
+                    className="workbench-intake-capture-btn"
+                    disabled={intakeRawText.trim().length === 0}
+                    onClick={() => {
+                      const adapter = sourceAdapterRegistry[selectedIntakeKind];
+                      const ctx = adapter.capture({ rawText: intakeRawText.trim() });
+                      setCapturedContexts((prev) => [ctx, ...prev]);
+                      setIntakeRawText("");
+                    }}
+                  >
+                    Capture as source
+                  </button>
+                </div>
+              </div>
+              {capturedContexts.length > 0 && (
+                <div className="workbench-captured-contexts">
+                  <span className="workbench-captured-count">
+                    {capturedContexts.length} captured
+                  </span>
+                  {capturedContexts.slice(0, 3).map((ctx) => (
+                    <div key={ctx.id} className="workbench-captured-item">
+                      <small>
+                        {sourceAdapterRegistry[ctx.sourceType as IntakeSourceKind]?.meta.label ?? ctx.sourceType}
+                        {" · "}
+                        {ctx.rawText.length > 80
+                          ? ctx.rawText.slice(0, 80) + "…"
+                          : ctx.rawText}
+                      </small>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
 
             <section className="workbench-source-list-shell" aria-labelledby="source-list-title">
               <div className="workbench-list-heading">

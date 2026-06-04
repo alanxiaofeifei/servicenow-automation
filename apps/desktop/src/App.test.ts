@@ -3,6 +3,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { demoManualPasteScenarios } from "@servicenow-automation/adapters/browser";
+import {
+  IntakeSourceKinds,
+  sourceAdapterRegistry,
+} from "@servicenow-automation/core";
 
 import {
   App,
@@ -1183,5 +1187,44 @@ describe("App", () => {
       writeAction: "submit_incident",
       approvalPhrase: ""
     });
+  });
+
+  it("renders the intake source type selector in the sidebar", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain('class="workbench-intake-selector"');
+    expect(output).toContain('aria-label="Intake source"');
+    expect(output).toContain('class="workbench-intake-select"');
+    expect(output).toContain('aria-label="Select intake source type"');
+  });
+
+  it("renders all 6 intake source kinds as select options", () => {
+    const output = renderAppMarkup();
+
+    for (const kind of IntakeSourceKinds) {
+      const adapter = sourceAdapterRegistry[kind];
+      expect(output).toContain(`value="${kind}"`);
+      expect(output).toContain(adapter.meta.label);
+    }
+  });
+
+  it("shows the safety notice on the intake selector", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain('class="workbench-intake-safety-notice"');
+    expect(output).toContain("Manual / stub / local only");
+  });
+
+  it("renders a disabled capture button when the textarea is empty", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain('class="workbench-intake-capture-btn"');
+    expect(buttonAttrs(output, "Capture as source")).toContain("disabled");
+  });
+
+  it("shows the paste placeholder on the intake textarea", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Paste content from the selected source type");
   });
 });

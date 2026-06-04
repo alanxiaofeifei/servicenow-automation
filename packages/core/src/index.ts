@@ -8,6 +8,7 @@ export * from "./qa-single-ticket-smoke";
 export * from "./qa-browser-autofill";
 export * from "./qa-incident-defaults";
 export * from "./service-desk-workflow";
+export * from "./source-adapters";
 
 export type HumanReviewPolicy = {
   aiDraftsOnly: true;
