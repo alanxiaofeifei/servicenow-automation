@@ -2944,6 +2944,7 @@ export function App({
   const operatorActionSequenceRef = useRef(0);
   const operatorActionTimeoutRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
   const [validationRunHistory, setValidationRunHistory] = useState<QaValidationRunEntry[]>([]);
+  const [monthlyExcelFillState, setMonthlyExcelFillState] = useState<"pending" | "queued" | "deferred">("pending");
 
   useEffect(() => {
     return () => {
@@ -3490,6 +3491,10 @@ export function App({
   const workbenchTargetStatusLabel = targetConfigured ? workbenchCopy.target.configured : workbenchCopy.target.missing;
   const topbarTargetChipClass = targetConfigured ? "workbench-status-pill success" : "workbench-status-pill warning";
   const kbMatches = searchKnowledgeArticles(sourceCleanup.normalizedText, demoKnowledgeArticles, { limit: 3 });
+  const monthlyExcelRow = serviceDeskWorkflowPreview.excelDryRunRowPreview.row;
+  const currentMonthLabel = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const previousMonthLabel = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const monthlyWorkbookLabel = `Service Desk monthly ticket log — ${currentMonthLabel}`;
   const guidedDemoSourceReady = sourceCleanup.normalizedText.trim().length > 0;
   const guidedDemoDraftReady =
     fieldValue(draft.shortDescription).trim().length > 0 &&
@@ -3953,6 +3958,101 @@ export function App({
             </ol>
             <small className="guided-demo-stepper-footer">
               AI drafts and fills allowed text fields only. Human reviews and submits in ServiceNow.
+            </small>
+          </section>
+
+          <section className="workbench-card kb-recommendations-card" aria-labelledby="kb-recommendations-title">
+            <div className="workbench-card-header kb-recommendations-header">
+              <div>
+                <p className="eyebrow">KB recommendations visible for review</p>
+                <h2 id="kb-recommendations-title">Local KB recommendations</h2>
+                <p>No external KB lookup. These cards explain the recommendation before the operator uses it.</p>
+              </div>
+              <span>{kbMatches.length} local match{kbMatches.length === 1 ? "" : "es"}</span>
+            </div>
+            <div className="kb-recommendation-summary">
+              <div>
+                <span>Recommended support group</span>
+                <strong>{operatorSafeDisplayText(fieldValue(draft.assignmentGroup) || serviceDeskOwnerTeam)}</strong>
+              </div>
+              <div>
+                <span>Routing reason</span>
+                <p>{operatorSafeDisplayText(serviceDeskWorkflowPreview.routingPlan.stage2.reason)}</p>
+              </div>
+            </div>
+            <div className="kb-recommendation-list" role="list" aria-label="Visible local KB suggestions">
+              {kbMatches.map((match, index) => (
+                <article className="kb-recommendation-item" key={match.articleId} role="listitem">
+                  <div className="kb-recommendation-topline">
+                    <span>Local KB suggestion {index + 1}</span>
+                    <strong>{operatorSafeDisplayText(match.title)}</strong>
+                  </div>
+                  <dl>
+                    <div>
+                      <dt>Match confidence</dt>
+                      <dd>{Math.round(match.score * 100)}%</dd>
+                    </div>
+                    <div>
+                      <dt>Matched evidence</dt>
+                      <dd>{match.matchedKeywords.length > 0 ? match.matchedKeywords.join(", ") : "Sanitized context similarity"}</dd>
+                    </div>
+                  </dl>
+                  <p>{operatorSafeDisplayText(match.excerpt ?? "Review the local demo article before using the recommendation.")}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="workbench-card monthly-excel-fill-card" aria-labelledby="monthly-excel-fill-title">
+            <div className="workbench-card-header monthly-excel-fill-header">
+              <div>
+                <p className="eyebrow">Verify / monthly record</p>
+                <h2 id="monthly-excel-fill-title">Monthly Excel fill queue</h2>
+                <p>Prompt after ticket is opened: fill the reviewed core fields into the current month tracking workbook, or keep it pending for later.</p>
+              </div>
+              <span>{monthlyExcelFillState === "queued" ? "Queued" : monthlyExcelFillState === "deferred" ? "Deferred" : "Pending"}</span>
+            </div>
+            <div className="monthly-excel-workbook-row">
+              <div>
+                <span>Current month workbook</span>
+                <strong>{monthlyWorkbookLabel}</strong>
+                <small>Placeholder only. The real monthly web workbook link must be configured and opened by the operator.</small>
+              </div>
+              <div className="monthly-excel-month-actions" aria-label="Monthly workbook choices">
+                <button type="button" className="local-draft-button primary" onClick={() => setMonthlyExcelFillState("queued")}>
+                  Fill this ticket into monthly Excel
+                </button>
+                <button type="button" className="local-draft-button" onClick={() => setMonthlyExcelFillState("deferred")}>
+                  Do later — keep in pending queue
+                </button>
+              </div>
+            </div>
+            <div className="monthly-excel-choice-grid">
+              <button type="button" className="monthly-excel-month-card selected">
+                <span>Current month</span>
+                <strong>{currentMonthLabel}</strong>
+              </button>
+              <button type="button" className="monthly-excel-month-card">
+                <span>Previous month</span>
+                <strong>{previousMonthLabel}</strong>
+              </button>
+            </div>
+            <dl className="monthly-excel-core-fields">
+              <div>
+                <dt>Opened ticket core data</dt>
+                <dd>{operatorSafeDisplayText(fieldValue(draft.shortDescription))}</dd>
+              </div>
+              <div>
+                <dt>Support group</dt>
+                <dd>{operatorSafeDisplayText(fieldValue(draft.assignmentGroup) || serviceDeskOwnerTeam)}</dd>
+              </div>
+              <div>
+                <dt>Monthly row preview</dt>
+                <dd>{operatorSafeDisplayText(monthlyExcelRow["Short Description"] ?? monthlyExcelRow["Dry-run Result"] ?? "Reviewed local row is ready.")}</dd>
+              </div>
+            </dl>
+            <small className="monthly-excel-safety">
+              No Microsoft Graph or Excel Web write is performed from this local demo. This replaces the old per-ticket export-first story with a monthly workbook fill decision.
             </small>
           </section>
 

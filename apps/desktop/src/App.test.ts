@@ -174,6 +174,31 @@ describe("App", () => {
     expect(output).toContain("AI drafts and fills allowed text fields only. Human reviews and submits in ServiceNow.");
   });
 
+  it("shows visible KB recommendation cards with evidence and support group context on the main workbench", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("KB recommendations visible for review");
+    expect(output).toContain("Local KB suggestion");
+    expect(output).toContain("Match confidence");
+    expect(output).toContain("Matched evidence");
+    expect(output).toContain("Recommended support group");
+    expect(output).toContain("Service Desk");
+    expect(output).toContain("No external KB lookup");
+  });
+
+  it("shows monthly Excel-fill workflow instead of only per-ticket report export", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Monthly Excel fill queue");
+    expect(output).toContain("Current month workbook");
+    expect(output).toContain("Prompt after ticket is opened");
+    expect(output).toContain("Fill this ticket into monthly Excel");
+    expect(output).toContain("Do later — keep in pending queue");
+    expect(output).toContain("No Microsoft Graph or Excel Web write is performed from this local demo");
+    expect(output).toContain("Current month");
+    expect(output).toContain("Previous month");
+  });
+
   it("renders rebuilt target-style Inbox, Knowledgebase, History, and Search pages", () => {
     const pageCases = [
       { key: "inbox", label: "Inbox", title: "Inbox triage", panel: "Triage checklist" },
@@ -812,7 +837,6 @@ describe("App", () => {
     expect(primaryMarkup).toContain('rows="10"');
     expect(styles.lastIndexOf("textarea[data-auto-fit-field]")).toBeGreaterThan(styles.lastIndexOf("max-height: 70px"));
     expect(styles).toContain("max-height: none;");
-    expect(primaryMarkup).not.toContain("Confidence");
     expect(primaryMarkup).not.toContain("local evidence");
     expect(primaryMarkup).not.toContain("Create local draft");
     expect(primaryMarkup).not.toContain("Local draft only");
