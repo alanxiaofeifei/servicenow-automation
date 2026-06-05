@@ -801,7 +801,7 @@ describe("App", () => {
     const simplifiedChineseSettings = settingsMarkup(renderAppMarkup("zh-CN"));
 
     expect(englishSettings).toContain("Default environment selector");
-    expect(englishSettings).toContain("Choose this workspace to use Start, Check Page, and Autofill. Production remains read-only.");
+    expect(englishSettings).toContain("Choose this workspace to use Start QA Chromium, Verify, and Autofill. Production remains read-only.");
     expect(englishSettings).toContain('value="production-shadow"');
     expect(englishSettings).toContain("Production");
     expect(visibleTextCount(englishSettings, "QA workspace")).toBe(1);
@@ -868,7 +868,7 @@ describe("App", () => {
     expect(zhTwOutput).toContain("驗證目前 Incident");
     expect(esOutput).toContain("Columnas del banco de trabajo del operador");
     expect(esOutput).toContain("Configuración");
-    expect(esOutput).toContain("Elige este espacio para usar Start, Check Page y Autofill. Producción permanece en solo lectura.");
+    expect(esOutput).toContain("Elige este espacio para usar Start QA Chromium, Verify y Autofill. Producción permanece en solo lectura.");
     expect(esOutput).toContain("Guardar configuración");
     expect(esOutput).toContain("Selector de entorno predeterminado");
     expect(esOutput).toContain("Contraer panel de acciones del navegador");

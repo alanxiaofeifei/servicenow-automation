@@ -1347,7 +1347,7 @@ const englishChromeTranslations: UiChromeTranslations = {
         safetyNotes: [
           "Production is visible for selection and target review, but browser actions remain disabled outside QA.",
           "No state-changing production path is implemented.",
-          "Use QA-only browser controls for Start, Check Page, and Autofill.",
+          "Use QA-only browser controls for Start QA Chromium, Verify, and Autofill.",
           "Upgrade to a separate safety review before considering any production write capability."
         ]
       }
@@ -1767,7 +1767,7 @@ const englishOperatorWorkbenchCopy = {
     defaultEnvironmentSelector: "Default environment selector",
     qaTestEnvironment: "QA workspace",
     productionEnvironment: "Production",
-    environmentHelper: "Choose this workspace to use Start, Check Page, and Autofill. Production remains read-only.",
+    environmentHelper: "Choose this workspace to use Start QA Chromium, Verify, and Autofill. Production remains read-only.",
     environmentBusyHelper: "Disabled: wait for the current browser step to finish before changing settings.",
     urlSettingsTitle: "ServiceNow target settings",
     compactSafety: "Only authorized landing targets are accepted. Secrets, record identifiers, tokens, cookies, query strings, and hash fragments stay blocked.",
@@ -1777,7 +1777,7 @@ const englishOperatorWorkbenchCopy = {
     qaUrl: "QA target",
     productionUrl: "Production target",
     urlDescriptionQa: "Authorized QA landing page for controlled testing; the value is hidden after validation.",
-    urlDescriptionProduction: "Production target remains read-only; Start, Check Page, and Autofill stay unavailable outside QA.",
+    urlDescriptionProduction: "Production target remains read-only; Start QA Chromium, Verify, and Autofill stay unavailable outside QA.",
     qaSubmitPolicy: "QA fill requires Start, current-page check, and approved text-only autofill checks.",
     productionPolicy: "Production is read-only in this workbench; no automated write path is enabled.",
     activeCustomTarget: "Custom target active; raw value hidden",
@@ -2268,7 +2268,7 @@ const operatorWorkbenchTranslations = {
       defaultEnvironmentSelector: "Selector de entorno predeterminado",
       qaTestEnvironment: "QA workspace",
       productionEnvironment: "Producción",
-      environmentHelper: "Elige este espacio para usar Start, Check Page y Autofill. Producción permanece en solo lectura.",
+      environmentHelper: "Elige este espacio para usar Start QA Chromium, Verify y Autofill. Producción permanece en solo lectura.",
       environmentBusyHelper: "Deshabilitado: espera a que termine la acción actual antes de cambiar la configuración.",
       urlSettingsTitle: "Configuración de destino de ServiceNow",
       compactSafety: "Solo se aceptan destinos iniciales autorizados. Secretos, identificadores de registro, tokens, cookies, query strings y fragments quedan bloqueados.",
@@ -5818,7 +5818,7 @@ function buildOperatorStaticPageContent({
         ],
         detailCards: [
           { title: "Latest draft", body: operatorSafeDisplayText(draft.shortDescription.value) },
-          { title: "Browser evidence", body: "Browser rail remains the source of truth for Start, Check Page, and Autofill readiness." }
+          { title: "Browser evidence", body: "Browser rail remains the source of truth for Start QA Chromium, Verify, and Autofill readiness." }
         ],
         validationRuns: validationRuns.length > 0 ? validationRuns : undefined,
         contextTitle: "Recent outcomes",
@@ -6532,7 +6532,7 @@ export function exportProductReviewReport(
     "|------------|--------|",
     "| Local-only execution | Active — no network calls, no cloud writes, no ServiceNow API |",
     "| No real ServiceNow write | Enforced — Save, Submit, Update, Resolve, Close are absent or disabled in demo mode |",
-    "| No browser automation beyond Start / Check Page / Autofill | Enforced — runtime is constrained to approved actions only |",
+    "| No browser automation beyond Start QA Chromium / Verify current Incident / Autofill | Enforced — runtime is constrained to approved actions only |",
     "| No screenshots, HAR, traces, cookies, sessions, or storage export | Confirmed — validation entries track counts and sanitized summaries only |",
     "| No real ticket identifiers | Confirmed — all data is demo/fake |",
     "| No Excel / Graph / cloud workbook write | Confirmed — export uses browser Blob download only |",
