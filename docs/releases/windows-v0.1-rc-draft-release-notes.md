@@ -2,9 +2,11 @@
 
 ServiceNow Automation v0.1.0-rc.2 is a Windows Operator Preview for supervised local testing.
 
-> **Manual validation**: Alan ran Windows app launch + UX review on 2026-06-05 (commit `269b9fe`).
-> Workbench order verified: Selected source → Cleaned summary → Incident draft → Guided demo path → Local KB recommendations → Monthly Excel fill queue.
-> See `docs/status/alan-manual-validation-pass-2026-06-05.md` for full status.
+> **Prior-round validation** (branch `next/pr-rc-hardening-20260605`, commit `269b9fe`):
+> Alan validated that prior RC. See `docs/status/alan-manual-validation-pass-2026-06-05.md` for that result.
+>
+> **Current-branch validation: PENDING — see the next-morning checklist:**
+> `docs/status/phase-V1-next-morning-alan-manual-validation-checklist-2026-06-05.md`
 
 ## What's included
 
@@ -47,6 +49,7 @@ Docs refreshed to match the new three-column layout, guided stepper, KB recommen
 
 ## What to test
 
+- Authoritative next-morning checklist: `docs/status/phase-V1-next-morning-alan-manual-validation-checklist-2026-06-05.md`
 - WSL dry-run readiness check.
 - Windows launcher opens the desktop app.
 - Mock/synthetic desktop workflows:
