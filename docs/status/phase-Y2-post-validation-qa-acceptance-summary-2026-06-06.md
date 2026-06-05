@@ -1,135 +1,139 @@
-# Phase Y2 — Post-validation QA Acceptance Summary and Residual Manual Checklist
+# Phase Y2 — Post-Validation QA Acceptance Summary and Residual Manual Checklist
 
 **Date:** 2026-06-06
 **Profile:** `sna-qa-acceptance`
 **Branch:** `next/product-clarity-demo-polish-20260605`
 **HEAD before this doc:** `10c8fa7` (`[sna-release-docs] Phase Y1 — record Alan manual validation PASS for current-HEAD RC artifact`)
-**Remote status before this doc:** 31 commits ahead of `origin/next/product-clarity-demo-polish-20260605`
-**Privacy scan before this doc:** 236 files — PASS
+**Remote status before this doc:** 30 commits ahead of `origin/next/product-clarity-demo-polish-20260605`
+**Base comparison before this doc:** 68 files changed, 8,220 insertions, 884 deletions versus `main`
 
----
+## 1. What Alan Passed
 
-## 1. Summary of what passed
+Alan manually validated the current-HEAD Windows RC artifact on 2026-06-06 (Phase Y1) and reported:
 
-### Alan manual product validation (2026-06-06)
+> **手动测试通过，没有任何问题**
+> *(Manual test passed, no problems at all.)*
 
-| Check | Result |
-|-------|--------|
-| Alan's reported verdict | **PASS** — 手动测试通过，没有任何问题 |
-| Validated artifact | `dist/release/servicenow-automation-windows-v0.1.0-rc.1.zip` (SHA256 `16f32bcf...`) |
-| Artifact SHA256 verified | Consistent across X2, X3, X4, X5, Y1 |
-| Artifact size | 118,586,291 bytes |
-| START-HERE safety wording | Present and correct |
+This manual validation PASS covers the following concrete checks:
 
-Alan validated these product behaviors on the local artifact:
+| # | Check | Result |
+|---|-------|--------|
+| 1 | Three-column UI opens cleanly; window title says "ServiceNow Automation" | PASS |
+| 2 | Right-column runtime labels read `Start QA Chromium`, `Verify current Incident`, `Autofill current Incident` | PASS |
+| 3 | Settings/helper copy uses correct current wording (helper-text mismatch resolved in X1) | PASS |
+| 4 | Workbench card order: Selected source → Cleaned summary → Incident draft → Guided Review Path → KB recommendations → Monthly Excel fill queue | PASS |
+| 5 | Safety text visible; incident draft has no Save/Submit/Update/Resolve/Close buttons | PASS |
+| 6 | KB recommendations visible and local/demo-only | PASS |
+| 7 | Monthly Excel fill queue is a local queue, not a live export | PASS |
 
-1. Three-column UI opens cleanly with window title "ServiceNow Automation".
-2. Right-column runtime labels: `Start QA Chromium`, `Verify current Incident`, `Autofill current Incident`.
-3. Settings/helper copy uses current wording (helper-text mismatch resolved in Phase X1).
-4. Workbench card order: Selected source → Cleaned summary → Incident draft → Guided Review Path → KB recommendations → Monthly Excel fill queue.
-5. Safety text visible — no Save/Submit/Update/Resolve/Close buttons on Incident draft.
-6. KB recommendations visible and local/demo-only.
-7. Monthly Excel fill queue is a local queue, not a live export.
+Alan's PASS is an **official local status record** — it confirms the RC artifact is usable, the workflow behaves as expected, and the product direction is acceptable for continued development. It does **not** constitute merge/release/live approval.
 
-### Automated gates (Phase X5 — last full gate run)
+## 2. What Automated Gates Passed
 
-| Gate | Result | Notes |
-|------|--------|-------|
-| `pnpm build` | PASS | 7 workspace projects — Electron/Vite and CLI TypeScript |
-| `pnpm typecheck` | PASS | All packages/apps |
-| `pnpm test` | PASS | 382 tests, 29 test files |
-| `pnpm privacy:scan` | PASS | 235 files (X5); 236 files post-Y1 |
+All four mandatory automated gates passed across the X5 → Y1 → Y2 sequence:
 
-No code changes since X5, so full gate re-run is not required. Privacy scan re-verified in Y2: 236 files — PASS.
+| Gate | X5 (2026-06-05) | Y1 (2026-06-06) | Y2 (this run) |
+|------|------------------|------------------|---------------|
+| `pnpm build` | PASS (7 workspaces) | N/A (no code change) | N/A (no code change) |
+| `pnpm typecheck` | PASS | N/A (no code change) | N/A (no code change) |
+| `pnpm test` | PASS (382 tests, 29 files) | N/A (no code change) | N/A (no code change) |
+| `pnpm privacy:scan` | PASS (235 files) | PASS (236 files) | **PASS (236 files)** |
 
-### Privacy/release-boundary milestones (X-series)
+No code, test, or configuration changes occurred between Y1 and Y2. The only deltas are documentation files, so privacy scan is the only gate re-run — and it passes.
 
-| Phase | Verdict |
-|-------|---------|
-| X3 — Privacy/security audit (sna-privacy-security) | APPROVE — no blocking issues |
-| X4 — QA validation (sna-qa-acceptance) | PASS — all gates clean, artifact consistent |
-| X5 — Readiness gate (codex-gpt55-control) | PASS — ready for Alan manual validation only |
-| Y1 — Manual validation record (sna-release-docs) | PASS — recorded Alan's verdict |
+## 3. Validated Artifact
 
----
+| Property | Value |
+|----------|-------|
+| Artifact | `dist/release/servicenow-automation-windows-v0.1.0-rc.1.zip` |
+| SHA256 | `16f32bcf07b69580a3f5b641619130b5173ea1b8b4a42f064fc831b3abcf8314` |
+| SHA256 consistent across X2–Y2 | ✅ Yes |
+| Size | 118,586,291 bytes |
+| Contents | 86 entries (EXE + app.asar + CDP bridge + PS1 + dependencies) |
+| START-HERE | `dist/release/servicenow-automation-windows-v0.1.0-rc.1-START-HERE-WINDOWS.txt` |
+| Safety wording present | ✅ Yes (No Save/Submit/Update/Resolve/Close automation) |
 
-## 2. Post-validation QA acceptance verdict
+## 4. What Remains Blocked or Untested
 
-**VERDICT: LOCAL ACCEPTANCE PASS — RELEASE/MERGE REMAINS BLOCKED.**
+The following items still require explicit human approval or manual validation. **No automated gate or agent can clear these.**
 
-Alan has manually validated the local artifact and reported no issues. The automated gate chain is clean. There is no evidence of regression, capability drift, or safety violation in the current-HEAD state.
+| Item | Status | Why blocked | Who can clear |
+|------|--------|-------------|---------------|
+| Windows double-click validation on clean machine | **NOT TESTED** | The artifact works from `pnpm desktop:dev` and double-click inside WSL dev env, but has never been validated on a clean Windows machine without Node/uv/pnpm. Automated gates cannot replace this. | Alan (manual, on a clean Windows machine) |
+| PR review / merge | **BLOCKED** | Not merge-ready by policy — requires explicit Alan approval through the required review path. | Alan (approval decision) |
+| GitHub Release publication | **BLOCKED** | Requires merge approval first. Cannot proceed without PR merge. | Alan (after merge approval) |
+| Live ServiceNow operations | **NOT READY** | This is a local demo / text-field-assistance tool only. No live ServiceNow browser or API capability has been validated. | Alan (strategic decision, future) |
+| Electron auto-update / code signing | **NOT IMPLEMENTED** | Not in scope for v0.1.0-rc.1. The artifact is delivered as a plain zip for manual unzip-and-run. | Alan (feature decision) |
+| Cross-platform validation (macOS, Linux) | **NOT TESTED** | Only Windows RC has been built and validated. | Alan (scope decision) |
 
-However, this acceptance is **explicitly local-only**. It does not constitute:
+## 5. Residual Manual Checklist
 
-- ✅ Local QA acceptance — PASS
-- ❌ Merge approval — BLOCKED
-- ❌ PR creation/push — BLOCKED (31 commits ahead of origin)
-- ❌ GitHub Release publication — BLOCKED
-- ❌ Live ServiceNow deployment — NOT READY
+For the record, here is the complete set of manual checks that **only a human can perform** and that **remain pending** beyond this validation cycle:
 
----
+### 5.1 Clean-machine Windows double-click (highest priority)
 
-## 3. Residual manual checklist (requires explicit human approval)
+- [ ] Unzip `servicenow-automation-windows-v0.1.0-rc.1.zip` on a Windows machine that has **no Node.js, no pnpm, no uv, no Python, no WSL**.
+- [ ] Double-click `ServiceNow Automation.exe`.
+- [ ] Confirm the app window opens and title says "ServiceNow Automation".
+- [ ] Confirm the three-column UI is visible.
+- [ ] Confirm startup failure (if any) shows a clear sanitized diagnostic and log path.
+- [ ] Confirm `Start QA Chromium` visibly launches a dedicated Chromium browser (not user's default Chrome).
+- [ ] Confirm CDP readiness is shown in the app.
+- [ ] Confirm `Verify current Incident` is disabled before CDP readiness, with a clear reason.
+- [ ] Confirm `Verify current Incident` enables after CDP readiness.
+- [ ] Confirm Verify-only is read-only (no writes).
+- [ ] Confirm Autofill is separated from Save/Submit/Update/Resolve/Close.
+- [ ] Confirm no raw ServiceNow URL, ticket/fingerprint, credential, or session leaks in app UI.
 
-These items cannot be cleared by automated gates and remain **pending Alan decision**.
+### 5.2 Merge/release approval
 
-### P0 — Windows double-click validation on clean machine
+- [ ] Alan explicitly reviews the full branch diff (68 files, 8,220 insertions, 884 deletions vs `main`).
+- [ ] Alan either approves and unblocks merge, or requests changes.
 
-| Item | Status | Why it matters |
-|------|--------|---------------|
-| Double-click on clean Windows machine with no Node/uv/pnpm | **NOT TESTED** | All validation so far used `pnpm desktop:dev` or double-click inside WSL dev env. The artifact unpacks to an Electron app, so it *should* work without a JS toolchain, but this has never been confirmed on a real clean Windows environment. Automated gates cannot test this. |
+### 5.3 Future live ServiceNow validation
 
-### P0 — Merge / PR approval
+- [ ] (Deferred) If Alan decides to use against a real ServiceNow instance, a separate manual validation cycle is needed against the live environment, with explicit saved-secrets management and full safety audit.
 
-| Item | Status | Action required |
-|------|--------|----------------|
-| PR from `next/product-clarity-demo-polish-20260605` to `main` | **BLOCKED** | Alan must approve the PR using the normal review workflow. 31 commits ahead of origin. |
-| Merge into `main` | **BLOCKED** | Requires PR approval first. |
-| Push to origin | **BLOCKED** | Local branch only; no push without Alan's explicit direction. |
+## 6. Safety Reaffirmation
 
-### P1 — Release publication
+Phase Y2 performed no red-zone operation:
 
-| Item | Status | Action required |
-|------|--------|----------------|
-| GitHub Tag | **BLOCKED** | Requires merge approval first. |
-| GitHub Release | **BLOCKED** | Requires merge approval first. |
-| Release artifact publication | **BLOCKED** | Requires merge approval first. |
+- No real ServiceNow login.
+- No live browser operation against real ServiceNow.
+- No ServiceNow API write.
+- No Save / Submit / Update / Resolve / Close.
+- No attachment upload.
+- No Microsoft Graph or Excel Web write.
+- No Teams/Outlook/phone ingestion.
+- No Git push, PR creation, merge, tag, or GitHub Release publication.
+- No release publication or live/prod-shadow operation.
+- No secrets, cookies, storage state, HAR, screenshots, real URLs, ticket IDs/sys_ids, customer/requester/group names, or real field values exposed.
 
-### P2 — Live operations
-
-| Item | Status | Notes |
-|------|--------|-------|
-| Real ServiceNow login/browser ops | **NOT READY** | This is a local demo/text-field-assistance tool. Live ServiceNow operations require separate authorization and testing. |
-| Save/Submit/Update/Resolve/Close | **NOT READY** | Explicitly forbidden by product rule. |
-| Attachment upload | **NOT READY** | Explicitly forbidden by product rule. |
-| Microsoft Graph / Excel Web write | **NOT READY** | Explicitly forbidden by product rule. |
-
----
-
-## 4. Residual risk register
-
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| Windows double-click fails on clean machine without JS toolchain | Medium | High — blocks non-devs from using the tool | Currently no way to test without shipping; Alan could validate on his Windows desktop using the RC zip |
-| Branch divergence (31 ahead of origin) | Low | Medium — rebase could conflict if main moves | No main changes expected during this session |
-| Artifact SHA256 mismatch at ship-time | Low | High — silent corruption | Each phase re-verifies SHA256 against X2/X3 record |
-| Manual validation overclaimed as release approval | Low | High — policy violation | Y1/Y2 documents explicitly block this interpretation |
-
----
-
-## 5. Next step (child task)
-
-Phase Y3 — Post-validation privacy/release-boundary audit — assigned to `sna-privacy-security`, blocked on Y2 completion.
-
----
-
-## Final status
+## 7. Final Verdict
 
 ```
-Phase Y2 — Post-validation QA acceptance summary
-Verdict: LOCAL ACCEPTANCE PASS — RELEASE/MERGE/BLOCKED
-Alan manual validation: PASS (手动测试通过，没有任何问题)
-Last automated gates: PASS (X5 — build, typecheck, 382 tests, privacy scan)
-Privacy scan: PASS (236 files)
-Residual checklist: 3 P0 items pending Alan (clean-machine double-click, merge/PR, release)
+Phase Y2 — POST-VALIDATION QA ACCEPTANCE SUMMARY
+
+Manual validation:     PASS (Alan, 2026-06-06: "手动测试通过，没有任何问题")
+Automated gates:       ALL PASS (build, typecheck, 382 tests, privacy=236)
+Artifact integrity:    CONSISTENT (SHA256 16f32bcf..., 86 entries)
+Red-zone operations:   NONE PERFORMED
+
+QA ACCEPTANCE STATUS:  CONDITIONAL PASS
+
+Conditions (unresolved):
+  1. Windows double-click on clean machine — NOT TESTED (highest manual gap)
+  2. PR merge/release approval — BLOCKED (requires explicit Alan approval)
+  3. Live ServiceNow validation — DEFERRED (out of scope for v0.1.0-rc.1)
+
+This is a local QA acceptance summary only — not release approval.
 ```
+
+## 8. Suggested Next Actions
+
+| Action | Owner | Priority |
+|--------|-------|----------|
+| Alan reviews this summary and decides next step | Alan | High |
+| If Alan wants clean-machine validation, document the procedure and optionally support the test via remote/guide | Alan / agent | Medium |
+| If Alan wants to merge, create a Phase Z merge/PR task | orchestrator | When requested |
+| Phase Y1–Y2 documents serve as the permanent QA evidence trail | Archived | Done |
