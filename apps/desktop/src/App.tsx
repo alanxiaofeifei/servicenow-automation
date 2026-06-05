@@ -3931,6 +3931,35 @@ export function App({
             </div>
           </section>
 
+          <section className="workbench-card incident-draft-card" aria-labelledby="incident-draft-title">
+            <div className="workbench-card-header">
+              <div>
+                <h2 id="incident-draft-title">{workbenchCopy.cards.incidentDraft}</h2>
+              </div>
+            </div>
+            <DraftTextField
+              label={workbenchCopy.cards.shortDescription}
+              fieldName="shortDescription"
+              field={draft.shortDescription}
+              onChange={(value) => updateField("shortDescription", value)}
+            />
+            <DraftTextField
+              label={workbenchCopy.cards.description}
+              fieldName="description"
+              field={draft.description}
+              onChange={(value) => updateField("description", value)}
+            />
+            <DraftTextField
+              label={workbenchCopy.cards.workNotes}
+              fieldName="workNotes"
+              field={draft.workNotes}
+              onChange={(value) => updateField("workNotes", value)}
+            />
+            <footer className="incident-draft-footer">
+              <small>{workbenchCopy.cards.localOnly}</small>
+            </footer>
+          </section>
+
           <section className="workbench-card guided-demo-stepper-card" aria-labelledby="guided-demo-stepper-title">
             <div className="workbench-card-header guided-demo-stepper-header">
               <div>
@@ -4054,35 +4083,6 @@ export function App({
             <small className="monthly-excel-safety">
               No Microsoft Graph or Excel Web write is performed from this local demo. This replaces the old per-ticket export-first story with a monthly workbook fill decision.
             </small>
-          </section>
-
-          <section className="workbench-card incident-draft-card" aria-labelledby="incident-draft-title">
-            <div className="workbench-card-header">
-              <div>
-                <h2 id="incident-draft-title">{workbenchCopy.cards.incidentDraft}</h2>
-              </div>
-            </div>
-            <DraftTextField
-              label={workbenchCopy.cards.shortDescription}
-              fieldName="shortDescription"
-              field={draft.shortDescription}
-              onChange={(value) => updateField("shortDescription", value)}
-            />
-            <DraftTextField
-              label={workbenchCopy.cards.description}
-              fieldName="description"
-              field={draft.description}
-              onChange={(value) => updateField("description", value)}
-            />
-            <DraftTextField
-              label={workbenchCopy.cards.workNotes}
-              fieldName="workNotes"
-              field={draft.workNotes}
-              onChange={(value) => updateField("workNotes", value)}
-            />
-            <footer className="incident-draft-footer">
-              <small>{workbenchCopy.cards.localOnly}</small>
-            </footer>
           </section>
             </div>
           ) : (

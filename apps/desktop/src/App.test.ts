@@ -157,10 +157,24 @@ describe("App", () => {
     expect(output.split('aria-label="Use scenario:').length - 1).toBe(6);
   });
 
-  it("renders the guided demo stepper before the ticket draft cards", () => {
+  it("renders incident draft card before guided demo path, before KB recommendations, before monthly Excel fill queue", () => {
     const output = renderAppMarkup();
 
+    expect(output).toContain("Incident draft");
     expect(output).toContain("Guided demo path");
+    expect(output).toContain("Local KB recommendations");
+    expect(output).toContain("Monthly Excel fill queue");
+
+    const incidentDraftIndex = output.indexOf("Incident draft");
+    const guidedDemoIndex = output.indexOf("Guided demo path");
+    const kbIndex = output.indexOf("Local KB recommendations");
+    const monthlyExcelIndex = output.indexOf("Monthly Excel fill queue");
+
+    expect(incidentDraftIndex).toBeGreaterThan(0);
+    expect(guidedDemoIndex).toBeGreaterThan(incidentDraftIndex);
+    expect(kbIndex).toBeGreaterThan(guidedDemoIndex);
+    expect(monthlyExcelIndex).toBeGreaterThan(kbIndex);
+
     expect(output).toContain("Follow the story without guessing");
     expect(output).toContain("Choose source");
     expect(output).toContain("Review cleaned context");
