@@ -259,13 +259,11 @@ describe("App", () => {
     ].join("\n");
     const legacyCustomerToken = ["YA", "GEO"].join("");
     const legacyPersonName = ["Al", "an"].join("");
-    const legacyBrowserLabel = ["QA", "Chromium"].join(" ");
     const legacyEnvironmentLabel = ["QA Test", "Environment"].join(" ");
     const staleManualLoginOnlyCopy = ["manual", "login", "only"].join(" ");
 
     expect(desktopSource).not.toMatch(new RegExp(legacyCustomerToken, "i"));
     expect(desktopSource).not.toContain(legacyPersonName);
-    expect(desktopSource).not.toContain(legacyBrowserLabel);
     expect(desktopSource).not.toContain(legacyEnvironmentLabel);
     expect(desktopSource).not.toContain(staleManualLoginOnlyCopy);
     expect(desktopSource).toContain("saved sign-in can be reused");
@@ -305,20 +303,19 @@ describe("App", () => {
   it("keeps runtime actions visible with plain-language disabled reasons", () => {
     const output = renderAppMarkup("en-US", { initialRuntimeRailExpanded: true });
 
-    expect(output).toContain("1 Start test browser");
-    expect(output).toContain("2 Check current ticket page");
-    expect(output).toContain("3 Autofill allowed fields");
-    expect(buttonAttrs(output, "1 Start test browser")).not.toContain("disabled");
-    expect(buttonAttrs(output, "2 Check current ticket page")).toContain("disabled");
-    expect(buttonAttrs(output, "3 Autofill allowed fields")).toContain("disabled");
-    expect(output).toContain("Ready: opens the same dedicated test browser profile for QA; saved sign-in can be reused.");
-    expect(output).toContain("Disabled: start the test browser and wait until the browser connection is ready.");
-    expect(output).toContain("Opens the same dedicated test browser profile for the QA workspace, so your ServiceNow sign-in can stay remembered; manual login remains yours.");
-    expect(output).toContain("Confirms the visible Incident form is safe and current before any fill.");
-    expect(output).toContain("Fills allowed fields only after page check. It never saves or submits.");
+    expect(output).toContain("1 Start QA Chromium");
+    expect(output).toContain("2 Verify current Incident");
+    expect(output).toContain("3 Autofill current Incident");
+    expect(buttonAttrs(output, "1 Start QA Chromium")).not.toContain("disabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).toContain("disabled");
+    expect(output).toContain("Ready: opens a dedicated test browser profile for QA; saved sign-in can be reused.");
+    expect(output).toContain("Disabled: start QA Chromium and wait until the browser connection is ready.");
+    expect(output).toContain("Opens a dedicated test browser profile for the QA workspace so your ServiceNow sign-in can stay remembered; manual login remains yours.");
+    expect(output).toContain("Confirms the visible Incident form is safe and current before any autofill.");
+    expect(output).toContain("Fills allowed text fields only after the page is verified. It never saves or submits.");
     expect(output).not.toContain(["manual", "login", "only"].join(" "));
     expect(output).not.toContain("CDP readiness");
-    expect(output).not.toContain("Verify current Incident");
     expect(output).toContain("Browser status");
     expect(output).toContain("No browser status evidence yet; only sanitized status is shown.");
     expect(output).toContain("Collapse browser action rail");
@@ -331,12 +328,12 @@ describe("App", () => {
       initialOperatorBusyAction: "launch"
     });
 
-    expect(output).toContain("Starting test browser");
+    expect(output).toContain("Starting QA Chromium");
     expect(output).toContain("Working");
-    expect(buttonAttrs(output, "1 Starting test browser")).toContain("disabled");
-    expect(buttonAttrs(output, "2 Check current ticket page")).toContain("disabled");
-    expect(buttonAttrs(output, "3 Autofill allowed fields")).toContain("disabled");
-    expect(visibleTextCount(output, "Disabled: another browser/test step is still working.")).toBe(3);
+    expect(buttonAttrs(output, "1 Starting QA Chromium")).toContain("disabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).toContain("disabled");
+    expect(visibleTextCount(output, "Disabled: another browser or step is still working.")).toBe(3);
     expect(output).toContain("If it does not finish, the app clears this local waiting state automatically.");
     expect(output).toContain("Reset browser readiness");
     expect(output).toContain("Safe to retry: clears only local browser connection/page-check readiness; no ServiceNow action is taken.");
@@ -367,7 +364,7 @@ describe("App", () => {
     for (const outcome of outcomes) {
       expect(outcome.operatorBusyAction).toBeNull();
     }
-    expect(outcomes[3].operatorStatus.label).toBe("Start test browser took too long");
+    expect(outcomes[3].operatorStatus.label).toBe("Start QA Chromium took too long");
     expect(outcomes[3].operatorStatus.details).toContain("The app cleared the local waiting state");
     expect(outcomes[3].operatorLastResponse?.launch?.status).toBe("timeout");
     expect(outcomes[4].shouldApplyState).toBe(false);
@@ -386,11 +383,11 @@ describe("App", () => {
       initialOperatorStatus: timeoutOutcome.operatorStatus
     });
 
-    expect(output).toContain("Start test browser took too long");
+    expect(output).toContain("Start QA Chromium took too long");
     expect(output).toContain("No ServiceNow action was taken.");
-    expect(buttonAttrs(output, "1 Start test browser")).not.toContain("disabled");
-    expect(buttonAttrs(output, "2 Check current ticket page")).toContain("disabled");
-    expect(buttonAttrs(output, "3 Autofill allowed fields")).toContain("disabled");
+    expect(buttonAttrs(output, "1 Start QA Chromium")).not.toContain("disabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).toContain("disabled");
     expect(output).toContain("Reset browser readiness");
     expect(output).not.toContain("127.0.0.1");
     expect(output).not.toContain("devtools/browser");
@@ -477,29 +474,29 @@ describe("App", () => {
     expect(styles).toContain("grid-template-columns: var(--sna-icon-rail-width) minmax(0, 1fr);");
   });
 
-  it("keeps Start test browser enabled in QA mode while page check waits for browser readiness", () => {
+  it("keeps Start QA Chromium enabled in QA mode while verify waits for browser readiness", () => {
     const output = renderAppMarkup("en-US", { initialEnvironmentMode: "qa", initialRuntimeRailExpanded: true });
 
     expect(output).toContain("QA workspace");
     expect(output).toContain("QA workspace");
     expect(output).toContain("QA target hidden");
-    expect(buttonAttrs(output, "1 Start test browser")).not.toContain("disabled");
-    expect(buttonAttrs(output, "2 Check current ticket page")).toContain("disabled");
-    expect(output).toContain("Ready: opens the same dedicated test browser profile for QA; saved sign-in can be reused.");
-    expect(output).toContain("Disabled: start the test browser and wait until the browser connection is ready.");
+    expect(buttonAttrs(output, "1 Start QA Chromium")).not.toContain("disabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).toContain("disabled");
+    expect(output).toContain("Ready: opens a dedicated test browser profile for QA; saved sign-in can be reused.");
+    expect(output).toContain("Disabled: start QA Chromium and wait until the browser connection is ready.");
   });
 
-  it("enables page check only after sanitized browser readiness without rendering the raw endpoint", () => {
+  it("enables verify only after sanitized browser readiness without rendering the raw endpoint", () => {
     const output = renderAppMarkup("en-US", {
       initialEnvironmentMode: "qa",
       initialRuntimeRailExpanded: true,
       initialOperatorCdpReady: true
     });
 
-    expect(output).toContain("Browser connection ready; Check Page enabled");
-    expect(buttonAttrs(output, "2 Check current ticket page")).not.toContain("disabled");
-    expect(buttonAttrs(output, "3 Autofill allowed fields")).toContain("disabled");
-    expect(output).toContain("Disabled: check the current ticket page first.");
+    expect(output).toContain("Browser connection ready; verify the current Incident.");
+    expect(buttonAttrs(output, "2 Verify current Incident")).not.toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).toContain("disabled");
+    expect(output).toContain("Disabled: verify the current Incident first.");
   });
 
   it("shows page-check pass or block feedback directly on the action card", () => {
@@ -527,7 +524,7 @@ describe("App", () => {
     expect(blockedOutput).toContain('class="runtime-action-feedback blocked"');
     expect(blockedOutput).toContain("Blocked: Could not find one unique approved Incident tab in the test browser.");
     expect(successOutput).toContain('class="runtime-action-feedback success"');
-    expect(successOutput).toContain("Current ticket page checked; Autofill can fill allowed text fields only.");
+    expect(successOutput).toContain("Current ticket verified; Autofill can fill allowed text fields only.");
     expect(successOutput).not.toContain("do-not-render-page-check-feedback");
   });
 
@@ -563,10 +560,10 @@ describe("App", () => {
       initialOperatorVerifiedPageFingerprint: rawFingerprint
     });
 
-    expect(buttonAttrs(output, "3 Autofill allowed fields")).not.toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).not.toContain("disabled");
     expect(output).toContain("Ready: Autofill can fill allowed text fields only; you still review manually.");
-    expect(output).toContain("Current ticket page checked; Autofill can fill allowed text fields only.");
-    expect(output).toContain("No Save, Submit, Update, Resolve, Close, upload, email, or ServiceNow API is automated.");
+    expect(output).toContain("Current ticket verified; Autofill can fill allowed text fields only.");
+    expect(output).toContain("AI drafts and fills allowed text fields only. Human reviews and submits in ServiceNow.");
     expect(output).not.toContain(rawFingerprint);
   });
 
@@ -700,10 +697,10 @@ describe("App", () => {
       initialOperatorVerifiedPageFingerprint: rawFingerprint
     });
 
-    expect(buttonAttrs(output, "1 Start test browser")).toContain("disabled");
-    expect(buttonAttrs(output, "2 Check current ticket page")).toContain("disabled");
-    expect(buttonAttrs(output, "3 Autofill allowed fields")).toContain("disabled");
-    expect(output).toContain("Disabled: Production is read-only in this workbench; choose the QA workspace for Start, Check Page, and Autofill.");
+    expect(buttonAttrs(output, "1 Start QA Chromium")).toContain("disabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).toContain("disabled");
+    expect(output).toContain("Disabled: Production is read-only in this workbench; choose the QA workspace for Start QA Chromium, Verify, and Autofill.");
     expect(output).toContain("Waiting for the dedicated test browser profile to connect.");
     expect(output).not.toContain("Browser connection ready; Check Page enabled.");
     expect(output).not.toContain("Current ticket page checked; Autofill can fill allowed text fields only.");
@@ -734,7 +731,7 @@ describe("App", () => {
 
     expect(primaryMarkup).toContain("Safety note");
     expect(primaryMarkup).toContain("AI drafts and fills allowed text fields only.");
-    expect(primaryMarkup).toContain("Human reviews and handles the record in ServiceNow.");
+    expect(primaryMarkup).toContain("Human reviews and submits in ServiceNow.");
     expect(primaryMarkup).not.toMatch(/<button[^>]*>\s*(Save|Submit|Update|Resolve|Close)\s*<\/button>/);
     expect(primaryMarkup).not.toContain("raw-session-id");
   });
@@ -868,7 +865,7 @@ describe("App", () => {
     expect(zhTwOutput).toContain("QA 工作區");
     expect(zhTwOutput).toContain("選擇此工作區可使用啟動、檢查頁面、自動填入。生產保持唯讀。");
     expect(zhTwOutput).toContain("儲存設定");
-    expect(zhTwOutput).toContain("檢查目前工單頁面");
+    expect(zhTwOutput).toContain("驗證目前 Incident");
     expect(esOutput).toContain("Columnas del banco de trabajo del operador");
     expect(esOutput).toContain("Configuración");
     expect(esOutput).toContain("Elige este espacio para usar Start, Check Page y Autofill. Producción permanece en solo lectura.");
@@ -1040,9 +1037,9 @@ describe("App", () => {
     expect(settingsMarkup).toContain("Production");
     expect(settingsMarkup).not.toContain("Production Shadow Mode");
     expect(settingsMarkup).not.toContain("Mock Demo");
-    expect(buttonAttrs(output, "1 Start test browser")).toContain("disabled");
-    expect(buttonAttrs(output, "2 Check current ticket page")).toContain("disabled");
-    expect(buttonAttrs(output, "3 Autofill allowed fields")).toContain("disabled");
+    expect(buttonAttrs(output, "1 Start QA Chromium")).toContain("disabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).toContain("disabled");
   });
 
   it("localizes the operator workbench chrome to Chinese", () => {
@@ -1055,10 +1052,10 @@ describe("App", () => {
     expect(output).toContain("清理摘要");
     expect(output).toContain("Incident 草稿");
     expect(output).toContain("浏览器操作");
-    expect(output).toContain("启动测试浏览器");
-    expect(output).toContain("禁用：请先启动测试浏览器，并等待浏览器连接就绪。");
-    expect(output).toContain("检查当前工单页面");
-    expect(output).toContain("自动填充允许字段");
+    expect(output).toContain("打开 QA Chromium");
+    expect(output).toContain("禁用：请先打开 QA Chromium，并等待浏览器连接就绪。");
+    expect(output).toContain("验证当前 Incident");
+    expect(output).toContain("自动填充当前 Incident");
     expect(output).toContain("设置");
   });
 
@@ -1339,8 +1336,8 @@ describe("App", () => {
   });
 
   it("maps operator actions to sanitized display labels", () => {
-    expect(operatorActionDisplayAction("launch")).toBe("Browser launch");
-    expect(operatorActionDisplayAction("verify")).toBe("Page check");
+    expect(operatorActionDisplayAction("launch")).toBe("QA Chromium launch");
+    expect(operatorActionDisplayAction("verify")).toBe("Verify");
     expect(operatorActionDisplayAction("autofill")).toBe("Autofill");
   });
 
@@ -1418,8 +1415,8 @@ describe("App", () => {
     ];
     const md = exportValidationRunsToMarkdown(runs);
     expect(md).toContain("| Time | Action | Result | Details |");
-    expect(md).toContain("| 2026-06-05 00:01:00 | Page check | BLOCKED | Page check blocked:");
-    expect(md).toContain("| 2026-06-05 00:00:00 | Browser launch | OK | App launch ok, browser ready");
+    expect(md).toContain("| 2026-06-05 00:01:00 | Verify | BLOCKED | Page check blocked:");
+    expect(md).toContain("| 2026-06-05 00:00:00 | QA Chromium launch | OK | App launch ok, browser ready");
   });
 
   it("exportValidationRunsToCsv renders CSV rows from validation runs", () => {
@@ -1429,8 +1426,8 @@ describe("App", () => {
     ];
     const csv = exportValidationRunsToCsv(runs);
     expect(csv).toContain("Time,Action,Result,Details");
-    expect(csv).toContain("2026-06-05 00:01:00,Page check,BLOCKED,\"Page check blocked:");
-    expect(csv).toContain("2026-06-05 00:00:00,Browser launch,OK,\"App launch ok; browser ready\"");
+    expect(csv).toContain("2026-06-05 00:01:00,Verify,BLOCKED,\"Page check blocked:");
+    expect(csv).toContain("2026-06-05 00:00:00,QA Chromium launch,OK,\"App launch ok; browser ready\"");
   });
 
   it("exportValidationRunsToMarkdown does not contain raw ticket metadata", () => {

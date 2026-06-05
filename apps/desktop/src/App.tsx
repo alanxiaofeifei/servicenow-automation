@@ -1697,32 +1697,32 @@ const englishOperatorWorkbenchCopy = {
     collapseRuntime: "Collapse browser action rail",
     expandRuntime: "Expand browser action rail",
     collapsedTitle: "Browser actions",
-    collapsedHint: "Collapsed. Expand to access Start test browser, Check current ticket page, and Autofill allowed fields.",
+    collapsedHint: "Collapsed. Expand to access Start QA Chromium, Verify, and Autofill.",
     statusReady: "Ready",
     statusBusy: "Working",
     statusBlocked: "Blocked",
     statusSuccess: "Verified",
-    statusVerified: "Current ticket page checked; Autofill can fill allowed text fields only.",
-    statusCdpReady: "Browser connection ready; Check Page enabled.",
+    statusVerified: "Current ticket verified; Autofill can fill allowed text fields only.",
+    statusCdpReady: "Browser connection ready; verify the current Incident.",
     statusWaiting: "Waiting for the dedicated test browser profile to connect.",
-    startTitle: "Start test browser",
-    startDescription: "Opens the same dedicated test browser profile for the QA workspace, so your ServiceNow sign-in can stay remembered; manual login remains yours.",
-    starting: "Starting test browser",
-    verifyTitle: "Check current ticket page",
-    verifyDescription: "Confirms the visible Incident form is safe and current before any fill.",
-    verifying: "Checking current ticket page",
-    autofillTitle: "Autofill allowed fields",
-    autofillDescription: "Fills allowed fields only after page check. It never saves or submits.",
-    autofilling: "Autofilling allowed fields",
+    startTitle: "Start QA Chromium",
+    startDescription: "Opens a dedicated test browser profile for the QA workspace so your ServiceNow sign-in can stay remembered; manual login remains yours.",
+    starting: "Starting QA Chromium",
+    verifyTitle: "Verify current Incident",
+    verifyDescription: "Confirms the visible Incident form is safe and current before any autofill.",
+    verifying: "Verifying current Incident",
+    autofillTitle: "Autofill current Incident",
+    autofillDescription: "Fills allowed text fields only after the page is verified. It never saves or submits.",
+    autofilling: "Autofilling current Incident",
     readyChip: "Ready",
     waitingChip: "Waiting",
-    disabledProductionReason: "Disabled: Production is read-only in this workbench; choose the QA workspace for Start, Check Page, and Autofill.",
+    disabledProductionReason: "Disabled: Production is read-only in this workbench; choose the QA workspace for Start QA Chromium, Verify, and Autofill.",
     disabledTargetReason: "Disabled: configure an allowed QA target in Settings first.",
-    disabledBusyReason: "Disabled: another browser/test step is still working.",
-    startReadyReason: "Ready: opens the same dedicated test browser profile for QA; saved sign-in can be reused.",
-    verifyCdpReason: "Disabled: start the test browser and wait until the browser connection is ready.",
-    verifyReadyReason: "Ready: browser connection is ready; check the visible ticket page.",
-    autofillVerifyReason: "Disabled: check the current ticket page first.",
+    disabledBusyReason: "Disabled: another browser or step is still working.",
+    startReadyReason: "Ready: opens a dedicated test browser profile for QA; saved sign-in can be reused.",
+    verifyCdpReason: "Disabled: start QA Chromium and wait until the browser connection is ready.",
+    verifyReadyReason: "Ready: browser connection is ready; verify the current Incident.",
+    autofillVerifyReason: "Disabled: verify the current Incident first.",
     autofillReadyReason: "Ready: Autofill can fill allowed text fields only; you still review manually.",
     autofillCompletedFeedback: (filledCount: number) =>
       `Autofill completed: ${filledCount} text fields filled. No Save, Submit, Update, Resolve, Close, upload, email, or ServiceNow API was used.`,
@@ -1736,7 +1736,7 @@ const englishOperatorWorkbenchCopy = {
     sanitizedEvidence: "Sanitized browser status evidence available.",
     noEvidence: "No browser status evidence yet; only sanitized status is shown.",
     safetyTitle: "Safety note",
-    safetyNote: "AI drafts and fills allowed text fields only. Human reviews and handles the record in ServiceNow. No Save, Submit, Update, Resolve, Close, upload, email, or ServiceNow API is automated.",
+    safetyNote: "AI drafts and fills allowed text fields only. Human reviews and submits in ServiceNow.",
     whatChanged: {
       title: "What changed in this round",
       summary: "This workbench has been hardened through multiple rounds of automated checks and manual validation since the last release. Every test of the automation proves it is safe and visible before any fill action.",
@@ -1866,32 +1866,32 @@ const operatorWorkbenchTranslations = {
       collapseRuntime: "折叠浏览器操作栏",
       expandRuntime: "展开浏览器操作栏",
       collapsedTitle: "浏览器操作",
-      collapsedHint: "已折叠。展开后可使用启动测试浏览器、检查当前工单页面、自动填充允许字段。",
+      collapsedHint: "已折叠。展开后可打开 QA Chromium、验证当前工单和自动填充允许字段。",
       statusReady: "就绪",
       statusBusy: "处理中",
       statusBlocked: "已阻止",
       statusSuccess: "已验证",
-      statusVerified: "当前工单页面已检查；自动填充只能填写允许的文本字段。",
-      statusCdpReady: "浏览器连接已准备好；可以检查当前工单页面。",
+      statusVerified: "当前工单已验证；自动填充只能填写允许的文本字段。",
+      statusCdpReady: "浏览器连接已准备好；可以验证当前 Incident。",
       statusWaiting: "等待单独的测试浏览器连接。",
-      startTitle: "启动测试浏览器",
-      startDescription: "打开同一个专用 QA 测试浏览器 Profile，可保留 ServiceNow 登录状态；登录仍由你手动完成。",
-      starting: "正在启动测试浏览器",
-      verifyTitle: "检查当前工单页面",
-      verifyDescription: "在任何填充前确认可见 Incident 表单安全且仍是当前页面。",
-      verifying: "正在检查当前工单页面",
-      autofillTitle: "自动填充允许字段",
-      autofillDescription: "页面检查后只填写允许字段。它不会保存或提交。",
-      autofilling: "正在自动填充允许字段",
+      startTitle: "打开 QA Chromium",
+      startDescription: "打开专用测试浏览器 Profile，可保留 ServiceNow 登录状态；登录仍由你手动完成。",
+      starting: "正在打开 QA Chromium",
+      verifyTitle: "验证当前 Incident",
+      verifyDescription: "在自动填充前确认可见 Incident 表单安全且仍是当前页面。",
+      verifying: "正在验证当前 Incident",
+      autofillTitle: "自动填充当前 Incident",
+      autofillDescription: "页面验证后只填写允许的文本字段。它不会保存或提交。",
+      autofilling: "正在自动填充当前 Incident",
       readyChip: "就绪",
       waitingChip: "等待",
-      disabledProductionReason: "禁用：生产环境在此工作台中保持只读；如需启动、检查页面、自动填充，请选择 QA 工作区。",
+      disabledProductionReason: "禁用：生产环境在此工作台中保持只读；如需打开、验证、自动填充，请选择 QA 工作区。",
       disabledTargetReason: "禁用：请先在设置中配置允许的 QA 目标。",
-      disabledBusyReason: "禁用：另一个浏览器/测试步骤仍在处理中。",
-      startReadyReason: "就绪：打开同一个专用 QA 测试浏览器 Profile；可复用已保存的登录状态。",
-      verifyCdpReason: "禁用：请先启动测试浏览器，并等待浏览器连接就绪。",
-      verifyReadyReason: "就绪：浏览器连接已准备好，可以检查当前工单页面。",
-      autofillVerifyReason: "禁用：请先检查当前工单页面。",
+      disabledBusyReason: "禁用：另一个浏览器或步骤仍在处理中。",
+      startReadyReason: "就绪：打开专用 QA 测试浏览器 Profile；可复用已保存的登录状态。",
+      verifyCdpReason: "禁用：请先打开 QA Chromium，并等待浏览器连接就绪。",
+      verifyReadyReason: "就绪：浏览器连接已准备好，可以验证当前 Incident。",
+      autofillVerifyReason: "禁用：请先验证当前 Incident。",
       autofillReadyReason: "就绪：自动填充只能填写允许的文本字段；仍需人工审核。",
       autofillCompletedFeedback: (filledCount: number) =>
         `自动填充已完成：已填写 ${filledCount} 个文本字段。没有执行 Save、Submit、Update、Resolve、Close、上传、邮件或 ServiceNow API。`,
@@ -2032,32 +2032,32 @@ const operatorWorkbenchTranslations = {
       collapseRuntime: "收合瀏覽器操作欄",
       expandRuntime: "展開瀏覽器操作欄",
       collapsedTitle: "瀏覽器操作",
-      collapsedHint: "已收合。展開後可使用啟動測試瀏覽器、檢查目前工單頁面、自動填入允許欄位。",
+      collapsedHint: "已收合。展開後可使用打開 QA Chromium、驗證和自動填入。",
       statusReady: "就緒",
       statusBusy: "處理中",
       statusBlocked: "已阻止",
       statusSuccess: "已驗證",
-      statusVerified: "目前工單頁面已檢查；自動填入只能填寫允許的文字欄位。",
-      statusCdpReady: "瀏覽器連線已準備好；可以檢查目前工單頁面。",
+      statusVerified: "目前工單已驗證；自動填入只能填寫允許的文字欄位。",
+      statusCdpReady: "瀏覽器連線已準備好；可以驗證目前 Incident。",
       statusWaiting: "等待單獨的測試瀏覽器連線。",
-      startTitle: "啟動測試瀏覽器",
-      startDescription: "開啟同一個專用 QA 測試瀏覽器 Profile，可保留 ServiceNow 登入狀態；登入仍由你手動完成。",
-      starting: "正在啟動測試瀏覽器",
-      verifyTitle: "檢查目前工單頁面",
+      startTitle: "打開 QA Chromium",
+      startDescription: "打開專用測試瀏覽器 Profile，可保留 ServiceNow 登入狀態；登入仍由你手動完成。",
+      starting: "正在打開 QA Chromium",
+      verifyTitle: "驗證目前 Incident",
       verifyDescription: "在任何填入前確認可見 Incident 表單安全且仍是目前頁面。",
-      verifying: "正在檢查目前工單頁面",
-      autofillTitle: "自動填入允許欄位",
-      autofillDescription: "頁面檢查後只填入允許欄位。不會儲存或提交。",
-      autofilling: "正在自動填入允許欄位",
+      verifying: "正在驗證目前 Incident",
+      autofillTitle: "自動填入目前 Incident",
+      autofillDescription: "頁面驗證後只填入允許的文字欄位。它不會儲存或提交。",
+      autofilling: "正在自動填入目前 Incident",
       readyChip: "就緒",
       waitingChip: "等待",
-      disabledProductionReason: "停用：生產環境在此工作臺中保持唯讀；如需啟動、檢查、自動填入，請選擇 QA 工作區。",
+      disabledProductionReason: "停用：生產環境在此工作臺中保持唯讀；如需打開、驗證、自動填入，請選擇 QA 工作區。",
       disabledTargetReason: "停用：請先在設定中設定允許的 QA 目標。",
-      disabledBusyReason: "停用：另一個瀏覽器/測試步驟仍在處理中。",
-      startReadyReason: "就緒：開啟同一個專用 QA 測試瀏覽器 Profile；可重用已儲存的登入狀態。",
-      verifyCdpReason: "停用：請先啟動測試瀏覽器，並等待瀏覽器連線就緒。",
-      verifyReadyReason: "就緒：瀏覽器連線已準備好，可以檢查目前工單頁面。",
-      autofillVerifyReason: "停用：請先檢查目前工單頁面。",
+      disabledBusyReason: "停用：另一個瀏覽器或步驟仍在處理中。",
+      startReadyReason: "就緒：打開專用 QA 測試瀏覽器 Profile；可重用已儲存的登入狀態。",
+      verifyCdpReason: "停用：請先打開 QA Chromium，並等待瀏覽器連線就緒。",
+      verifyReadyReason: "就緒：瀏覽器連線已準備好，可以驗證目前 Incident。",
+      autofillVerifyReason: "停用：請先驗證目前 Incident。",
       autofillReadyReason: "就緒：自動填入只能填寫允許的文字欄位；仍需人工審核。",
       autofillCompletedFeedback: (filledCount: number) =>
         `自動填入已完成：已填寫 ${filledCount} 個文字欄位。沒有執行 Save、Submit、Update、Resolve、Close、上傳、郵件或 ServiceNow API。`,
@@ -2198,32 +2198,32 @@ const operatorWorkbenchTranslations = {
       collapseRuntime: "Contraer panel de acciones del navegador",
       expandRuntime: "Expandir panel de acciones del navegador",
       collapsedTitle: "Acciones del navegador",
-      collapsedHint: "Contraído. Expande para acceder a Start test browser, Check current ticket page y Autofill allowed fields.",
+      collapsedHint: "Contraído. Expande para acceder a Start QA Chromium, Verify y Autofill.",
       statusReady: "Listo",
       statusBusy: "Trabajando",
       statusBlocked: "Bloqueado",
       statusSuccess: "Verificado",
-      statusVerified: "Página de ticket actual revisada; Autofill solo puede rellenar campos de texto permitidos.",
-      statusCdpReady: "Navegador conectado; se habilita revisar la página actual del ticket.",
+      statusVerified: "Ticket actual verificado; Autofill puede rellenar solo campos de texto permitidos.",
+      statusCdpReady: "Conexión del navegador lista; verifica el Incident actual.",
       statusWaiting: "Esperando la conexión del navegador de prueba separado.",
-      startTitle: "Start test browser",
-      startDescription: "Abre el mismo perfil dedicado del navegador de prueba para QA, para que el inicio de sesión de ServiceNow pueda conservarse; el inicio de sesión sigue siendo tuyo.",
-      starting: "Iniciando navegador de prueba",
-      verifyTitle: "Check current ticket page",
-      verifyDescription: "Confirma que el formulario Incident visible sea seguro y actual antes de rellenar.",
-      verifying: "Revisando la página de ticket actual",
-      autofillTitle: "Autofill allowed fields",
-      autofillDescription: "Rellena solo campos permitidos después de revisar la página. Nunca guarda ni envía.",
-      autofilling: "Autorrellenando campos permitidos",
+      startTitle: "Start QA Chromium",
+      startDescription: "Abre un perfil de navegador de prueba dedicado para QA, para que el inicio de sesión de ServiceNow pueda conservarse; el inicio de sesión sigue siendo tuyo.",
+      starting: "Iniciando QA Chromium",
+      verifyTitle: "Verify current Incident",
+      verifyDescription: "Confirma que el formulario Incident visible sea seguro y actual antes de autocompletar.",
+      verifying: "Verificando Incident actual",
+      autofillTitle: "Autofill current Incident",
+      autofillDescription: "Rellena solo campos de texto permitidos después de verificar la página. Nunca guarda ni envía.",
+      autofilling: "Autocompletando Incident actual",
       readyChip: "Listo",
       waitingChip: "Espera",
-      disabledProductionReason: "Deshabilitado: Producción es de solo lectura en este workbench; elige QA workspace para Start, Check y Autofill.",
+      disabledProductionReason: "Deshabilitado: Producción es de solo lectura en este workbench; elige QA workspace para Start QA Chromium, Verify y Autofill.",
       disabledTargetReason: "Deshabilitado: configura primero un destino QA permitido en Settings.",
-      disabledBusyReason: "Deshabilitado: otro paso de navegador/prueba sigue en curso.",
-      startReadyReason: "Listo: abre el mismo perfil dedicado del navegador de prueba para QA; se puede reutilizar el inicio de sesión guardado.",
-      verifyCdpReason: "Deshabilitado: inicia el navegador de prueba y espera a que la conexión del navegador esté lista.",
-      verifyReadyReason: "Listo: conexión del navegador preparada; revisa la página de ticket visible.",
-      autofillVerifyReason: "Deshabilitado: primero revisa la página de ticket actual.",
+      disabledBusyReason: "Deshabilitado: otro paso del navegador sigue en curso.",
+      startReadyReason: "Listo: abre un perfil de navegador de prueba dedicado para QA; se puede reutilizar el inicio de sesión guardado.",
+      verifyCdpReason: "Deshabilitado: inicia QA Chromium y espera a que la conexión del navegador esté lista.",
+      verifyReadyReason: "Listo: conexión del navegador preparada; verifica el Incident actual.",
+      autofillVerifyReason: "Deshabilitado: verifica el Incident actual primero.",
       autofillReadyReason: "Listo: Autofill puede rellenar solo campos de texto permitidos; aún revisas manualmente.",
       autofillCompletedFeedback: (filledCount: number) =>
         `Autofill completado: ${filledCount} campos de texto rellenados. No se usó Save, Submit, Update, Resolve, Close, carga, correo ni ServiceNow API.`,
@@ -3966,7 +3966,7 @@ export function App({
                 <p className="eyebrow">Guided review path</p>
                 <h2 id="guided-demo-stepper-title">Guided demo path</h2>
               </div>
-              <span className="guided-demo-stepper-chip">Choose source → review context → draft ticket → check KB → verify/report → optional QA/dev text-field assistance</span>
+              <span className="guided-demo-stepper-chip">Choose source → review context → draft ticket → check KB → verify/report → optional QA/dev assistance</span>
             </div>
             <p className="guided-demo-stepper-intro">
               Follow the story without guessing. This is a compact, local-only guide for the operator flow; the human still reviews every change and performs ServiceNow actions manually.
@@ -6391,20 +6391,20 @@ function getSdaOperatorApi(): SdaOperatorApi | undefined {
 function operatorActionLabel(action: OperatorAction): string {
   switch (action) {
     case "launch":
-      return "Start test browser";
+      return "Start QA Chromium";
     case "verify":
-      return "Check current ticket page";
+      return "Verify current Incident";
     case "autofill":
-      return "Autofill allowed fields";
+      return "Autofill current Incident";
   }
 }
 
 export function operatorActionDisplayAction(action: OperatorAction): string {
   switch (action) {
     case "launch":
-      return "Browser launch";
+      return "QA Chromium launch";
     case "verify":
-      return "Page check";
+      return "Verify";
     case "autofill":
       return "Autofill";
   }
@@ -6659,7 +6659,7 @@ export function buildOperatorActionFinalState(input: OperatorActionFinalStateInp
       operatorStatus: {
         label: `${operatorActionLabel(input.action)} took too long`,
         tone: "blocked",
-        details: `The app cleared the local waiting state after ${timeoutSeconds} seconds so you can retry Start test browser. No ServiceNow action was taken.`
+        details: `The app cleared the local waiting state after ${timeoutSeconds} seconds so you can retry Start QA Chromium. No ServiceNow action was taken.`
       },
       operatorLastResponse: buildOperatorTimeoutResponse(input.action)
     };
