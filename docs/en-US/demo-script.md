@@ -2,7 +2,7 @@
 
 ## 1. Opening
 
-Service desk agents spend time turning scattered support context into clean ServiceNow tickets. This demo shows a local-only operator workbench that turns pasted issue context into an editable TicketDraft, keeps the current work visible in three columns, and preserves the human-in-the-loop safety boundary.
+Service desk agents spend time turning scattered support context into clean ServiceNow tickets. This demo shows a local-only operator workbench that turns pasted issue context into an editable TicketDraft, matches local knowledge articles, shows the recommended support group, tracks monthly Excel fill decisions, and preserves the human-in-the-loop safety boundary.
 
 ## 2. Safety statement
 
@@ -12,29 +12,28 @@ Never present Save, Submit, Update, Resolve, Close, upload, email, bulk action, 
 
 ## 3. Walkthrough narrative
 
-1. Start in the left column and show the intake queue, todo list, and history.
-2. Pick one fake source item and point to the source / loading feed.
-3. Move to the center column and show the selected source detail, cleaned source, and TicketDraft.
-4. Explain the field preview: required fields, common fields, and the autofill plan.
-5. Open the KB / recommendation area and show why the draft is being suggested.
-6. Move to the right column and show the runtime actions: Start QA Chromium, Verify current Incident, and Autofill current Incident.
-7. Point out the CDP readiness status and the plain-language disabled reasons.
-8. Expand the What changed panel and say what was improved in this round.
-9. Show the recent run evidence area as a sanitized, local-only log of progress.
+1. Start in the **left column** — expand the **Demo Scenario Library** and click one of the 6 preset fake scenarios (e.g. VPN issue). Show the intake queue, todo list, and history.
+2. Move to the **center column** — the workbench flows in operator order: **Selected source** → **Cleaned summary** → **Incident draft** → **Guided demo path** → **Local KB recommendations** → **Monthly Excel fill queue**.
+3. Point out the **Incident draft** fields — short description, description, work notes, category, subcategory, assignment group, impact, urgency, priority. Edit one field to prove the agent remains in control.
+4. Follow the **Guided demo path** stepper — tracks source → clean → draft → KB → verify/report → optional QA assistance.
+5. Show the **Local KB recommendations** — title, match confidence, matched evidence keywords, excerpt, and recommended support group with routing reason.
+6. Show the **Monthly Excel fill queue** — "Fill this ticket into monthly Excel" / "Do later — keep in pending queue". Emphasize this is a local-only placeholder; no Microsoft Graph or Excel Web write is performed.
+7. Move to the **right column** — show runtime actions: Start QA Chromium, Verify current Incident, Autofill current Incident.
+8. Point out the CDP readiness status and the plain-language disabled reasons.
+9. **Export a Product-Review Report** from the History page — a self-contained Markdown document covering the full demo session.
 10. Close by explaining that the human still reviews and submits in ServiceNow.
 
 ## 4. Quick second and third scenarios
 
 Briefly switch to:
-
 - Windows issue demo
 - Account access / login issue demo — still fake and local only
 
-Explain that the same intake → cleaned source → TicketDraft → KB recommendation → evidence story applies to common service desk triage categories.
+Explain that the same intake → cleaned source → TicketDraft → KB recommendation → Excel fill → report evidence story applies to common service desk triage categories.
 
 ## 5. Business value line
 
-The value is less repetitive ticket writing, clearer reviewable drafts, stronger safety boundaries, and a demo that reads like a real operator workflow instead of a vertical stack of unrelated panels.
+The value is less repetitive ticket writing, clearer reviewable drafts, stronger safety boundaries, built-in KB matching with support group routing, a monthly fill-tracking workflow, and a demo that reads like a real operator workflow instead of a vertical stack of unrelated panels.
 
 ## 6. Closing line
 

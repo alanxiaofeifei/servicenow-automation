@@ -4,11 +4,11 @@
 
 Hiring manager, Service Desk lead, or technical reviewer who wants to understand the business value quickly.
 
-## Core message
+|## Core message
 
-Service Desk work is not just text generation. Agents must collect context across channels, normalize noisy intake, confirm missing facts, map required ServiceNow fields, plan internal work notes, route to the right group, and maintain reporting evidence.
+Service Desk work is not just text generation. Agents must collect context across channels, normalize noisy intake, confirm missing facts, map required ServiceNow fields, plan internal work notes, route to the right group, track monthly fill decisions, and maintain reporting evidence.
 
-This demo shows a human-in-the-loop cockpit that speeds up that workflow while staying safe: fake/sanitized data only, local deterministic draft generation, no ServiceNow API, no browser DOM autofill, no auto-submit, and Excel dry-run only.
+This demo shows a human-in-the-loop cockpit that speeds up that workflow while staying safe: fake/sanitized data only, local deterministic draft generation, no ServiceNow API, no browser DOM autofill, no auto-submit, local KB recommendations with support group routing, monthly Excel fill queue placeholder, and Excel dry-run only.
 
 ## Safety line to say upfront
 
@@ -78,18 +78,23 @@ Point out:
 
 Say:
 
-"From real workflow observation, I modeled the repeated stages without carrying over private content: intake, confirmation, incident draft, Service Desk ownership, final assignment, work notes, and reporting. The app now exposes those as explicit workflow stages."
+"From real workflow observation, I modeled the repeated stages without carrying over private content: intake, confirmation, incident draft, KB matching with support group routing, monthly Excel fill tracking, and reporting. The app now exposes those as explicit workflow stages with real-time KB evidence and fill-decision tracking."
 
 Show:
 
 - Service Desk workflow preview.
 - Contact / confirmation state.
 - Routing Plan: Stage 1 Service Desk Handling and Stage 2 Final Assignment.
+- Local KB recommendations with title, match confidence, matched evidence keywords, and sanitized excerpt.
+- Recommended support group and routing reason.
 - Work Notes Plan.
 
 Point out:
 
 - The workflow mirrors real operational shape while using only fake/sanitized examples.
+- KB recommendations show evidence, not just labels — the reviewer can see why a match was suggested.
+- The recommended support group is derived from KB metadata, not hardcoded.
+- Monthly Excel fill queue tracks whether a ticket was filled or deferred — still a local placeholder, no Graph/Excel write.
 - Confirmation state helps prevent low-quality ticket creation.
 - Save is explicitly called out as a write action, not a harmless step.
 
@@ -166,7 +171,13 @@ Before recording or presenting:
 - Default scenario is VPN fake QA scenario.
 - Queue has exactly fake/sanitized items.
 - Source Review shows raw and cleaned fake context.
+- Incident draft appears above Guided demo path, before KB recommendations.
+- Guided demo path stepper is visible below incident draft.
+- Local KB recommendations are visible with title, match confidence, evidence, and excerpt.
+- Recommended support group and routing reason are visible.
+- Monthly Excel fill queue is visible below KB with fill/defer buttons and safety text.
 - Mock Incident Preview is clearly labeled mock/demo.
+- Product-Review Report export is available from History page.
 - Excel dry-run fields include QA readiness and approval gates.
 - Controlled QA single-ticket smoke panel shows action-specific phrases and stop rules.
 - No real host, ticket ID, user, email, chat, recording text, screenshot, cookie, or session is visible.

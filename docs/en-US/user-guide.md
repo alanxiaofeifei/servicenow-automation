@@ -8,23 +8,24 @@ The current local demo is intentionally simple and stable: it uses manual paste,
 
 ## Workbench map
 
-Left column
+### Left column
+- Demo Scenario Library — collapsible section with 6 preset fake scenarios (VPN, Windows, Account Access, etc.). Click any scenario to populate the full intake → draft → KB → report pipeline.
 - source / loading information feed
 - intake queue
 - todo list
-- history
+- history (including Product-Review Report export button)
 - mode / function switching
 - bottom-left settings access
 
-Center column
-- selected source detail
-- cleaned / normalized source text
-- generated TicketDraft
-- ServiceNow required / common field preview
-- autofill plan
-- KB / recommendation detail when selected
+### Center column (operator workflow order)
+1. **Selected source** — raw sanitized intake text from the chosen scenario.
+2. **Cleaned summary** — normalized, extracted facts from the raw source.
+3. **Incident draft** — editable TicketDraft fields (Short description, Description, Work notes, Category, Subcategory, Assignment group, Impact, Urgency, Priority).
+4. **Guided demo path** — compact stepper showing source → clean → draft → KB → verify/report → optional QA assistance. Read-only reference; derived from local state.
+5. **Local KB recommendations** — KB card(s) with title, match confidence, matched evidence keywords, sanitized excerpt, and recommended support group with routing reason.
+6. **Monthly Excel fill queue** — current/previous month selectors with ticket-fill decision buttons ("Fill this ticket into monthly Excel" / "Do later — keep in pending queue"). Local UI placeholder — no Microsoft Graph or Excel Web write.
 
-Right column
+### Right column
 - runtime actions
 - Start QA Chromium
 - Verify current Incident
@@ -44,31 +45,35 @@ Right column
    - Production URL
    - default environment
    - safety state
-3. Choose one fake scenario from the intake queue.
-4. Review the selected source and the cleaned source.
-5. Review the TicketDraft and the field preview.
-6. Check the KB / recommendation detail.
-7. Use the runtime rail in order:
+3. Choose one fake scenario from the Demo Scenario Library (left sidebar) or the intake queue.
+4. Review the selected source and the cleaned source in the center column.
+5. Review the Incident draft and edit fields as needed.
+6. Follow the Guided demo path stepper to track pipeline progress.
+7. Check the KB / recommendation detail and the recommended support group.
+8. Use the Monthly Excel fill queue to mark ticket disposition (local placeholder — no actual Excel write).
+9. Use the runtime rail in order:
    - Start QA Chromium
    - Verify current Incident
    - Autofill current Incident
-8. Read the recent run evidence before handing control back to the human.
-9. Keep the final ServiceNow action manual.
+10. Export a Product-Review Report from the History page if desired.
+11. Read the recent run evidence before handing control back to the human.
+12. Keep the final ServiceNow action manual.
 
 ## Expected output
 
 The tool should show:
 
+- Demo Scenario Library (collapsible, left sidebar)
 - source / loading feed
 - intake queue
 - todo list
-- history
+- history (with Product-Review Report export)
 - selected source detail
 - cleaned source
-- TicketDraft
-- required / common field preview
-- autofill plan
-- KB recommendation detail
+- Incident draft fields
+- Guided demo path stepper
+- Local KB recommendations with evidence and support group
+- Monthly Excel fill queue with fill/defer buttons
 - runtime controls
 - CDP readiness
 - safety boundary
@@ -81,6 +86,7 @@ The tool should show:
 - No external writes.
 - No Save / Submit / Update / Resolve / Close automation.
 - No ServiceNow API writes.
+- No Microsoft Graph or Excel Web writes.
 - No real ServiceNow URLs, ticket IDs, sys_ids, cookies, sessions, or page fingerprints in the demo.
 
 ## QA/dev testing note
