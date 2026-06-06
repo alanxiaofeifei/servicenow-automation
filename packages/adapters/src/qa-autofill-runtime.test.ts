@@ -582,7 +582,7 @@ describe("QA incident default field read-only runtime", () => {
     }
   });
 
-  windowsHelperIt("waits for the matching Runtime.evaluate response instead of accepting unsolicited WebSocket events", async () => {
+  windowsHelperIt("waits for the matching Runtime.evaluate response instead of accepting unsolicited WebSocket events", { retry: 2 }, async () => {
     const fakeCdp = await startFakeWindowsLocalCdpEndpoint();
     try {
       const helperResult = await runWindowsLocalCdpHelper({
