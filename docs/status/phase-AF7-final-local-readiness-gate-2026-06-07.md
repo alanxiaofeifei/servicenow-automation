@@ -6,7 +6,7 @@ Alan should test this file: \\wsl.localhost\Ubuntu-Compact\home\alanxwsl\project
 **Profile:** codex-gpt55-control
 **Task:** t_62bac5e5
 **Branch:** `next/post-release-operator-cockpit-ab-20260606`
-**Source checkpoint before AF local commit:** `2469c04`
+**Final local commit checked:** `1a18b94` (`af: finalize local operator packaging gate artifacts`).
 
 ---
 
@@ -28,14 +28,14 @@ Alan should test this file: \\wsl.localhost\Ubuntu-Compact\home\alanxwsl\project
 
 ---
 
-## Required gates rerun for AF7
+## Required gates rerun for AF7 after cleanup commit
 
 | Gate | Result | Sanitized evidence |
 |---|---:|---|
 | `pnpm build` | PASS | recursive workspace build completed; electron-vite emitted main, preload, and renderer bundles. |
 | `pnpm typecheck` | PASS | all 7 workspace packages typecheck clean. |
 | `pnpm test` | PASS | 7 workspace projects passed; 412/412 tests passed, including `apps/desktop` 122/122 and `electron/chromium-provisioner.test.ts` 9/9. |
-| `pnpm privacy:scan` | PASS | `TRACKED_PRIVACY_SCAN_PASS files=273` before staging; `TRACKED_PRIVACY_SCAN_PASS files=287` after staging AF implementation/tests/status docs for local commit. |
+| `pnpm privacy:scan` | PASS | `TRACKED_PRIVACY_SCAN_PASS files=287`. |
 
 No gateway failure occurred during the required gate sequence.
 
@@ -54,7 +54,7 @@ No gateway failure occurred during the required gate sequence.
 
 ## Worktree state
 
-AF implementation/test/status-doc changes are staged for a local commit in this handoff. Final verification after that local commit must show `git status --short` clean; no push, PR, merge, tag, GitHub Release, upload, or release/publish action is part of this gate.
+AF implementation/runtime provisioning changes and AF1-AF7 status docs are included in local commit `1a18b94`. Before this final doc refresh, `git status --short` was clean; after this final doc refresh, the only expected remaining worktree change is this AF7 status doc. No push, PR, merge, tag, GitHub Release, upload, or release/publish action is part of this gate.
 
 ---
 
