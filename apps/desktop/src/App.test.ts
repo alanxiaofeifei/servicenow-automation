@@ -32,6 +32,8 @@ import {
   previewHighSeveritySpeechReminder,
   updateQaSmokeWriteActionSelection,
   type AppProps,
+  type CdpState,
+  type CenterState,
   type HighSeverityMonitorGroup,
   type LanguageCode
 } from "./App";
@@ -1523,5 +1525,77 @@ describe("App", () => {
     expect(report).not.toContain("admin");
     expect(report).not.toContain("api_key");
     expect(report).not.toContain("Bearer");
+  });
+
+  it("renders browser/CDP state chip in the runtime rail header with disconnected state by default", () => {
+    const output = renderAppMarkup("en-US", { initialRuntimeRailExpanded: true });
+
+    expect(output).toContain('class="browser-status-chip disconnected"');
+    expect(output).toContain("Browser: disconnected");
+    expect(output).toContain('aria-label="Browser state: disconnected"');
+  });
+
+  it("shows Browser: connecting state when launch is in progress", () => {
+    const output = renderAppMarkup("en-US", {
+      initialRuntimeRailExpanded: true,
+      initialOperatorBusyAction: "launch"
+    });
+
+    expect(output).toContain('class="browser-status-chip connecting"');
+    expect(output).toContain("Browser: connecting");
+  });
+
+  it("shows Browser: connected state when CDP is ready", () => {
+    const output = renderAppMarkup("en-US", {
+      initialRuntimeRailExpanded: true,
+      initialOperatorCdpReady: true
+    });
+
+    expect(output).toContain('class="browser-status-chip connected"');
+    expect(output).toContain("Browser: connected");
+  });
+
+  it("shows Browser: error state when launch was blocked", () => {
+    const output = renderAppMarkup("en-US", {
+      initialRuntimeRailExpanded: true,
+      initialOperatorLastResponse: {
+        ok: false,
+        launch: { status: "blocked", blockedReason: "dedicated-browser-runtime-missing" }
+      }
+    });
+
+    expect(output).toContain('class="browser-status-chip error"');
+    expect(output).toContain("Browser: error");
+  });
+
+  it("renders center empty state placeholders when centerState is empty", () => {
+    const output = renderAppMarkup("en-US", { initialCenterState: "empty" });
+
+    expect(output).toContain("Select a source from the left queue to begin.");
+    expect(output).toContain("The cleaned summary will appear after normalization.");
+    expect(output).toContain("The draft stays blank until a source is selected.");
+    expect(output).toContain("The guided path appears after the draft is ready.");
+    expect(output).toContain("Local KB recommendations appear after the draft is generated.");
+    expect(output).toContain("Items stay local-only until the monthly queue is ready.");
+    expect(output).toContain('class="center-placeholder"');
+  });
+
+  it("renders center loading state with working placeholders", () => {
+    const output = renderAppMarkup("en-US", { initialCenterState: "loading" });
+
+    expect(output).toContain("Preparing source content...");
+    expect(output).toContain("Drafting Incident...");
+    expect(output).toContain("Preparing guided path...");
+    expect(output).toContain("Checking KB recommendations...");
+    expect(output).toContain('class="center-placeholder working"');
+  });
+
+  it("renders center error state with blocked placeholders", () => {
+    const output = renderAppMarkup("en-US", { initialCenterState: "error" });
+
+    expect(output).toContain("Source preparation encountered an issue.");
+    expect(output).toContain("Draft generation encountered an issue.");
+    expect(output).toContain("KB recommendation lookup encountered an issue.");
+    expect(output).toContain('class="center-placeholder blocked"');
   });
 });

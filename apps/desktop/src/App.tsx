@@ -1679,6 +1679,8 @@ const englishOperatorWorkbenchCopy = {
     cleanedSummary: "Cleaned summary",
     incidentDraft: "Incident draft",
     selectedSourceEmpty: "Select a source from the left queue to begin.",
+    sourceLoading: "Preparing source content...",
+    sourceError: "Source preparation encountered an issue.",
     cleanedSummaryEmpty: "The cleaned summary will appear after normalization.",
     incidentDraftEmpty: "The draft stays blank until a source is selected.",
     guidedDemoPathEmpty: "The guided path appears after the draft is ready.",
@@ -1866,6 +1868,8 @@ const operatorWorkbenchTranslations = {
       cleanedSummary: "清理摘要",
       incidentDraft: "Incident 草稿",
       selectedSourceEmpty: "请从左侧队列中选择一个来源以开始。",
+      sourceLoading: "正在准备来源内容...",
+      sourceError: "来源准备过程中遇到问题。",
       cleanedSummaryEmpty: "清理摘要将在规范化后显示。",
       incidentDraftEmpty: "在选择来源之前，草稿将保持空白。",
       guidedDemoPathEmpty: "引导路径将在草稿准备好后显示。",
@@ -2050,6 +2054,8 @@ const operatorWorkbenchTranslations = {
       cleanedSummary: "清理後摘要",
       incidentDraft: "Incident 草稿",
       selectedSourceEmpty: "請從左側佇列中選擇一個來源以開始。",
+      sourceLoading: "正在準備來源內容...",
+      sourceError: "來源準備過程中遇到問題。",
       cleanedSummaryEmpty: "清理後摘要將在標準化後顯示。",
       incidentDraftEmpty: "在選擇來源之前，草稿將保持空白。",
       guidedDemoPathEmpty: "引導路徑將在草稿準備好後顯示。",
@@ -2234,6 +2240,8 @@ const operatorWorkbenchTranslations = {
       cleanedSummary: "Resumen depurado",
       incidentDraft: "Borrador de Incident",
       selectedSourceEmpty: "Selecciona un origen de la cola izquierda para comenzar.",
+      sourceLoading: "Preparando contenido del origen...",
+      sourceError: "La preparación del origen encontró un problema.",
       cleanedSummaryEmpty: "El resumen depurado aparecerá después de la normalización.",
       incidentDraftEmpty: "El borrador permanecerá en blanco hasta que se seleccione un origen.",
       guidedDemoPathEmpty: "La ruta guiada aparecerá después de que el borrador esté listo.",
@@ -2896,6 +2904,9 @@ export function buildDemoQueueItems(
   });
 }
 
+export type CenterState = "populated" | "empty" | "loading" | "error";
+export type CdpState = "disconnected" | "connecting" | "connected" | "error";
+
 export type AppProps = {
   initialLanguage?: LanguageCode;
   initialEnvironmentMode?: ServiceNowEnvironmentMode;
@@ -2916,6 +2927,7 @@ export type AppProps = {
   initialLeftSidebarExpanded?: boolean;
   initialRuntimeRailExpanded?: boolean;
   initialActivePage?: OperatorWorkbenchPageKey;
+  initialCenterState?: CenterState;
 };
 
 export function updateQaSmokeWriteActionSelection(nextAction: QaManualFillWriteAction) {
@@ -2949,7 +2961,8 @@ export function App({
   initialDisplayTheme = "warm",
   initialLeftSidebarExpanded = true,
   initialRuntimeRailExpanded = false,
-  initialActivePage = "workbench"
+  initialActivePage = "workbench",
+  initialCenterState
 }: AppProps = {}) {
   const [language, setLanguage] = useState<LanguageCode>(initialLanguage);
   const [displayTheme, setDisplayTheme] = useState<DisplayTheme>(initialDisplayTheme);
@@ -3017,6 +3030,20 @@ export function App({
   const operatorActionTimeoutRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
   const [validationRunHistory, setValidationRunHistory] = useState<QaValidationRunEntry[]>([]);
   const [monthlyExcelFillState, setMonthlyExcelFillState] = useState<"pending" | "queued" | "deferred">("pending");
+
+  const cdpState = useMemo<CdpState>(() => {
+    if (operatorBusyAction === "launch") return "connecting";
+    if (operatorCdpReady) return "connected";
+    if (operatorLastResponse?.launch?.blockedReason) return "error";
+    return "disconnected";
+  }, [operatorBusyAction, operatorCdpReady, operatorLastResponse]);
+
+  const centerState = useMemo<CenterState>(() => {
+    if (initialCenterState) return initialCenterState;
+    if (operatorBusyAction === "launch" || operatorBusyAction === "verify") return "loading";
+    if (operatorLastResponse?.launch?.blockedReason || operatorLastResponse?.fieldInspection?.blockedReason) return "error";
+    return "populated";
+  }, [initialCenterState, operatorBusyAction, operatorLastResponse]);
 
   useEffect(() => {
     return () => {
@@ -3970,6 +3997,8 @@ export function App({
               </div>
               <span>{formatQueueStatus(selectedQueueItem.status, workbenchCopy)}</span>
             </div>
+            {centerState === "populated" ? (
+            <>
             <dl className="workbench-source-meta">
               <div>
                 <dt>{workbenchCopy.cards.source}</dt>
@@ -3988,6 +4017,14 @@ export function App({
               <summary>{workbenchCopy.cards.sourcePreview}</summary>
               <p>{operatorSafeDisplayText(selectedQueueItem.bodyPreview)}</p>
             </details>
+            </>
+            ) : centerState === "empty" ? (
+              <p className="center-placeholder">{workbenchCopy.cards.selectedSourceEmpty}</p>
+            ) : centerState === "loading" ? (
+              <p className="center-placeholder working">{workbenchCopy.cards.sourceLoading}</p>
+            ) : (
+              <p className="center-placeholder blocked">{workbenchCopy.cards.sourceError}</p>
+            )}
           </section>
 
           <section className="workbench-card cleaned-summary-card" aria-labelledby="cleaned-summary-title">
@@ -3996,6 +4033,7 @@ export function App({
                 <h2 id="cleaned-summary-title">{workbenchCopy.cards.cleanedSummary}</h2>
               </div>
             </div>
+            {centerState === "populated" ? (
             <div className="summary-row-list">
               {cleanedSummaryRows.map((row) => (
                 <div key={row.label} className="summary-row">
@@ -4004,6 +4042,13 @@ export function App({
                 </div>
               ))}
             </div>
+            ) : centerState === "empty" ? (
+              <p className="center-placeholder">{workbenchCopy.cards.cleanedSummaryEmpty}</p>
+            ) : centerState === "loading" ? (
+              <p className="center-placeholder working">Normalizing source content...</p>
+            ) : (
+              <p className="center-placeholder blocked">Normalization encountered an issue.</p>
+            )}
           </section>
 
           <section className="workbench-card incident-draft-card" aria-labelledby="incident-draft-title">
@@ -4012,6 +4057,8 @@ export function App({
                 <h2 id="incident-draft-title">{workbenchCopy.cards.incidentDraft}</h2>
               </div>
             </div>
+            {centerState === "populated" ? (
+            <>
             <DraftTextField
               label={workbenchCopy.cards.shortDescription}
               fieldName="shortDescription"
@@ -4033,6 +4080,14 @@ export function App({
             <footer className="incident-draft-footer">
               <small>{workbenchCopy.cards.localOnly}</small>
             </footer>
+            </>
+            ) : centerState === "empty" ? (
+              <p className="center-placeholder">{workbenchCopy.cards.incidentDraftEmpty}</p>
+            ) : centerState === "loading" ? (
+              <p className="center-placeholder working">Drafting Incident...</p>
+            ) : (
+              <p className="center-placeholder blocked">Draft generation encountered an issue.</p>
+            )}
           </section>
 
           <section className="workbench-card guided-demo-stepper-card" aria-labelledby="guided-demo-stepper-title">
@@ -4043,6 +4098,8 @@ export function App({
               </div>
               <span className="guided-demo-stepper-chip">Choose source → review context → draft ticket → check KB → verify/report → optional QA/dev assistance</span>
             </div>
+            {centerState === "populated" ? (
+            <>
             <p className="guided-demo-stepper-intro">
               Follow the story without guessing. This is a compact, local-only guide for the operator flow; the human still reviews every change and performs ServiceNow actions manually.
             </p>
@@ -4063,6 +4120,14 @@ export function App({
             <small className="guided-demo-stepper-footer">
               AI drafts and fills allowed text fields only. Human reviews and submits in ServiceNow.
             </small>
+            </>
+            ) : centerState === "empty" ? (
+              <p className="center-placeholder">{workbenchCopy.cards.guidedDemoPathEmpty}</p>
+            ) : centerState === "loading" ? (
+              <p className="center-placeholder working">Preparing guided path...</p>
+            ) : (
+              <p className="center-placeholder blocked">Guided path preparation encountered an issue.</p>
+            )}
           </section>
 
           <section className="workbench-card kb-recommendations-card" aria-labelledby="kb-recommendations-title">
@@ -4074,6 +4139,8 @@ export function App({
               </div>
               <span>{kbMatches.length} local match{kbMatches.length === 1 ? "" : "es"}</span>
             </div>
+            {centerState === "populated" ? (
+            <>
             <div className="kb-recommendation-summary">
               <div>
                 <span>Recommended support group</span>
@@ -4105,6 +4172,14 @@ export function App({
                 </article>
               ))}
             </div>
+            </>
+            ) : centerState === "empty" ? (
+              <p className="center-placeholder">{workbenchCopy.cards.kbRecommendationsEmpty}</p>
+            ) : centerState === "loading" ? (
+              <p className="center-placeholder working">Checking KB recommendations...</p>
+            ) : (
+              <p className="center-placeholder blocked">KB recommendation lookup encountered an issue.</p>
+            )}
           </section>
 
           <section className="workbench-card monthly-excel-fill-card" aria-labelledby="monthly-excel-fill-title">
@@ -4116,6 +4191,8 @@ export function App({
               </div>
               <span>{monthlyExcelFillState === "queued" ? "Queued" : monthlyExcelFillState === "deferred" ? "Deferred" : "Pending"}</span>
             </div>
+            {centerState === "populated" ? (
+            <>
             <div className="monthly-excel-workbook-row">
               <div>
                 <span>Current month workbook</span>
@@ -4158,6 +4235,14 @@ export function App({
             <small className="monthly-excel-safety">
               No Microsoft Graph or Excel Web write is performed from this local demo. This replaces the old per-ticket export-first story with a monthly workbook fill decision.
             </small>
+            </>
+            ) : centerState === "empty" ? (
+              <p className="center-placeholder">{workbenchCopy.cards.monthlyExcelEmpty}</p>
+            ) : centerState === "loading" ? (
+              <p className="center-placeholder working">Preparing monthly queue...</p>
+            ) : (
+              <p className="center-placeholder blocked">Monthly queue preparation encountered an issue.</p>
+            )}
           </section>
             </div>
           ) : (
@@ -4183,6 +4268,7 @@ export function App({
             <QaOperatorRuntimePanel
               busyAction={operatorBusyAction}
               cdpEndpointReady={operatorCdpReady}
+              cdpState={cdpState}
               lastResponse={operatorLastResponse}
               mode={selectedEnvironmentMode}
               targetReady={targetConfigured}
@@ -6934,6 +7020,7 @@ function operatorActionCardFeedback(
 function QaOperatorRuntimePanel({
   busyAction,
   cdpEndpointReady,
+  cdpState,
   lastResponse,
   mode,
   targetReady,
@@ -6950,6 +7037,7 @@ function QaOperatorRuntimePanel({
 }: {
   busyAction: "launch" | "verify" | "autofill" | null;
   cdpEndpointReady: boolean;
+  cdpState: CdpState;
   lastResponse: OperatorRuntimeResponse | null;
   mode: WorkbenchEnvironmentMode;
   targetReady: boolean;
@@ -6967,6 +7055,7 @@ function QaOperatorRuntimePanel({
   const [whatChangedExpanded, setWhatChangedExpanded] = useState(false);
   const canUseRuntime = isQaWorkbenchMode(mode);
   const qaBoundCdpEndpointReady = canUseRuntime && cdpEndpointReady;
+  const qaBoundCdpState = canUseRuntime ? cdpState : "disconnected";
   const qaBoundVerifiedPageFingerprintReady = qaBoundCdpEndpointReady && verifiedPageFingerprintReady;
   const launchDisabled = !canUseRuntime || !targetReady || busyAction !== null;
   const verifyDisabled = !canUseRuntime || !targetReady || !qaBoundCdpEndpointReady || busyAction !== null;
@@ -7011,6 +7100,12 @@ function QaOperatorRuntimePanel({
     : qaBoundCdpEndpointReady
       ? workbenchCopy.runtime.statusCdpReady
       : workbenchCopy.runtime.statusWaiting;
+  const cdpStateLabel: Record<CdpState, string> = {
+    disconnected: workbenchCopy.runtime.browserDisconnected,
+    connecting: workbenchCopy.runtime.browserConnecting,
+    connected: workbenchCopy.runtime.browserConnected,
+    error: workbenchCopy.runtime.browserError
+  };
   const lastPlanCount = lastResponse?.defaultPlan?.plannedFields?.length ?? 0;
   const filledCount = lastResponse?.runtime?.filledFields?.length ?? 0;
   const evidenceText = lastResponse
@@ -7064,6 +7159,9 @@ function QaOperatorRuntimePanel({
         </div>
         <div className="runtime-panel-header-actions">
           <span className={`runtime-status-chip ${status.tone}`}>{runtimeStatusChip}</span>
+          <span className={`browser-status-chip ${qaBoundCdpState}`} aria-label={`Browser state: ${qaBoundCdpState}`}>
+            {cdpStateLabel[qaBoundCdpState]}
+          </span>
           <button
             aria-label={workbenchCopy.runtime.collapseRuntime}
             className="runtime-rail-collapse-button"
