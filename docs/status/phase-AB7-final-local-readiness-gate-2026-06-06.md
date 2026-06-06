@@ -132,3 +132,30 @@ Recommended next step: Alan manually validates the local Windows RC artifact usi
 ## Final recommendation
 
 READY FOR ALAN MANUAL VALIDATION ONLY
+
+---
+
+## 📎 Addendum (2026-06-07) — Current test package location
+
+**This AB7 doc originally referred to the canonical `servicenow-automation-windows-v0.1.0-rc.1.zip` at the end of AB6.**
+The exact file Alan should now test is the **dated local copy** produced by Phase AC0:
+
+| Property | Value |
+|---|---|
+| Filename | `servicenow-automation-windows-v0.1.0-rc.1-ab-20260607-local.zip` |
+| SHA256 | `ea94272dd1a399c04851c26867e50dfd533affeb08953de2895ea308ebd786f1` |
+| Size | 118,588,267 bytes (~113 MB) |
+| mtime | 2026-06-07 01:04 CST |
+| Build provenance | Byte-for-byte identical to canonical rc.1 (same HEAD `77475d8`, same build command, dated copy only) |
+
+**Linux (WSL) path:**
+```
+/home/alanxwsl/projects/servicenow-automation/dist/release/servicenow-automation-windows-v0.1.0-rc.1-ab-20260607-local.zip
+```
+
+**Windows UNC path (File Explorer or cmd.exe):**
+```
+\\wsl.localhost\Ubuntu-Compact\home\alanxwsl\projects\servicenow-automation\dist\release\servicenow-automation-windows-v0.1.0-rc.1-ab-20260607-local.zip
+```
+
+**The pass/fail checklist, safety rules, and START-HERE instructions in AB7 all still apply.** See `docs/status/phase-AC1-alan-test-package-handoff-2026-06-07.md` for the full handoff summary.
