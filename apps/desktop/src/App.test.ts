@@ -155,8 +155,8 @@ describe("App", () => {
     expect(output).toContain("Fake/local/demo data only");
     expect(output).toContain("DEMO");
     expect(output).toContain('aria-label="Use scenario:');
-    // All 6 demo manual paste scenarios render as clickable items
-    expect(output.split('aria-label="Use scenario:').length - 1).toBe(6);
+    // All demo manual paste scenarios render as clickable items
+    expect(output.split('aria-label="Use scenario:').length - 1).toBe(demoManualPasteScenarios.length);
   });
 
   it("renders incident draft card before guided demo path, before KB recommendations, before monthly Excel fill queue", () => {
