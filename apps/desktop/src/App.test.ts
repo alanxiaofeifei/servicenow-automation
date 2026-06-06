@@ -3,6 +3,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { demoManualPasteScenarios } from "@servicenow-automation/adapters/browser";
+import {
+  IntakeSourceKinds,
+  sourceAdapterRegistry,
+} from "@servicenow-automation/core";
 
 import {
   App,
@@ -13,6 +17,9 @@ import {
   buildOperatorActionFinalState,
   clampAppZoomPercent,
   draftTemplatePresets,
+  exportValidationRunsToCsv,
+  exportValidationRunsToMarkdown,
+  exportProductReviewReport,
   getCtrlWheelZoomDelta,
   getDraftTextAreaRows,
   getHighSeveritySpeechReminderDecision,
@@ -20,6 +27,8 @@ import {
   getHighSeverityVoiceReminder,
   getNextAppZoomPercent,
   getNextEnvironmentUrlOverrideFromDraft,
+  operatorActionDisplayAction,
+  operatorSanitizeBlockedReason,
   previewHighSeveritySpeechReminder,
   updateQaSmokeWriteActionSelection,
   type AppProps,
@@ -134,6 +143,76 @@ describe("App", () => {
     expect(output).not.toContain("Environment missing");
   });
 
+  it("shows the Demo Scenario Library with demo-only labeled presets", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain('class="workbench-demo-library"');
+    expect(output).toContain("Demo Scenario Library");
+    expect(output).toContain("Demo only");
+    // Section renders with safety text and scenario meta
+    expect(output).toContain("Fake/local/demo data only");
+    expect(output).toContain("DEMO");
+    expect(output).toContain('aria-label="Use scenario:');
+    // All 6 demo manual paste scenarios render as clickable items
+    expect(output.split('aria-label="Use scenario:').length - 1).toBe(6);
+  });
+
+  it("renders incident draft card before guided demo path, before KB recommendations, before monthly Excel fill queue", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Incident draft");
+    expect(output).toContain("Guided demo path");
+    expect(output).toContain("Local KB recommendations");
+    expect(output).toContain("Monthly Excel fill queue");
+
+    const incidentDraftIndex = output.indexOf("Incident draft");
+    const guidedDemoIndex = output.indexOf("Guided demo path");
+    const kbIndex = output.indexOf("Local KB recommendations");
+    const monthlyExcelIndex = output.indexOf("Monthly Excel fill queue");
+
+    expect(incidentDraftIndex).toBeGreaterThan(0);
+    expect(guidedDemoIndex).toBeGreaterThan(incidentDraftIndex);
+    expect(kbIndex).toBeGreaterThan(guidedDemoIndex);
+    expect(monthlyExcelIndex).toBeGreaterThan(kbIndex);
+
+    expect(output).toContain("Follow the story without guessing");
+    expect(output).toContain("Choose source");
+    expect(output).toContain("Review cleaned context");
+    expect(output).toContain("Draft TicketDraft");
+    expect(output).toContain("Check KB recommendations");
+    expect(output).toContain("Verify and report");
+    expect(output).toContain("Optional QA/dev text-field assistance");
+    expect(output).toContain('data-step-status="completed"');
+    expect(output).toContain('data-step-status="current"');
+    expect(output).toContain('data-step-status="locked"');
+    expect(output).toContain("AI drafts and fills allowed text fields only. Human reviews and submits in ServiceNow.");
+  });
+
+  it("shows visible KB recommendation cards with evidence and support group context on the main workbench", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("KB recommendations visible for review");
+    expect(output).toContain("Local KB suggestion");
+    expect(output).toContain("Match confidence");
+    expect(output).toContain("Matched evidence");
+    expect(output).toContain("Recommended support group");
+    expect(output).toContain("Service Desk");
+    expect(output).toContain("No external KB lookup");
+  });
+
+  it("shows monthly Excel-fill workflow instead of only per-ticket report export", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Monthly Excel fill queue");
+    expect(output).toContain("Current month workbook");
+    expect(output).toContain("Prompt after ticket is opened");
+    expect(output).toContain("Fill this ticket into monthly Excel");
+    expect(output).toContain("Do later — keep in pending queue");
+    expect(output).toContain("No Microsoft Graph or Excel Web write is performed from this local demo");
+    expect(output).toContain("Current month");
+    expect(output).toContain("Previous month");
+  });
+
   it("renders rebuilt target-style Inbox, Knowledgebase, History, and Search pages", () => {
     const pageCases = [
       { key: "inbox", label: "Inbox", title: "Inbox triage", panel: "Triage checklist" },
@@ -180,13 +259,11 @@ describe("App", () => {
     ].join("\n");
     const legacyCustomerToken = ["YA", "GEO"].join("");
     const legacyPersonName = ["Al", "an"].join("");
-    const legacyBrowserLabel = ["QA", "Chromium"].join(" ");
     const legacyEnvironmentLabel = ["QA Test", "Environment"].join(" ");
     const staleManualLoginOnlyCopy = ["manual", "login", "only"].join(" ");
 
     expect(desktopSource).not.toMatch(new RegExp(legacyCustomerToken, "i"));
     expect(desktopSource).not.toContain(legacyPersonName);
-    expect(desktopSource).not.toContain(legacyBrowserLabel);
     expect(desktopSource).not.toContain(legacyEnvironmentLabel);
     expect(desktopSource).not.toContain(staleManualLoginOnlyCopy);
     expect(desktopSource).toContain("saved sign-in can be reused");
@@ -226,20 +303,19 @@ describe("App", () => {
   it("keeps runtime actions visible with plain-language disabled reasons", () => {
     const output = renderAppMarkup("en-US", { initialRuntimeRailExpanded: true });
 
-    expect(output).toContain("1 Start test browser");
-    expect(output).toContain("2 Check current ticket page");
-    expect(output).toContain("3 Autofill allowed fields");
-    expect(buttonAttrs(output, "1 Start test browser")).not.toContain("disabled");
-    expect(buttonAttrs(output, "2 Check current ticket page")).toContain("disabled");
-    expect(buttonAttrs(output, "3 Autofill allowed fields")).toContain("disabled");
-    expect(output).toContain("Ready: opens the same dedicated test browser profile for QA; saved sign-in can be reused.");
-    expect(output).toContain("Disabled: start the test browser and wait until the browser connection is ready.");
-    expect(output).toContain("Opens the same dedicated test browser profile for the QA workspace, so your ServiceNow sign-in can stay remembered; manual login remains yours.");
-    expect(output).toContain("Confirms the visible Incident form is safe and current before any fill.");
-    expect(output).toContain("Fills allowed fields only after page check. It never saves or submits.");
+    expect(output).toContain("1 Start QA Chromium");
+    expect(output).toContain("2 Verify current Incident");
+    expect(output).toContain("3 Autofill current Incident");
+    expect(buttonAttrs(output, "1 Start QA Chromium")).not.toContain("disabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).toContain("disabled");
+    expect(output).toContain("Ready: opens a dedicated test browser profile for QA; saved sign-in can be reused.");
+    expect(output).toContain("Disabled: start QA Chromium and wait until the browser connection is ready.");
+    expect(output).toContain("Opens a dedicated test browser profile for the QA workspace so your ServiceNow sign-in can stay remembered; manual login remains yours.");
+    expect(output).toContain("Confirms the visible Incident form is safe and current before any autofill.");
+    expect(output).toContain("Fills allowed text fields only after the page is verified. It never saves or submits.");
     expect(output).not.toContain(["manual", "login", "only"].join(" "));
     expect(output).not.toContain("CDP readiness");
-    expect(output).not.toContain("Verify current Incident");
     expect(output).toContain("Browser status");
     expect(output).toContain("No browser status evidence yet; only sanitized status is shown.");
     expect(output).toContain("Collapse browser action rail");
@@ -252,12 +328,12 @@ describe("App", () => {
       initialOperatorBusyAction: "launch"
     });
 
-    expect(output).toContain("Starting test browser");
+    expect(output).toContain("Starting QA Chromium");
     expect(output).toContain("Working");
-    expect(buttonAttrs(output, "1 Starting test browser")).toContain("disabled");
-    expect(buttonAttrs(output, "2 Check current ticket page")).toContain("disabled");
-    expect(buttonAttrs(output, "3 Autofill allowed fields")).toContain("disabled");
-    expect(visibleTextCount(output, "Disabled: another browser/test step is still working.")).toBe(3);
+    expect(buttonAttrs(output, "1 Starting QA Chromium")).toContain("disabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).toContain("disabled");
+    expect(visibleTextCount(output, "Disabled: another browser or step is still working.")).toBe(3);
     expect(output).toContain("If it does not finish, the app clears this local waiting state automatically.");
     expect(output).toContain("Reset browser readiness");
     expect(output).toContain("Safe to retry: clears only local browser connection/page-check readiness; no ServiceNow action is taken.");
@@ -288,7 +364,7 @@ describe("App", () => {
     for (const outcome of outcomes) {
       expect(outcome.operatorBusyAction).toBeNull();
     }
-    expect(outcomes[3].operatorStatus.label).toBe("Start test browser took too long");
+    expect(outcomes[3].operatorStatus.label).toBe("Start QA Chromium took too long");
     expect(outcomes[3].operatorStatus.details).toContain("The app cleared the local waiting state");
     expect(outcomes[3].operatorLastResponse?.launch?.status).toBe("timeout");
     expect(outcomes[4].shouldApplyState).toBe(false);
@@ -307,11 +383,11 @@ describe("App", () => {
       initialOperatorStatus: timeoutOutcome.operatorStatus
     });
 
-    expect(output).toContain("Start test browser took too long");
+    expect(output).toContain("Start QA Chromium took too long");
     expect(output).toContain("No ServiceNow action was taken.");
-    expect(buttonAttrs(output, "1 Start test browser")).not.toContain("disabled");
-    expect(buttonAttrs(output, "2 Check current ticket page")).toContain("disabled");
-    expect(buttonAttrs(output, "3 Autofill allowed fields")).toContain("disabled");
+    expect(buttonAttrs(output, "1 Start QA Chromium")).not.toContain("disabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).toContain("disabled");
     expect(output).toContain("Reset browser readiness");
     expect(output).not.toContain("127.0.0.1");
     expect(output).not.toContain("devtools/browser");
@@ -398,29 +474,29 @@ describe("App", () => {
     expect(styles).toContain("grid-template-columns: var(--sna-icon-rail-width) minmax(0, 1fr);");
   });
 
-  it("keeps Start test browser enabled in QA mode while page check waits for browser readiness", () => {
+  it("keeps Start QA Chromium enabled in QA mode while verify waits for browser readiness", () => {
     const output = renderAppMarkup("en-US", { initialEnvironmentMode: "qa", initialRuntimeRailExpanded: true });
 
     expect(output).toContain("QA workspace");
     expect(output).toContain("QA workspace");
     expect(output).toContain("QA target hidden");
-    expect(buttonAttrs(output, "1 Start test browser")).not.toContain("disabled");
-    expect(buttonAttrs(output, "2 Check current ticket page")).toContain("disabled");
-    expect(output).toContain("Ready: opens the same dedicated test browser profile for QA; saved sign-in can be reused.");
-    expect(output).toContain("Disabled: start the test browser and wait until the browser connection is ready.");
+    expect(buttonAttrs(output, "1 Start QA Chromium")).not.toContain("disabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).toContain("disabled");
+    expect(output).toContain("Ready: opens a dedicated test browser profile for QA; saved sign-in can be reused.");
+    expect(output).toContain("Disabled: start QA Chromium and wait until the browser connection is ready.");
   });
 
-  it("enables page check only after sanitized browser readiness without rendering the raw endpoint", () => {
+  it("enables verify only after sanitized browser readiness without rendering the raw endpoint", () => {
     const output = renderAppMarkup("en-US", {
       initialEnvironmentMode: "qa",
       initialRuntimeRailExpanded: true,
       initialOperatorCdpReady: true
     });
 
-    expect(output).toContain("Browser connection ready; Check Page enabled");
-    expect(buttonAttrs(output, "2 Check current ticket page")).not.toContain("disabled");
-    expect(buttonAttrs(output, "3 Autofill allowed fields")).toContain("disabled");
-    expect(output).toContain("Disabled: check the current ticket page first.");
+    expect(output).toContain("Browser connection ready; verify the current Incident.");
+    expect(buttonAttrs(output, "2 Verify current Incident")).not.toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).toContain("disabled");
+    expect(output).toContain("Disabled: verify the current Incident first.");
   });
 
   it("shows page-check pass or block feedback directly on the action card", () => {
@@ -448,7 +524,7 @@ describe("App", () => {
     expect(blockedOutput).toContain('class="runtime-action-feedback blocked"');
     expect(blockedOutput).toContain("Blocked: Could not find one unique approved Incident tab in the test browser.");
     expect(successOutput).toContain('class="runtime-action-feedback success"');
-    expect(successOutput).toContain("Current ticket page checked; Autofill can fill allowed text fields only.");
+    expect(successOutput).toContain("Current ticket verified; Autofill can fill allowed text fields only.");
     expect(successOutput).not.toContain("do-not-render-page-check-feedback");
   });
 
@@ -484,10 +560,10 @@ describe("App", () => {
       initialOperatorVerifiedPageFingerprint: rawFingerprint
     });
 
-    expect(buttonAttrs(output, "3 Autofill allowed fields")).not.toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).not.toContain("disabled");
     expect(output).toContain("Ready: Autofill can fill allowed text fields only; you still review manually.");
-    expect(output).toContain("Current ticket page checked; Autofill can fill allowed text fields only.");
-    expect(output).toContain("No Save, Submit, Update, Resolve, Close, upload, email, or ServiceNow API is automated.");
+    expect(output).toContain("Current ticket verified; Autofill can fill allowed text fields only.");
+    expect(output).toContain("AI drafts and fills allowed text fields only. Human reviews and submits in ServiceNow.");
     expect(output).not.toContain(rawFingerprint);
   });
 
@@ -621,10 +697,10 @@ describe("App", () => {
       initialOperatorVerifiedPageFingerprint: rawFingerprint
     });
 
-    expect(buttonAttrs(output, "1 Start test browser")).toContain("disabled");
-    expect(buttonAttrs(output, "2 Check current ticket page")).toContain("disabled");
-    expect(buttonAttrs(output, "3 Autofill allowed fields")).toContain("disabled");
-    expect(output).toContain("Disabled: Production is read-only in this workbench; choose the QA workspace for Start, Check Page, and Autofill.");
+    expect(buttonAttrs(output, "1 Start QA Chromium")).toContain("disabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).toContain("disabled");
+    expect(output).toContain("Disabled: Production is read-only in this workbench; choose the QA workspace for Start QA Chromium, Verify, and Autofill.");
     expect(output).toContain("Waiting for the dedicated test browser profile to connect.");
     expect(output).not.toContain("Browser connection ready; Check Page enabled.");
     expect(output).not.toContain("Current ticket page checked; Autofill can fill allowed text fields only.");
@@ -655,7 +731,7 @@ describe("App", () => {
 
     expect(primaryMarkup).toContain("Safety note");
     expect(primaryMarkup).toContain("AI drafts and fills allowed text fields only.");
-    expect(primaryMarkup).toContain("Human reviews and handles the record in ServiceNow.");
+    expect(primaryMarkup).toContain("Human reviews and submits in ServiceNow.");
     expect(primaryMarkup).not.toMatch(/<button[^>]*>\s*(Save|Submit|Update|Resolve|Close)\s*<\/button>/);
     expect(primaryMarkup).not.toContain("raw-session-id");
   });
@@ -665,6 +741,29 @@ describe("App", () => {
 
     expect(appSource).toContain("Load Mock Account Access Demo");
     expect(appSource).not.toContain("Load Account/Login Demo");
+  });
+
+  it("keeps labels, status text, and headings free of automation-implying wording for prohibited actions", () => {
+    const output = renderAppMarkup("en-US", { initialEnvironmentMode: "qa", initialRuntimeRailExpanded: true });
+    const primaryMarkup = mainMarkupWithoutSettings(output);
+
+    expect(primaryMarkup).not.toMatch(/<button[^>]*>\s*(Save|Submit|Update|Resolve|Close)\s*<\/button>/);
+    expect(primaryMarkup).not.toContain("automatically saves");
+    expect(primaryMarkup).not.toContain("auto-save");
+    expect(primaryMarkup).not.toContain("auto-submit");
+    expect(primaryMarkup).not.toContain("auto-update");
+    expect(primaryMarkup).not.toContain("will submit");
+    expect(primaryMarkup).not.toContain("will save");
+    expect(primaryMarkup).not.toContain("will update");
+    expect(primaryMarkup).not.toContain("will close");
+    expect(primaryMarkup).not.toContain("can submit");
+    expect(primaryMarkup).not.toContain("can save");
+    expect(primaryMarkup).not.toContain("can update");
+    expect(primaryMarkup).not.toContain("can close");
+    expect(primaryMarkup).not.toContain("saves the ticket");
+    expect(primaryMarkup).not.toContain("submits the ticket");
+    expect(primaryMarkup).not.toContain("updates the ticket");
+    expect(primaryMarkup).not.toContain("closes the ticket");
   });
 
   it("preserves first-class Settings with language, environment, URL inputs, and clear-state reasons", () => {
@@ -702,7 +801,7 @@ describe("App", () => {
     const simplifiedChineseSettings = settingsMarkup(renderAppMarkup("zh-CN"));
 
     expect(englishSettings).toContain("Default environment selector");
-    expect(englishSettings).toContain("Choose this workspace to use Start, Check Page, and Autofill. Production remains read-only.");
+    expect(englishSettings).toContain("Choose this workspace to use Start QA Chromium, Verify, and Autofill. Production remains read-only.");
     expect(englishSettings).toContain('value="production-shadow"');
     expect(englishSettings).toContain("Production");
     expect(visibleTextCount(englishSettings, "QA workspace")).toBe(1);
@@ -749,7 +848,6 @@ describe("App", () => {
     expect(primaryMarkup).toContain('rows="10"');
     expect(styles.lastIndexOf("textarea[data-auto-fit-field]")).toBeGreaterThan(styles.lastIndexOf("max-height: 70px"));
     expect(styles).toContain("max-height: none;");
-    expect(primaryMarkup).not.toContain("Confidence");
     expect(primaryMarkup).not.toContain("local evidence");
     expect(primaryMarkup).not.toContain("Create local draft");
     expect(primaryMarkup).not.toContain("Local draft only");
@@ -767,10 +865,10 @@ describe("App", () => {
     expect(zhTwOutput).toContain("QA 工作區");
     expect(zhTwOutput).toContain("選擇此工作區可使用啟動、檢查頁面、自動填入。生產保持唯讀。");
     expect(zhTwOutput).toContain("儲存設定");
-    expect(zhTwOutput).toContain("檢查目前工單頁面");
+    expect(zhTwOutput).toContain("驗證目前 Incident");
     expect(esOutput).toContain("Columnas del banco de trabajo del operador");
     expect(esOutput).toContain("Configuración");
-    expect(esOutput).toContain("Elige este espacio para usar Start, Check Page y Autofill. Producción permanece en solo lectura.");
+    expect(esOutput).toContain("Elige este espacio para usar Start QA Chromium, Verify y Autofill. Producción permanece en solo lectura.");
     expect(esOutput).toContain("Guardar configuración");
     expect(esOutput).toContain("Selector de entorno predeterminado");
     expect(esOutput).toContain("Contraer panel de acciones del navegador");
@@ -939,9 +1037,9 @@ describe("App", () => {
     expect(settingsMarkup).toContain("Production");
     expect(settingsMarkup).not.toContain("Production Shadow Mode");
     expect(settingsMarkup).not.toContain("Mock Demo");
-    expect(buttonAttrs(output, "1 Start test browser")).toContain("disabled");
-    expect(buttonAttrs(output, "2 Check current ticket page")).toContain("disabled");
-    expect(buttonAttrs(output, "3 Autofill allowed fields")).toContain("disabled");
+    expect(buttonAttrs(output, "1 Start QA Chromium")).toContain("disabled");
+    expect(buttonAttrs(output, "2 Verify current Incident")).toContain("disabled");
+    expect(buttonAttrs(output, "3 Autofill current Incident")).toContain("disabled");
   });
 
   it("localizes the operator workbench chrome to Chinese", () => {
@@ -954,10 +1052,10 @@ describe("App", () => {
     expect(output).toContain("清理摘要");
     expect(output).toContain("Incident 草稿");
     expect(output).toContain("浏览器操作");
-    expect(output).toContain("启动测试浏览器");
-    expect(output).toContain("禁用：请先启动测试浏览器，并等待浏览器连接就绪。");
-    expect(output).toContain("检查当前工单页面");
-    expect(output).toContain("自动填充允许字段");
+    expect(output).toContain("打开 QA Chromium");
+    expect(output).toContain("禁用：请先打开 QA Chromium，并等待浏览器连接就绪。");
+    expect(output).toContain("验证当前 Incident");
+    expect(output).toContain("自动填充当前 Incident");
     expect(output).toContain("设置");
   });
 
@@ -1118,6 +1216,19 @@ describe("App", () => {
     expect(expandedRail).toContain("No ServiceNow polling, API write, or production notification");
   });
 
+  it("renders the What Changed panel toggle in the expanded runtime rail", () => {
+    const defaultShell = renderAppMarkup("en-US");
+    const expandedRail = renderAppMarkup("en-US", {
+      initialRuntimeRailExpanded: true
+    });
+
+    expect(defaultShell).not.toContain("What changed in this round");
+    expect(expandedRail).toContain("What changed in this round");
+    expect(expandedRail).toContain("runtime-what-changed");
+    expect(expandedRail).toContain("what-changed-toggle");
+    expect(expandedRail).not.toContain('id="what-changed-content"');
+  });
+
   it("applies the default template around generated draft content", () => {
     const queueItem = buildDemoQueueItems("en-US")[0];
     const draft = buildDraftForQueueItem(queueItem);
@@ -1183,5 +1294,235 @@ describe("App", () => {
       writeAction: "submit_incident",
       approvalPhrase: ""
     });
+  });
+
+  it("renders the intake source type selector in the sidebar", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain('class="workbench-intake-selector"');
+    expect(output).toContain('aria-label="Intake source"');
+    expect(output).toContain('class="workbench-intake-select"');
+    expect(output).toContain('aria-label="Select intake source type"');
+  });
+
+  it("renders all 6 intake source kinds as select options", () => {
+    const output = renderAppMarkup();
+
+    for (const kind of IntakeSourceKinds) {
+      const adapter = sourceAdapterRegistry[kind];
+      expect(output).toContain(`value="${kind}"`);
+      expect(output).toContain(adapter.meta.label);
+    }
+  });
+
+  it("shows the safety notice on the intake selector", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain('class="workbench-intake-safety-notice"');
+    expect(output).toContain("Manual / stub / local only");
+  });
+
+  it("renders a disabled capture button when the textarea is empty", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain('class="workbench-intake-capture-btn"');
+    expect(buttonAttrs(output, "Capture as source")).toContain("disabled");
+  });
+
+  it("shows the paste placeholder on the intake textarea", () => {
+    const output = renderAppMarkup();
+
+    expect(output).toContain("Paste content from the selected source type");
+  });
+
+  it("maps operator actions to sanitized display labels", () => {
+    expect(operatorActionDisplayAction("launch")).toBe("QA Chromium launch");
+    expect(operatorActionDisplayAction("verify")).toBe("Verify");
+    expect(operatorActionDisplayAction("autofill")).toBe("Autofill");
+  });
+
+  it("maps internal blocked reason codes to sanitized plain-language descriptions", () => {
+    expect(operatorSanitizeBlockedReason("dedicated-browser-runtime-missing")).toBe(
+      "dedicated browser runtime unavailable"
+    );
+    expect(operatorSanitizeBlockedReason("qa-runtime-required")).toBe(
+      "production mode is read-only; switch to QA workspace"
+    );
+    expect(operatorSanitizeBlockedReason("cdp-endpoint-denied")).toBe(
+      "test browser disconnected; restart browser"
+    );
+    expect(operatorSanitizeBlockedReason("cdp-page-selection-denied")).toBe(
+      "could not find one unique approved Incident tab in the test browser"
+    );
+    expect(operatorSanitizeBlockedReason("no-default-plan")).toBe(
+      "could not build default autofill plan; no fields matched"
+    );
+    expect(operatorSanitizeBlockedReason("browser-step-timeout")).toBe(
+      "operation timed out; no ServiceNow action was taken"
+    );
+    expect(operatorSanitizeBlockedReason("approval-stale-after-page-change")).toBe(
+      "page changed after approval; re-check the current ticket page"
+    );
+  });
+
+  it("sanitizes unknown blocked reason codes to a generic fallback that does not leak internal details", () => {
+    expect(operatorSanitizeBlockedReason("sys_id_mismatch")).toBe(
+      "operation could not complete; retry from the browser action rail"
+    );
+    expect(operatorSanitizeBlockedReason("")).toBe(
+      "operation could not complete; retry from the browser action rail"
+    );
+  });
+
+  it("shows validation run stats on the history page, including zero-run empty state", () => {
+    const output = renderAppMarkup("en-US", { initialActivePage: "history" });
+
+    expect(output).toContain("Validation runs");
+    expect(output).toContain("Passed");
+    expect(output).toContain("Blocked");
+    expect(output).toContain("aria-label=\"History timeline context panel\"");
+  });
+
+  it("keeps the validation run description free of raw ServiceNow identifiers", () => {
+    const output = renderAppMarkup("en-US", { initialActivePage: "history" });
+
+    // The history description should not hint at raw ServiceNow URLs, sys_ids, or ticket IDs
+    const descriptionTagMatch = output.match(/<p[^>]*>([^<]*)history timeline description[^<]*<\/p>/i);
+    // Instead check the page for the expected sanitized description
+    expect(output).not.toContain("sys_id");
+    expect(output).not.toContain("sysId");
+    expect(output).not.toContain("ticket ID");
+    expect(output).not.toContain("ServiceNow URL");
+    expect(output).not.toContain("ServiceNow host");
+    expect(output).not.toContain("assignment group");
+  });
+
+  it("exportValidationRunsToMarkdown returns empty header when there are no runs", () => {
+    const md = exportValidationRunsToMarkdown([]);
+    expect(md).toContain("# Validation Runs");
+    expect(md).toContain("No validation runs recorded.");
+  });
+
+  it("exportValidationRunsToCsv returns header-only when there are no runs", () => {
+    const csv = exportValidationRunsToCsv([]);
+    expect(csv).toBe("Time,Action,Result,Details\n");
+  });
+
+  it("exportValidationRunsToMarkdown renders a table from validation runs", () => {
+    const runs = [
+      { id: "vr-1", timestamp: "2026-06-05 00:00:00", action: "launch" as const, status: "ok" as const, sanitizedSummary: "App launch ok, browser ready" },
+      { id: "vr-2", timestamp: "2026-06-05 00:01:00", action: "verify" as const, status: "blocked" as const, sanitizedSummary: "Page check blocked: could not find one unique approved Incident tab" }
+    ];
+    const md = exportValidationRunsToMarkdown(runs);
+    expect(md).toContain("| Time | Action | Result | Details |");
+    expect(md).toContain("| 2026-06-05 00:01:00 | Verify | BLOCKED | Page check blocked:");
+    expect(md).toContain("| 2026-06-05 00:00:00 | QA Chromium launch | OK | App launch ok, browser ready");
+  });
+
+  it("exportValidationRunsToCsv renders CSV rows from validation runs", () => {
+    const runs = [
+      { id: "vr-1", timestamp: "2026-06-05 00:00:00", action: "launch" as const, status: "ok" as const, sanitizedSummary: "App launch ok, browser ready" },
+      { id: "vr-2", timestamp: "2026-06-05 00:01:00", action: "verify" as const, status: "blocked" as const, sanitizedSummary: "Page check blocked: could not find one unique approved Incident tab" }
+    ];
+    const csv = exportValidationRunsToCsv(runs);
+    expect(csv).toContain("Time,Action,Result,Details");
+    expect(csv).toContain("2026-06-05 00:01:00,Verify,BLOCKED,\"Page check blocked:");
+    expect(csv).toContain("2026-06-05 00:00:00,QA Chromium launch,OK,\"App launch ok; browser ready\"");
+  });
+
+  it("exportValidationRunsToMarkdown does not contain raw ticket metadata", () => {
+    const runs = [
+      { id: "vr-1", timestamp: "2026-06-05 00:00:00", action: "launch" as const, status: "ok" as const, sanitizedSummary: "App launch ok, browser ready" }
+    ];
+    const md = exportValidationRunsToMarkdown(runs);
+    expect(md).not.toContain("sys_id");
+    expect(md).not.toContain("sysId");
+    expect(md).not.toContain("ticket ID");
+    expect(md).not.toContain("ServiceNow URL");
+    expect(md).not.toContain("INC");
+  });
+
+  it("exportValidationRunsToCsv does not contain raw ticket metadata", () => {
+    const runs = [
+      { id: "vr-1", timestamp: "2026-06-05 00:00:00", action: "launch" as const, status: "ok" as const, sanitizedSummary: "App launch ok, browser ready" }
+    ];
+    const csv = exportValidationRunsToCsv(runs);
+    expect(csv).not.toContain("sys_id");
+    expect(csv).not.toContain("sysId");
+    expect(csv).not.toContain("ticket ID");
+    expect(csv).not.toContain("ServiceNow URL");
+    expect(csv).not.toContain("INC");
+  });
+
+  it("exportProductReviewReport produces a complete Markdown report with all required sections", () => {
+    const queueItem = buildDemoQueueItems("en-US")[0];
+    const draft = buildDraftForQueueItem(queueItem);
+    const runs = [
+      { id: "vr-1", timestamp: "2026-06-05 00:00:00", action: "launch" as const, status: "ok" as const, sanitizedSummary: "App launch ok, browser ready" },
+      { id: "vr-2", timestamp: "2026-06-05 00:01:00", action: "verify" as const, status: "ok" as const, sanitizedSummary: "Page inspected, 8 allowed fields planned" },
+      { id: "vr-3", timestamp: "2026-06-05 00:02:00", action: "autofill" as const, status: "blocked" as const, sanitizedSummary: "Autofill blocked: approval phrase required" }
+    ];
+    const report = exportProductReviewReport(queueItem, draft, runs);
+
+    // Required sections
+    expect(report).toContain("# Product-Review Report");
+    expect(report).toContain("## Demo Scenario");
+    expect(report).toContain("## TicketDraft Summary");
+    expect(report).toContain("## KB / Support Recommendation");
+    expect(report).toContain("## Safety Boundary");
+    expect(report).toContain("## Validation Run Summary");
+    expect(report).toContain("## What This Proves");
+    expect(report).toContain("## What Remains Human-Only");
+    expect(report).toContain("## Export Safety Notice");
+
+    // Scenario info
+    expect(report).toContain(queueItem.scenarioId);
+    expect(report).toContain(queueItem.sourceChannel);
+
+    // Draft content
+    expect(report).toContain(draft.shortDescription.value);
+    expect(report).toContain("Local-only execution");
+    expect(report).toContain("No real ServiceNow write");
+
+    // Validation run data
+    expect(report).toContain("3"); // total runs
+    expect(report).toContain("2"); // passed
+    expect(report).toContain("1"); // blocked
+    expect(report).toContain("App launch ok, browser ready");
+
+    // Human-only language
+    expect(report).toContain("Final review of the TicketDraft");
+    expect(report).toContain("Save / Submit / Update / Resolve / Close in ServiceNow");
+    expect(report).toContain("Live ServiceNow configuration");
+
+    // Safety
+    expect(report).toContain("Blob download");
+    expect(report).toContain("no cloud write");
+  });
+
+  it("exportProductReviewReport handles empty validation runs gracefully", () => {
+    const queueItem = buildDemoQueueItems("en-US")[0];
+    const draft = buildDraftForQueueItem(queueItem);
+    const report = exportProductReviewReport(queueItem, draft, []);
+
+    expect(report).toContain("# Product-Review Report");
+    expect(report).toContain("Total runs");
+    expect(report).toContain("0");
+    expect(report).toContain("No validation runs recorded.");
+  });
+
+  it("exportProductReviewReport does not contain raw live identifiers", () => {
+    const queueItem = buildDemoQueueItems("en-US")[0];
+    const draft = buildDraftForQueueItem(queueItem);
+    const runs: { id: string; timestamp: string; action: "launch" | "verify" | "autofill"; status: "ok" | "blocked"; sanitizedSummary: string }[] = [];
+    const report = exportProductReviewReport(queueItem, draft, runs);
+
+    // The safety notice uses words like "credentials", "sys_ids", "password" to describe what's NOT included
+    // — those are acceptable in denial-of-presence context. Check only for actual prohibited patterns:
+    expect(report).not.toContain(".service-now.com");
+    expect(report).not.toContain("your-instance");
+    expect(report).not.toContain("admin");
+    expect(report).not.toContain("api_key");
+    expect(report).not.toContain("Bearer");
   });
 });

@@ -14,15 +14,18 @@ import {
 } from "@servicenow-automation/profiles";
 import {
   CapturedContextSchema,
+  IntakeSourceKinds,
   buildExcelDryRunWorkbookArtifact,
   buildQaTextFieldAutofillPlan,
   buildServiceDeskWorkflowPreview,
   evaluateQaSingleTicketSmokePlan,
   getRequiredQaAutofillApprovalPhrase,
   normalizeSourceContextText,
+  sourceAdapterRegistry,
   type CapturedContext,
   type ExcelDryRunWorkbookArtifact,
   type FieldDraft,
+  type IntakeSourceKind,
   type ProjectProfile,
   type QaAutofillPlan,
   type QaIncidentDefaultScenario,
@@ -135,6 +138,16 @@ type PreparedCopyDraft = {
 };
 
 type OperatorAction = "launch" | "verify" | "autofill";
+
+type QaValidationRunEntry = {
+  id: string;
+  timestamp: string;
+  action: OperatorAction;
+  status: "ok" | "blocked" | "timeout" | "error";
+  sanitizedSummary: string;
+  plannedFieldCount?: number;
+  filledFieldCount?: number;
+};
 
 export const OPERATOR_RUNTIME_ACTION_TIMEOUT_MS = 90_000;
 
@@ -1334,7 +1347,7 @@ const englishChromeTranslations: UiChromeTranslations = {
         safetyNotes: [
           "Production is visible for selection and target review, but browser actions remain disabled outside QA.",
           "No state-changing production path is implemented.",
-          "Use QA-only browser controls for Start, Check Page, and Autofill.",
+          "Use QA-only browser controls for Start QA Chromium, Verify, and Autofill.",
           "Upgrade to a separate safety review before considering any production write capability."
         ]
       }
@@ -1684,32 +1697,32 @@ const englishOperatorWorkbenchCopy = {
     collapseRuntime: "Collapse browser action rail",
     expandRuntime: "Expand browser action rail",
     collapsedTitle: "Browser actions",
-    collapsedHint: "Collapsed. Expand to access Start test browser, Check current ticket page, and Autofill allowed fields.",
+    collapsedHint: "Collapsed. Expand to access Start QA Chromium, Verify, and Autofill.",
     statusReady: "Ready",
     statusBusy: "Working",
     statusBlocked: "Blocked",
     statusSuccess: "Verified",
-    statusVerified: "Current ticket page checked; Autofill can fill allowed text fields only.",
-    statusCdpReady: "Browser connection ready; Check Page enabled.",
+    statusVerified: "Current ticket verified; Autofill can fill allowed text fields only.",
+    statusCdpReady: "Browser connection ready; verify the current Incident.",
     statusWaiting: "Waiting for the dedicated test browser profile to connect.",
-    startTitle: "Start test browser",
-    startDescription: "Opens the same dedicated test browser profile for the QA workspace, so your ServiceNow sign-in can stay remembered; manual login remains yours.",
-    starting: "Starting test browser",
-    verifyTitle: "Check current ticket page",
-    verifyDescription: "Confirms the visible Incident form is safe and current before any fill.",
-    verifying: "Checking current ticket page",
-    autofillTitle: "Autofill allowed fields",
-    autofillDescription: "Fills allowed fields only after page check. It never saves or submits.",
-    autofilling: "Autofilling allowed fields",
+    startTitle: "Start QA Chromium",
+    startDescription: "Opens a dedicated test browser profile for the QA workspace so your ServiceNow sign-in can stay remembered; manual login remains yours.",
+    starting: "Starting QA Chromium",
+    verifyTitle: "Verify current Incident",
+    verifyDescription: "Confirms the visible Incident form is safe and current before any autofill.",
+    verifying: "Verifying current Incident",
+    autofillTitle: "Autofill current Incident",
+    autofillDescription: "Fills allowed text fields only after the page is verified. It never saves or submits.",
+    autofilling: "Autofilling current Incident",
     readyChip: "Ready",
     waitingChip: "Waiting",
-    disabledProductionReason: "Disabled: Production is read-only in this workbench; choose the QA workspace for Start, Check Page, and Autofill.",
+    disabledProductionReason: "Disabled: Production is read-only in this workbench; choose the QA workspace for Start QA Chromium, Verify, and Autofill.",
     disabledTargetReason: "Disabled: configure an allowed QA target in Settings first.",
-    disabledBusyReason: "Disabled: another browser/test step is still working.",
-    startReadyReason: "Ready: opens the same dedicated test browser profile for QA; saved sign-in can be reused.",
-    verifyCdpReason: "Disabled: start the test browser and wait until the browser connection is ready.",
-    verifyReadyReason: "Ready: browser connection is ready; check the visible ticket page.",
-    autofillVerifyReason: "Disabled: check the current ticket page first.",
+    disabledBusyReason: "Disabled: another browser or step is still working.",
+    startReadyReason: "Ready: opens a dedicated test browser profile for QA; saved sign-in can be reused.",
+    verifyCdpReason: "Disabled: start QA Chromium and wait until the browser connection is ready.",
+    verifyReadyReason: "Ready: browser connection is ready; verify the current Incident.",
+    autofillVerifyReason: "Disabled: verify the current Incident first.",
     autofillReadyReason: "Ready: Autofill can fill allowed text fields only; you still review manually.",
     autofillCompletedFeedback: (filledCount: number) =>
       `Autofill completed: ${filledCount} text fields filled. No Save, Submit, Update, Resolve, Close, upload, email, or ServiceNow API was used.`,
@@ -1723,7 +1736,21 @@ const englishOperatorWorkbenchCopy = {
     sanitizedEvidence: "Sanitized browser status evidence available.",
     noEvidence: "No browser status evidence yet; only sanitized status is shown.",
     safetyTitle: "Safety note",
-    safetyNote: "AI drafts and fills allowed text fields only. Human reviews and handles the record in ServiceNow. No Save, Submit, Update, Resolve, Close, upload, email, or ServiceNow API is automated."
+    safetyNote: "AI drafts and fills allowed text fields only. Human reviews and submits in ServiceNow.",
+    whatChanged: {
+      title: "What changed in this round",
+      summary: "This workbench has been hardened through multiple rounds of automated checks and manual validation since the last release. Every test of the automation proves it is safe and visible before any fill action.",
+      whyRepeatedValidation: "Manual checks are repeated because every ServiceNow session, browser profile, and ticket page is different. The app always validates the current page before any fill, so a stolen session or wrong window cannot trigger accidental data entry.",
+      whatIsAutomated: "Automated: browser launch, page verification, text-field checks, and autofill of allowed Short description, Description, and Work notes fields.",
+      whatIsHumanOnly: "Human-only: reading the ticket, judging its severity, typing not-allowed fields, saving, submitting, updating, resolving, closing, emailing, attachments, and any ServiceNow API write.",
+      doesNotDo: [
+        "This app does NOT save, submit, update, resolve, or close any ServiceNow record.",
+        "It does NOT upload attachments, send emails, or trigger ServiceNow API writes.",
+        "It does NOT access production data — it reads only the visible QA page in a dedicated browser profile.",
+        "All automated actions are limited to text-field fills after a verified page check."
+      ],
+      footer: "Human reviews and manually submits in ServiceNow."
+    }
   },
   settings: {
     ariaLabel: "Workbench settings",
@@ -1740,7 +1767,7 @@ const englishOperatorWorkbenchCopy = {
     defaultEnvironmentSelector: "Default environment selector",
     qaTestEnvironment: "QA workspace",
     productionEnvironment: "Production",
-    environmentHelper: "Choose this workspace to use Start, Check Page, and Autofill. Production remains read-only.",
+    environmentHelper: "Choose this workspace to use Start QA Chromium, Verify, and Autofill. Production remains read-only.",
     environmentBusyHelper: "Disabled: wait for the current browser step to finish before changing settings.",
     urlSettingsTitle: "ServiceNow target settings",
     compactSafety: "Only authorized landing targets are accepted. Secrets, record identifiers, tokens, cookies, query strings, and hash fragments stay blocked.",
@@ -1750,7 +1777,7 @@ const englishOperatorWorkbenchCopy = {
     qaUrl: "QA target",
     productionUrl: "Production target",
     urlDescriptionQa: "Authorized QA landing page for controlled testing; the value is hidden after validation.",
-    urlDescriptionProduction: "Production target remains read-only; Start, Check Page, and Autofill stay unavailable outside QA.",
+    urlDescriptionProduction: "Production target remains read-only; Start QA Chromium, Verify, and Autofill stay unavailable outside QA.",
     qaSubmitPolicy: "QA fill requires Start, current-page check, and approved text-only autofill checks.",
     productionPolicy: "Production is read-only in this workbench; no automated write path is enabled.",
     activeCustomTarget: "Custom target active; raw value hidden",
@@ -1839,32 +1866,32 @@ const operatorWorkbenchTranslations = {
       collapseRuntime: "折叠浏览器操作栏",
       expandRuntime: "展开浏览器操作栏",
       collapsedTitle: "浏览器操作",
-      collapsedHint: "已折叠。展开后可使用启动测试浏览器、检查当前工单页面、自动填充允许字段。",
+      collapsedHint: "已折叠。展开后可打开 QA Chromium、验证当前工单和自动填充允许字段。",
       statusReady: "就绪",
       statusBusy: "处理中",
       statusBlocked: "已阻止",
       statusSuccess: "已验证",
-      statusVerified: "当前工单页面已检查；自动填充只能填写允许的文本字段。",
-      statusCdpReady: "浏览器连接已准备好；可以检查当前工单页面。",
+      statusVerified: "当前工单已验证；自动填充只能填写允许的文本字段。",
+      statusCdpReady: "浏览器连接已准备好；可以验证当前 Incident。",
       statusWaiting: "等待单独的测试浏览器连接。",
-      startTitle: "启动测试浏览器",
-      startDescription: "打开同一个专用 QA 测试浏览器 Profile，可保留 ServiceNow 登录状态；登录仍由你手动完成。",
-      starting: "正在启动测试浏览器",
-      verifyTitle: "检查当前工单页面",
-      verifyDescription: "在任何填充前确认可见 Incident 表单安全且仍是当前页面。",
-      verifying: "正在检查当前工单页面",
-      autofillTitle: "自动填充允许字段",
-      autofillDescription: "页面检查后只填写允许字段。它不会保存或提交。",
-      autofilling: "正在自动填充允许字段",
+      startTitle: "打开 QA Chromium",
+      startDescription: "打开专用测试浏览器 Profile，可保留 ServiceNow 登录状态；登录仍由你手动完成。",
+      starting: "正在打开 QA Chromium",
+      verifyTitle: "验证当前 Incident",
+      verifyDescription: "在自动填充前确认可见 Incident 表单安全且仍是当前页面。",
+      verifying: "正在验证当前 Incident",
+      autofillTitle: "自动填充当前 Incident",
+      autofillDescription: "页面验证后只填写允许的文本字段。它不会保存或提交。",
+      autofilling: "正在自动填充当前 Incident",
       readyChip: "就绪",
       waitingChip: "等待",
-      disabledProductionReason: "禁用：生产环境在此工作台中保持只读；如需启动、检查页面、自动填充，请选择 QA 工作区。",
+      disabledProductionReason: "禁用：生产环境在此工作台中保持只读；如需打开、验证、自动填充，请选择 QA 工作区。",
       disabledTargetReason: "禁用：请先在设置中配置允许的 QA 目标。",
-      disabledBusyReason: "禁用：另一个浏览器/测试步骤仍在处理中。",
-      startReadyReason: "就绪：打开同一个专用 QA 测试浏览器 Profile；可复用已保存的登录状态。",
-      verifyCdpReason: "禁用：请先启动测试浏览器，并等待浏览器连接就绪。",
-      verifyReadyReason: "就绪：浏览器连接已准备好，可以检查当前工单页面。",
-      autofillVerifyReason: "禁用：请先检查当前工单页面。",
+      disabledBusyReason: "禁用：另一个浏览器或步骤仍在处理中。",
+      startReadyReason: "就绪：打开专用 QA 测试浏览器 Profile；可复用已保存的登录状态。",
+      verifyCdpReason: "禁用：请先打开 QA Chromium，并等待浏览器连接就绪。",
+      verifyReadyReason: "就绪：浏览器连接已准备好，可以验证当前 Incident。",
+      autofillVerifyReason: "禁用：请先验证当前 Incident。",
       autofillReadyReason: "就绪：自动填充只能填写允许的文本字段；仍需人工审核。",
       autofillCompletedFeedback: (filledCount: number) =>
         `自动填充已完成：已填写 ${filledCount} 个文本字段。没有执行 Save、Submit、Update、Resolve、Close、上传、邮件或 ServiceNow API。`,
@@ -1878,7 +1905,21 @@ const operatorWorkbenchTranslations = {
       sanitizedEvidence: "仅显示已清理的浏览器状态证据。",
       noEvidence: "暂无浏览器状态证据；仅显示已清理状态。",
       safetyTitle: "安全说明",
-      safetyNote: "AI 仅起草并填入允许的文本字段。人工审核并在 ServiceNow 中处理记录。"
+      safetyNote: "AI 仅起草并填入允许的文本字段。人工审核并在 ServiceNow 中处理记录。",
+      whatChanged: {
+        title: "本轮更新内容",
+        summary: "自上次发布以来，该工作台已通过多轮自动化检查和手动验证不断完善。每次自动化测试都证明在填充前的安全性和可见性。",
+        whyRepeatedValidation: "每次 ServiceNow 会话、浏览器 Profile 和工单页面都不同，因此必须重复手动检查。应用始终在填充前验证当前页面，防止被盗会话或错误窗口触发意外数据录入。",
+        whatIsAutomated: "已自动化：启动浏览器、页面验证、文本字段检查、允许字段（短描述、描述、工作备注）的自动填充。",
+        whatIsHumanOnly: "仅人工操作：阅读工单、判断严重级别、输入不允许字段、保存、提交、更新、解决、关闭、发送邮件、附件以及任何 ServiceNow API 写入。",
+        doesNotDo: [
+          "此应用不会保存、提交、更新、解决或关闭任何 ServiceNow 记录。",
+          "不会上传附件、发送邮件或触发 ServiceNow API 写入。",
+          "不会访问生产数据——仅读取专用浏览器 Profile 中可见的 QA 页面。",
+          "所有自动化操作仅限于页面验证后的文本字段填充。"
+        ],
+        footer: "由人工审核并在 ServiceNow 中手动提交。"
+      }
     },
     settings: {
       ariaLabel: "工作台设置",
@@ -1991,32 +2032,32 @@ const operatorWorkbenchTranslations = {
       collapseRuntime: "收合瀏覽器操作欄",
       expandRuntime: "展開瀏覽器操作欄",
       collapsedTitle: "瀏覽器操作",
-      collapsedHint: "已收合。展開後可使用啟動測試瀏覽器、檢查目前工單頁面、自動填入允許欄位。",
+      collapsedHint: "已收合。展開後可使用打開 QA Chromium、驗證和自動填入。",
       statusReady: "就緒",
       statusBusy: "處理中",
       statusBlocked: "已阻止",
       statusSuccess: "已驗證",
-      statusVerified: "目前工單頁面已檢查；自動填入只能填寫允許的文字欄位。",
-      statusCdpReady: "瀏覽器連線已準備好；可以檢查目前工單頁面。",
+      statusVerified: "目前工單已驗證；自動填入只能填寫允許的文字欄位。",
+      statusCdpReady: "瀏覽器連線已準備好；可以驗證目前 Incident。",
       statusWaiting: "等待單獨的測試瀏覽器連線。",
-      startTitle: "啟動測試瀏覽器",
-      startDescription: "開啟同一個專用 QA 測試瀏覽器 Profile，可保留 ServiceNow 登入狀態；登入仍由你手動完成。",
-      starting: "正在啟動測試瀏覽器",
-      verifyTitle: "檢查目前工單頁面",
+      startTitle: "打開 QA Chromium",
+      startDescription: "打開專用測試瀏覽器 Profile，可保留 ServiceNow 登入狀態；登入仍由你手動完成。",
+      starting: "正在打開 QA Chromium",
+      verifyTitle: "驗證目前 Incident",
       verifyDescription: "在任何填入前確認可見 Incident 表單安全且仍是目前頁面。",
-      verifying: "正在檢查目前工單頁面",
-      autofillTitle: "自動填入允許欄位",
-      autofillDescription: "頁面檢查後只填入允許欄位。不會儲存或提交。",
-      autofilling: "正在自動填入允許欄位",
+      verifying: "正在驗證目前 Incident",
+      autofillTitle: "自動填入目前 Incident",
+      autofillDescription: "頁面驗證後只填入允許的文字欄位。它不會儲存或提交。",
+      autofilling: "正在自動填入目前 Incident",
       readyChip: "就緒",
       waitingChip: "等待",
-      disabledProductionReason: "停用：生產環境在此工作臺中保持唯讀；如需啟動、檢查、自動填入，請選擇 QA 工作區。",
+      disabledProductionReason: "停用：生產環境在此工作臺中保持唯讀；如需打開、驗證、自動填入，請選擇 QA 工作區。",
       disabledTargetReason: "停用：請先在設定中設定允許的 QA 目標。",
-      disabledBusyReason: "停用：另一個瀏覽器/測試步驟仍在處理中。",
-      startReadyReason: "就緒：開啟同一個專用 QA 測試瀏覽器 Profile；可重用已儲存的登入狀態。",
-      verifyCdpReason: "停用：請先啟動測試瀏覽器，並等待瀏覽器連線就緒。",
-      verifyReadyReason: "就緒：瀏覽器連線已準備好，可以檢查目前工單頁面。",
-      autofillVerifyReason: "停用：請先檢查目前工單頁面。",
+      disabledBusyReason: "停用：另一個瀏覽器或步驟仍在處理中。",
+      startReadyReason: "就緒：打開專用 QA 測試瀏覽器 Profile；可重用已儲存的登入狀態。",
+      verifyCdpReason: "停用：請先打開 QA Chromium，並等待瀏覽器連線就緒。",
+      verifyReadyReason: "就緒：瀏覽器連線已準備好，可以驗證目前 Incident。",
+      autofillVerifyReason: "停用：請先驗證目前 Incident。",
       autofillReadyReason: "就緒：自動填入只能填寫允許的文字欄位；仍需人工審核。",
       autofillCompletedFeedback: (filledCount: number) =>
         `自動填入已完成：已填寫 ${filledCount} 個文字欄位。沒有執行 Save、Submit、Update、Resolve、Close、上傳、郵件或 ServiceNow API。`,
@@ -2030,7 +2071,21 @@ const operatorWorkbenchTranslations = {
       sanitizedEvidence: "僅顯示已清理的瀏覽器狀態證據。",
       noEvidence: "尚無瀏覽器狀態證據；僅顯示已清理狀態。",
       safetyTitle: "安全說明",
-      safetyNote: "AI 僅起草並填入允許的文字欄位。人工審核並在 ServiceNow 中處理記錄。"
+      safetyNote: "AI 僅起草並填入允許的文字欄位。人工審核並在 ServiceNow 中處理記錄。",
+      whatChanged: {
+        title: "本輪更新內容",
+        summary: "自上次發佈以來，該工作臺已透過多輪自動化檢查和手動驗證不斷完善。每次自動化測試都證明了填入前的安全性和可見性。",
+        whyRepeatedValidation: "每次 ServiceNow 會話、瀏覽器 Profile 和工單頁面都不同，因此必須重複手動檢查。應用始終在填入前驗證目前頁面，防止被盜會話或錯誤視窗觸發意外資料录入。",
+        whatIsAutomated: "已自動化：啟動瀏覽器、頁面驗證、文字欄位檢查、允許欄位（短描述、描述、工作備註）的自動填入。",
+        whatIsHumanOnly: "僅人工操作：閱讀工單、判斷嚴重級別、輸入不允許欄位、儲存、提交、更新、解決、關閉、發送郵件、附件以及任何 ServiceNow API 寫入。",
+        doesNotDo: [
+          "此應用不會儲存、提交、更新、解決或關閉任何 ServiceNow 記錄。",
+          "不會上傳附件、發送郵件或觸發 ServiceNow API 寫入。",
+          "不會存取生產資料——僅讀取專用瀏覽器 Profile 中可見的 QA 頁面。",
+          "所有自動化操作僅限於頁面驗證後的文字欄位填入。"
+        ],
+        footer: "由人工審核並在 ServiceNow 中手動提交。"
+      }
     },
     settings: {
       ariaLabel: "工作臺設定",
@@ -2143,32 +2198,32 @@ const operatorWorkbenchTranslations = {
       collapseRuntime: "Contraer panel de acciones del navegador",
       expandRuntime: "Expandir panel de acciones del navegador",
       collapsedTitle: "Acciones del navegador",
-      collapsedHint: "Contraído. Expande para acceder a Start test browser, Check current ticket page y Autofill allowed fields.",
+      collapsedHint: "Contraído. Expande para acceder a Start QA Chromium, Verify y Autofill.",
       statusReady: "Listo",
       statusBusy: "Trabajando",
       statusBlocked: "Bloqueado",
       statusSuccess: "Verificado",
-      statusVerified: "Página de ticket actual revisada; Autofill solo puede rellenar campos de texto permitidos.",
-      statusCdpReady: "Navegador conectado; se habilita revisar la página actual del ticket.",
+      statusVerified: "Ticket actual verificado; Autofill puede rellenar solo campos de texto permitidos.",
+      statusCdpReady: "Conexión del navegador lista; verifica el Incident actual.",
       statusWaiting: "Esperando la conexión del navegador de prueba separado.",
-      startTitle: "Start test browser",
-      startDescription: "Abre el mismo perfil dedicado del navegador de prueba para QA, para que el inicio de sesión de ServiceNow pueda conservarse; el inicio de sesión sigue siendo tuyo.",
-      starting: "Iniciando navegador de prueba",
-      verifyTitle: "Check current ticket page",
-      verifyDescription: "Confirma que el formulario Incident visible sea seguro y actual antes de rellenar.",
-      verifying: "Revisando la página de ticket actual",
-      autofillTitle: "Autofill allowed fields",
-      autofillDescription: "Rellena solo campos permitidos después de revisar la página. Nunca guarda ni envía.",
-      autofilling: "Autorrellenando campos permitidos",
+      startTitle: "Start QA Chromium",
+      startDescription: "Abre un perfil de navegador de prueba dedicado para QA, para que el inicio de sesión de ServiceNow pueda conservarse; el inicio de sesión sigue siendo tuyo.",
+      starting: "Iniciando QA Chromium",
+      verifyTitle: "Verify current Incident",
+      verifyDescription: "Confirma que el formulario Incident visible sea seguro y actual antes de autocompletar.",
+      verifying: "Verificando Incident actual",
+      autofillTitle: "Autofill current Incident",
+      autofillDescription: "Rellena solo campos de texto permitidos después de verificar la página. Nunca guarda ni envía.",
+      autofilling: "Autocompletando Incident actual",
       readyChip: "Listo",
       waitingChip: "Espera",
-      disabledProductionReason: "Deshabilitado: Producción es de solo lectura en este workbench; elige QA workspace para Start, Check y Autofill.",
+      disabledProductionReason: "Deshabilitado: Producción es de solo lectura en este workbench; elige QA workspace para Start QA Chromium, Verify y Autofill.",
       disabledTargetReason: "Deshabilitado: configura primero un destino QA permitido en Settings.",
-      disabledBusyReason: "Deshabilitado: otro paso de navegador/prueba sigue en curso.",
-      startReadyReason: "Listo: abre el mismo perfil dedicado del navegador de prueba para QA; se puede reutilizar el inicio de sesión guardado.",
-      verifyCdpReason: "Deshabilitado: inicia el navegador de prueba y espera a que la conexión del navegador esté lista.",
-      verifyReadyReason: "Listo: conexión del navegador preparada; revisa la página de ticket visible.",
-      autofillVerifyReason: "Deshabilitado: primero revisa la página de ticket actual.",
+      disabledBusyReason: "Deshabilitado: otro paso del navegador sigue en curso.",
+      startReadyReason: "Listo: abre un perfil de navegador de prueba dedicado para QA; se puede reutilizar el inicio de sesión guardado.",
+      verifyCdpReason: "Deshabilitado: inicia QA Chromium y espera a que la conexión del navegador esté lista.",
+      verifyReadyReason: "Listo: conexión del navegador preparada; verifica el Incident actual.",
+      autofillVerifyReason: "Deshabilitado: verifica el Incident actual primero.",
       autofillReadyReason: "Listo: Autofill puede rellenar solo campos de texto permitidos; aún revisas manualmente.",
       autofillCompletedFeedback: (filledCount: number) =>
         `Autofill completado: ${filledCount} campos de texto rellenados. No se usó Save, Submit, Update, Resolve, Close, carga, correo ni ServiceNow API.`,
@@ -2182,7 +2237,21 @@ const operatorWorkbenchTranslations = {
       sanitizedEvidence: "Solo evidencia depurada del estado del navegador.",
       noEvidence: "Sin evidencia del estado del navegador; solo se muestra estado depurado.",
       safetyTitle: "Nota de seguridad",
-      safetyNote: "La IA redacta y rellena solo campos de texto permitidos. El humano revisa y maneja el registro en ServiceNow."
+      safetyNote: "La IA redacta y rellena solo campos de texto permitidos. El humano revisa y maneja el registro en ServiceNow.",
+      whatChanged: {
+        title: "Qué cambió en esta ronda",
+        summary: "Este banco de trabajo se ha reforzado a través de múltiples rondas de comprobaciones automatizadas y validación manual desde la última versión. Cada prueba de la automatización demuestra que es segura y visible antes de cualquier acción de relleno.",
+        whyRepeatedValidation: "Las comprobaciones manuales se repiten porque cada sesión de ServiceNow, perfil de navegador y página de ticket es diferente. La aplicación siempre valida la página actual antes de rellenar, por lo que una sesión robada o una ventana incorrecta no pueden desencadenar una entrada de datos accidental.",
+        whatIsAutomated: "Automatizado: lanzamiento del navegador, verificación de página, comprobaciones de campos de texto y autocompletado de los campos permitidos Descripción corta, Descripción y Notas de trabajo.",
+        whatIsHumanOnly: "Solo humano: leer el ticket, juzgar su gravedad, escribir campos no permitidos, guardar, enviar, actualizar, resolver, cerrar, enviar correos electrónicos, adjuntos y cualquier escritura de API de ServiceNow.",
+        doesNotDo: [
+          "Esta aplicación NO guarda, envía, actualiza, resuelve ni cierra ningún registro de ServiceNow.",
+          "No carga archivos adjuntos, envía correos electrónicos ni activa escrituras de API de ServiceNow.",
+          "No accede a datos de producción: solo lee la página QA visible en un perfil de navegador dedicado.",
+          "Todas las acciones automatizadas se limitan al relleno de campos de texto después de una verificación de página."
+        ],
+        footer: "El humano revisa y envía manualmente en ServiceNow."
+      }
     },
     settings: {
       ariaLabel: "Configuración del banco de trabajo",
@@ -2199,7 +2268,7 @@ const operatorWorkbenchTranslations = {
       defaultEnvironmentSelector: "Selector de entorno predeterminado",
       qaTestEnvironment: "QA workspace",
       productionEnvironment: "Producción",
-      environmentHelper: "Elige este espacio para usar Start, Check Page y Autofill. Producción permanece en solo lectura.",
+      environmentHelper: "Elige este espacio para usar Start QA Chromium, Verify y Autofill. Producción permanece en solo lectura.",
       environmentBusyHelper: "Deshabilitado: espera a que termine la acción actual antes de cambiar la configuración.",
       urlSettingsTitle: "Configuración de destino de ServiceNow",
       compactSafety: "Solo se aceptan destinos iniciales autorizados. Secretos, identificadores de registro, tokens, cookies, query strings y fragments quedan bloqueados.",
@@ -2823,6 +2892,9 @@ export function App({
   const leftSidebarHandleSuppressClickRef = useRef(false);
   const [runtimeRailExpanded, setRuntimeRailExpanded] = useState(initialRuntimeRailExpanded);
   const [selectedScenarioId, setSelectedScenarioId] = useState<ManualPasteScenario["id"]>("vpn-issue");
+  const [selectedIntakeKind, setSelectedIntakeKind] = useState<IntakeSourceKind>("manual_paste");
+  const [intakeRawText, setIntakeRawText] = useState("");
+  const [capturedContexts, setCapturedContexts] = useState<CapturedContext[]>([]);
   const [selectedQueueItemId, setSelectedQueueItemId] = useState(demoQueueDefinitions[0].id);
   const [queueStatuses, setQueueStatuses] = useState<Partial<Record<string, DemoQueueStatus>>>({});
   const queueItems = useMemo(() => buildDemoQueueItems(language, queueStatuses), [language, queueStatuses]);
@@ -2871,6 +2943,8 @@ export function App({
   );
   const operatorActionSequenceRef = useRef(0);
   const operatorActionTimeoutRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
+  const [validationRunHistory, setValidationRunHistory] = useState<QaValidationRunEntry[]>([]);
+  const [monthlyExcelFillState, setMonthlyExcelFillState] = useState<"pending" | "queued" | "deferred">("pending");
 
   useEffect(() => {
     return () => {
@@ -3286,6 +3360,44 @@ export function App({
       setOperatorVerifiedPageFingerprint("");
     }
     setOperatorStatus(finalState.operatorStatus);
+
+    // Record sanitized validation run entry for the History page
+    if (response) {
+      setValidationRunHistory((prev) => {
+        const runId = `vr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
+        const action = finalState.action;
+        const filledFields = response.runtime?.filledFields;
+        const plannedFields = response.defaultPlan?.plannedFields;
+        const filledCount = filledFields?.length ?? 0;
+        const plannedCount = plannedFields?.length ?? 0;
+        const ok = response.ok === true;
+        const blocked = !ok;
+        let status: QaValidationRunEntry["status"];
+        let summary: string;
+        if (blocked) {
+          status = "blocked";
+          const reason =
+            response.launch?.blockedReason ??
+            response.fieldInspection?.blockedReason ??
+            response.defaultPlan?.blockedReason ??
+            response.runtime?.blockedReason ??
+            "unknown";
+          summary = `${operatorActionDisplayAction(action)} blocked: ${operatorSanitizeBlockedReason(reason)}`;
+        } else {
+          status = "ok";
+          if (action === "launch") {
+            summary = "App launch ok, browser ready";
+          } else if (action === "verify") {
+            summary = `Page inspected${plannedCount > 0 ? `, ${plannedCount} allowed fields planned` : ""}`;
+          } else {
+            summary = `${filledCount} allowed fields filled, no prohibited action`;
+          }
+        }
+        // Keep only the last 20 entries
+        return [...prev.slice(-19), { id: runId, timestamp, action, status, sanitizedSummary: summary, plannedFieldCount: plannedCount || undefined, filledFieldCount: filledCount || undefined }];
+      });
+    }
   }
 
   function finishOperatorAction(actionSequence: number, finalState: OperatorActionFinalState) {
@@ -3378,6 +3490,65 @@ export function App({
   const workbenchEnvironmentLabel = getWorkbenchEnvironmentChipLabel(selectedEnvironmentMode, workbenchCopy);
   const workbenchTargetStatusLabel = targetConfigured ? workbenchCopy.target.configured : workbenchCopy.target.missing;
   const topbarTargetChipClass = targetConfigured ? "workbench-status-pill success" : "workbench-status-pill warning";
+  const kbMatches = searchKnowledgeArticles(sourceCleanup.normalizedText, demoKnowledgeArticles, { limit: 3 });
+  const monthlyExcelRow = serviceDeskWorkflowPreview.excelDryRunRowPreview.row;
+  const currentMonthLabel = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const previousMonthLabel = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const monthlyWorkbookLabel = `Service Desk monthly ticket log — ${currentMonthLabel}`;
+  const guidedDemoSourceReady = sourceCleanup.normalizedText.trim().length > 0;
+  const guidedDemoDraftReady =
+    fieldValue(draft.shortDescription).trim().length > 0 &&
+    fieldValue(draft.description).trim().length > 0 &&
+    fieldValue(draft.workNotes).trim().length > 0;
+  const guidedDemoVerifyReady =
+    targetConfigured &&
+    operatorCdpReady &&
+    Boolean(operatorVerifiedPageFingerprint);
+  const guidedDemoAutofillReady = qaAutofillPlan.status === "ready-for-autofill";
+  const guidedDemoSteps = [
+    {
+      number: "1",
+      title: "Choose source",
+      note: `Selected queue item: ${operatorSafeDisplayText(selectedQueueItem.sourceChannel)}`,
+      status: "completed"
+    },
+    {
+      number: "2",
+      title: "Review cleaned context",
+      note: guidedDemoSourceReady ? `Sanitized text ready (${sourceCleanup.removedLineCount} lines removed)` : "Waiting for cleaned source text",
+      status: guidedDemoSourceReady ? "completed" : "current"
+    },
+    {
+      number: "3",
+      title: "Draft TicketDraft",
+      note: guidedDemoDraftReady ? "Short description, description, and work notes are populated" : "Keep editing the draft fields until the ticket draft is complete",
+      status: guidedDemoDraftReady ? "completed" : "current"
+    },
+    {
+      number: "4",
+      title: "Check KB recommendations",
+      note: kbMatches.length > 0 ? `${kbMatches.length} local KB suggestion${kbMatches.length === 1 ? "" : "s"} matched` : "No local KB match yet; use the sanitized draft context",
+      status: kbMatches.length > 0 ? "completed" : guidedDemoDraftReady ? "current" : "locked"
+    },
+    {
+      number: "5",
+      title: "Verify and report",
+      note: guidedDemoVerifyReady
+        ? "Test browser readiness and page verification are complete; the human still reviews the result"
+        : targetConfigured
+          ? "Wait for browser readiness and a verified page fingerprint before reporting"
+          : "Configure a QA/dev target before verification can run",
+      status: guidedDemoVerifyReady ? "completed" : targetConfigured ? "current" : "locked"
+    },
+    {
+      number: "6",
+      title: "Optional QA/dev text-field assistance",
+      note: guidedDemoAutofillReady
+        ? "Selector-verified, approval-gated text-field autofill is ready"
+        : "This remains optional and stays blocked until the selector-verified plan is ready",
+      status: guidedDemoAutofillReady ? "completed" : guidedDemoVerifyReady ? "current" : "locked"
+    }
+  ] as const;
   const cleanedSummaryRows = [
     { label: workbenchCopy.cards.issue, value: operatorSafeDisplayText(fieldValue(draft.shortDescription)) },
     { label: workbenchCopy.cards.impact, value: operatorSafeDisplayText(selectedQueueItem.bodyPreview) },
@@ -3553,6 +3724,107 @@ export function App({
               <span>{workbenchCopy.list.recent}</span>
             </div>
 
+            <section className="workbench-intake-selector" aria-label="Intake source">
+              <div className="workbench-intake-selector-row">
+                <select
+                  aria-label="Select intake source type"
+                  className="workbench-intake-select"
+                  value={selectedIntakeKind}
+                  onChange={(event) => {
+                    setSelectedIntakeKind(event.currentTarget.value as IntakeSourceKind);
+                    setIntakeRawText("");
+                  }}
+                >
+                  {IntakeSourceKinds.map((kind) => {
+                    const adapter = sourceAdapterRegistry[kind];
+                    return (
+                      <option key={kind} value={kind}>
+                        {adapter.meta.label}
+                      </option>
+                    );
+                  })}
+                </select>
+                <textarea
+                  aria-label="Paste or type intake content"
+                  className="workbench-intake-textarea"
+                  placeholder="Paste content from the selected source type…"
+                  value={intakeRawText}
+                  onChange={(event) => setIntakeRawText(event.currentTarget.value)}
+                  rows={2}
+                />
+                <div className="workbench-intake-actions">
+                  <span className="workbench-intake-safety-notice">{sourceAdapterRegistry[selectedIntakeKind].meta.safetyNotice}</span>
+                  <button
+                    type="button"
+                    className="workbench-intake-capture-btn"
+                    disabled={intakeRawText.trim().length === 0}
+                    onClick={() => {
+                      const adapter = sourceAdapterRegistry[selectedIntakeKind];
+                      const ctx = adapter.capture({ rawText: intakeRawText.trim() });
+                      setCapturedContexts((prev) => [ctx, ...prev]);
+                      setIntakeRawText("");
+                    }}
+                  >
+                    Capture as source
+                  </button>
+                </div>
+              </div>
+              {capturedContexts.length > 0 && (
+                <div className="workbench-captured-contexts">
+                  <span className="workbench-captured-count">
+                    {capturedContexts.length} captured
+                  </span>
+                  {capturedContexts.slice(0, 3).map((ctx) => (
+                    <div key={ctx.id} className="workbench-captured-item">
+                      <small>
+                        {sourceAdapterRegistry[ctx.sourceType as IntakeSourceKind]?.meta.label ?? ctx.sourceType}
+                        {" · "}
+                        {ctx.rawText.length > 80
+                          ? ctx.rawText.slice(0, 80) + "…"
+                          : ctx.rawText}
+                      </small>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <details className="workbench-demo-library" aria-label="Demo Scenario Library">
+              <summary>
+                <span className="workbench-demo-library-heading">Demo Scenario Library</span>
+                <span className="workbench-demo-library-badge">Demo only</span>
+                <span aria-hidden="true" className="details-indicator">
+                  <WorkbenchIcon name="chevron" />
+                </span>
+              </summary>
+              <div className="workbench-demo-library-list">
+                {demoManualPasteScenarios.map((scenario) => {
+                  const isActive = selectedScenarioId === scenario.id;
+                  const scenarioChannel = sourceChannelForScenario(scenario.id);
+                  return (
+                    <button
+                      key={scenario.id}
+                      aria-current={isActive ? "true" : undefined}
+                      aria-label={`Use scenario: ${scenario.label}`}
+                      className={isActive ? "workbench-demo-item selected" : "workbench-demo-item"}
+                      type="button"
+                      onClick={() => selectScenario(scenario.id)}
+                    >
+                      <span className="workbench-demo-item-dot" aria-hidden="true" />
+                      <span className="workbench-demo-item-title">{scenario.label}</span>
+                      <span className="workbench-demo-item-meta">
+                        <span className="workbench-demo-item-channel">{scenarioChannel}</span>
+                        <span className="workbench-demo-item-tag">DEMO</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <small className="workbench-demo-library-safety">
+                Fake/local/demo data only. No real ServiceNow, Teams, mailbox, phone, or API connection.
+              </small>
+            </details>
+
             <section className="workbench-source-list-shell" aria-labelledby="source-list-title">
               <div className="workbench-list-heading">
                 <h3 id="source-list-title">{workbenchCopy.list.today}</h3>
@@ -3687,6 +3959,131 @@ export function App({
               <small>{workbenchCopy.cards.localOnly}</small>
             </footer>
           </section>
+
+          <section className="workbench-card guided-demo-stepper-card" aria-labelledby="guided-demo-stepper-title">
+            <div className="workbench-card-header guided-demo-stepper-header">
+              <div>
+                <p className="eyebrow">Guided review path</p>
+                <h2 id="guided-demo-stepper-title">Guided demo path</h2>
+              </div>
+              <span className="guided-demo-stepper-chip">Choose source → review context → draft ticket → check KB → verify/report → optional QA/dev assistance</span>
+            </div>
+            <p className="guided-demo-stepper-intro">
+              Follow the story without guessing. This is a compact, local-only guide for the operator flow; the human still reviews every change and performs ServiceNow actions manually.
+            </p>
+            <ol className="guided-demo-stepper-list">
+              {guidedDemoSteps.map((step) => (
+                <li key={step.title} className={`guided-demo-stepper-step ${step.status}`} data-step-status={step.status}>
+                  <span className="guided-demo-step-number" aria-hidden="true">{step.number}</span>
+                  <div className="guided-demo-step-body">
+                    <div className="guided-demo-step-topline">
+                      <strong>{step.title}</strong>
+                      <span className={`guided-demo-step-badge ${step.status}`}>{step.status}</span>
+                    </div>
+                    <p>{step.note}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <small className="guided-demo-stepper-footer">
+              AI drafts and fills allowed text fields only. Human reviews and submits in ServiceNow.
+            </small>
+          </section>
+
+          <section className="workbench-card kb-recommendations-card" aria-labelledby="kb-recommendations-title">
+            <div className="workbench-card-header kb-recommendations-header">
+              <div>
+                <p className="eyebrow">KB recommendations visible for review</p>
+                <h2 id="kb-recommendations-title">Local KB recommendations</h2>
+                <p>No external KB lookup. These cards explain the recommendation before the operator uses it.</p>
+              </div>
+              <span>{kbMatches.length} local match{kbMatches.length === 1 ? "" : "es"}</span>
+            </div>
+            <div className="kb-recommendation-summary">
+              <div>
+                <span>Recommended support group</span>
+                <strong>{operatorSafeDisplayText(fieldValue(draft.assignmentGroup) || serviceDeskOwnerTeam)}</strong>
+              </div>
+              <div>
+                <span>Routing reason</span>
+                <p>{operatorSafeDisplayText(serviceDeskWorkflowPreview.routingPlan.stage2.reason)}</p>
+              </div>
+            </div>
+            <div className="kb-recommendation-list" role="list" aria-label="Visible local KB suggestions">
+              {kbMatches.map((match, index) => (
+                <article className="kb-recommendation-item" key={match.articleId} role="listitem">
+                  <div className="kb-recommendation-topline">
+                    <span>Local KB suggestion {index + 1}</span>
+                    <strong>{operatorSafeDisplayText(match.title)}</strong>
+                  </div>
+                  <dl>
+                    <div>
+                      <dt>Match confidence</dt>
+                      <dd>{Math.round(match.score * 100)}%</dd>
+                    </div>
+                    <div>
+                      <dt>Matched evidence</dt>
+                      <dd>{match.matchedKeywords.length > 0 ? match.matchedKeywords.join(", ") : "Sanitized context similarity"}</dd>
+                    </div>
+                  </dl>
+                  <p>{operatorSafeDisplayText(match.excerpt ?? "Review the local demo article before using the recommendation.")}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="workbench-card monthly-excel-fill-card" aria-labelledby="monthly-excel-fill-title">
+            <div className="workbench-card-header monthly-excel-fill-header">
+              <div>
+                <p className="eyebrow">Verify / monthly record</p>
+                <h2 id="monthly-excel-fill-title">Monthly Excel fill queue</h2>
+                <p>Prompt after ticket is opened: fill the reviewed core fields into the current month tracking workbook, or keep it pending for later.</p>
+              </div>
+              <span>{monthlyExcelFillState === "queued" ? "Queued" : monthlyExcelFillState === "deferred" ? "Deferred" : "Pending"}</span>
+            </div>
+            <div className="monthly-excel-workbook-row">
+              <div>
+                <span>Current month workbook</span>
+                <strong>{monthlyWorkbookLabel}</strong>
+                <small>Placeholder only. The real monthly web workbook link must be configured and opened by the operator.</small>
+              </div>
+              <div className="monthly-excel-month-actions" aria-label="Monthly workbook choices">
+                <button type="button" className="local-draft-button primary" onClick={() => setMonthlyExcelFillState("queued")}>
+                  Fill this ticket into monthly Excel
+                </button>
+                <button type="button" className="local-draft-button" onClick={() => setMonthlyExcelFillState("deferred")}>
+                  Do later — keep in pending queue
+                </button>
+              </div>
+            </div>
+            <div className="monthly-excel-choice-grid">
+              <button type="button" className="monthly-excel-month-card selected">
+                <span>Current month</span>
+                <strong>{currentMonthLabel}</strong>
+              </button>
+              <button type="button" className="monthly-excel-month-card">
+                <span>Previous month</span>
+                <strong>{previousMonthLabel}</strong>
+              </button>
+            </div>
+            <dl className="monthly-excel-core-fields">
+              <div>
+                <dt>Opened ticket core data</dt>
+                <dd>{operatorSafeDisplayText(fieldValue(draft.shortDescription))}</dd>
+              </div>
+              <div>
+                <dt>Support group</dt>
+                <dd>{operatorSafeDisplayText(fieldValue(draft.assignmentGroup) || serviceDeskOwnerTeam)}</dd>
+              </div>
+              <div>
+                <dt>Monthly row preview</dt>
+                <dd>{operatorSafeDisplayText(monthlyExcelRow["Short Description"] ?? monthlyExcelRow["Dry-run Result"] ?? "Reviewed local row is ready.")}</dd>
+              </div>
+            </dl>
+            <small className="monthly-excel-safety">
+              No Microsoft Graph or Excel Web write is performed from this local demo. This replaces the old per-ticket export-first story with a monthly workbook fill decision.
+            </small>
+          </section>
             </div>
           ) : (
             <OperatorStaticPage
@@ -3697,6 +4094,7 @@ export function App({
               targetConfigured={targetConfigured}
               workbenchCopy={workbenchCopy}
               workbenchEnvironmentLabel={workbenchEnvironmentLabel}
+              validationRunHistory={validationRunHistory}
             />
           )}
         </section>
@@ -5313,6 +5711,7 @@ type OperatorStaticPageContent = {
   heroBody: string;
   stats: { label: string; value: string }[];
   detailCards: { title: string; body: string }[];
+  validationRuns?: QaValidationRunEntry[];
   contextTitle: string;
   contextItems: string[];
   footerNote: string;
@@ -5325,7 +5724,8 @@ function buildOperatorStaticPageContent({
   selectedQueueItem,
   targetConfigured,
   workbenchCopy,
-  workbenchEnvironmentLabel
+  workbenchEnvironmentLabel,
+  validationRunHistory
 }: {
   draft: TicketDraft;
   page: Exclude<OperatorWorkbenchPageKey, "workbench">;
@@ -5334,6 +5734,7 @@ function buildOperatorStaticPageContent({
   targetConfigured: boolean;
   workbenchCopy: OperatorWorkbenchCopy;
   workbenchEnvironmentLabel: string;
+  validationRunHistory: QaValidationRunEntry[];
 }): OperatorStaticPageContent {
   switch (page) {
     case "inbox":
@@ -5391,11 +5792,14 @@ function buildOperatorStaticPageContent({
         contextItems: ["Do not paste raw KB exports", "Keep customer-facing notes concise", "Use Work Notes for internal checks"],
         footerNote: "Knowledgebase is local reference copy; it does not fetch ServiceNow articles."
       };
-    case "history":
+    case "history": {
+      const validationRuns = validationRunHistory.slice(-10).reverse();
+      const okRuns = validationRunHistory.filter((r) => r.status === "ok").length;
+      const blockedRuns = validationRunHistory.filter((r) => r.status === "blocked").length;
       return {
         eyebrow: workbenchCopy.nav.history,
         title: "History timeline",
-        description: "A quiet local timeline for recent reviewed copies and skipped sources.",
+        description: "A quiet local timeline for recent reviewed copies, skipped sources, and validation runs.",
         icon: "history",
         sidebarTitle: "Recent activity",
         sidebarItems: queueItems.slice(0, 5).map((item) => ({
@@ -5407,16 +5811,21 @@ function buildOperatorStaticPageContent({
         stats: [
           { label: "Reviewed", value: String(queueItems.filter((item) => item.status === "Done" || item.status === "Drafted").length) },
           { label: "Waiting", value: String(queueItems.filter((item) => item.status === "Reviewed").length) },
-          { label: "Skipped", value: String(queueItems.filter((item) => item.status === "Skipped").length) }
+          { label: "Skipped", value: String(queueItems.filter((item) => item.status === "Skipped").length) },
+          { label: "Validation runs", value: String(validationRunHistory.length) },
+          { label: "Passed", value: String(okRuns) },
+          { label: "Blocked", value: String(blockedRuns) }
         ],
         detailCards: [
           { title: "Latest draft", body: operatorSafeDisplayText(draft.shortDescription.value) },
-          { title: "Browser evidence", body: "Browser rail remains the source of truth for Start, Check Page, and Autofill readiness." }
+          { title: "Browser evidence", body: "Browser rail remains the source of truth for Start QA Chromium, Verify, and Autofill readiness." }
         ],
+        validationRuns: validationRuns.length > 0 ? validationRuns : undefined,
         contextTitle: "Recent outcomes",
         contextItems: ["Show status labels, not raw URLs", "Keep page-check details hidden", "Do not imply Save/Submit/Update/Resolve/Close approval"],
         footerNote: "History is a local operator aid, not a ServiceNow audit log."
       };
+    }
     case "search":
       return {
         eyebrow: workbenchCopy.nav.search,
@@ -5455,7 +5864,8 @@ function OperatorStaticPage({
   selectedQueueItem,
   targetConfigured,
   workbenchCopy,
-  workbenchEnvironmentLabel
+  workbenchEnvironmentLabel,
+  validationRunHistory
 }: {
   draft: TicketDraft;
   page: Exclude<OperatorWorkbenchPageKey, "workbench">;
@@ -5464,6 +5874,7 @@ function OperatorStaticPage({
   targetConfigured: boolean;
   workbenchCopy: OperatorWorkbenchCopy;
   workbenchEnvironmentLabel: string;
+  validationRunHistory: QaValidationRunEntry[];
 }) {
   const content = buildOperatorStaticPageContent({
     draft,
@@ -5472,7 +5883,8 @@ function OperatorStaticPage({
     selectedQueueItem,
     targetConfigured,
     workbenchCopy,
-    workbenchEnvironmentLabel
+    workbenchEnvironmentLabel,
+    validationRunHistory
   });
   const titleId = `${page}-page-title`;
 
@@ -5525,6 +5937,61 @@ function OperatorStaticPage({
             </section>
           ))}
         </div>
+        {content.validationRuns ? (
+          <section className="workbench-page-validation-runs" aria-labelledby="validation-runs-title">
+            <div className="validation-runs-header-row">
+              <h3 id="validation-runs-title">Validation / Run History</h3>
+              <div className="validation-runs-export-group">
+                <button
+                  className="workbench-secondary-button"
+                  type="button"
+                  onClick={() => {
+                    const md = exportValidationRunsToMarkdown(content.validationRuns ?? []);
+                    triggerStringDownload(md, `sna-validation-runs-${new Date().toISOString().slice(0, 10)}.md`, "text/markdown");
+                  }}
+                >
+                  Export MD
+                </button>
+                <button
+                  className="workbench-secondary-button"
+                  type="button"
+                  onClick={() => {
+                    const csv = exportValidationRunsToCsv(content.validationRuns ?? []);
+                    triggerStringDownload(csv, `sna-validation-runs-${new Date().toISOString().slice(0, 10)}.csv`, "text/csv");
+                  }}
+                >
+                  Export CSV
+                </button>
+                <button
+                  className="workbench-secondary-button"
+                  type="button"
+                  onClick={() => {
+                    const report = exportProductReviewReport(selectedQueueItem, draft, content.validationRuns ?? []);
+                    triggerStringDownload(report, `sna-product-review-${new Date().toISOString().slice(0, 10)}.md`, "text/markdown");
+                  }}
+                >
+                  Export Product-Review Report
+                </button>
+              </div>
+            </div>
+            <div className="validation-runs-table" role="list">
+              <div className="validation-runs-header" role="row">
+                <span>Time</span>
+                <span>Action</span>
+                <span>Result</span>
+                <span>Details</span>
+              </div>
+              {content.validationRuns.map((run) => (
+                <div key={run.id} className={`validation-run-row ${run.status}`} role="listitem">
+                  <span className="validation-run-time">{run.timestamp}</span>
+                  <span className="validation-run-action">{operatorActionDisplayAction(run.action)}</span>
+                  <span className={`validation-run-status ${run.status}`}>{run.status.toUpperCase()}</span>
+                  <span className="validation-run-summary">{run.sanitizedSummary}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </article>
 
       <aside className="workbench-page-context-panel" aria-label={`${content.title} context panel`}>
@@ -5924,12 +6391,224 @@ function getSdaOperatorApi(): SdaOperatorApi | undefined {
 function operatorActionLabel(action: OperatorAction): string {
   switch (action) {
     case "launch":
-      return "Start test browser";
+      return "Start QA Chromium";
     case "verify":
-      return "Check current ticket page";
+      return "Verify current Incident";
     case "autofill":
-      return "Autofill allowed fields";
+      return "Autofill current Incident";
   }
+}
+
+export function operatorActionDisplayAction(action: OperatorAction): string {
+  switch (action) {
+    case "launch":
+      return "QA Chromium launch";
+    case "verify":
+      return "Verify";
+    case "autofill":
+      return "Autofill";
+  }
+}
+
+export function operatorSanitizeBlockedReason(reason: string): string {
+  // Map internal reason codes to sanitized plain-language descriptions
+  switch (reason) {
+    case "dedicated-browser-runtime-missing":
+      return "dedicated browser runtime unavailable";
+    case "qa-runtime-required":
+      return "production mode is read-only; switch to QA workspace";
+    case "cdp-endpoint-denied":
+      return "test browser disconnected; restart browser";
+    case "cdp-page-selection-denied":
+      return "could not find one unique approved Incident tab in the test browser";
+    case "no-default-plan":
+      return "could not build default autofill plan; no fields matched";
+    case "browser-step-timeout":
+      return "operation timed out; no ServiceNow action was taken";
+    case "approval-stale-after-page-change":
+      return "page changed after approval; re-check the current ticket page";
+    default:
+      // Use a generic sanitized fallback that doesn't leak internal codes
+      return "operation could not complete; retry from the browser action rail";
+  }
+}
+
+export function exportValidationRunsToMarkdown(runs: QaValidationRunEntry[]): string {
+  if (runs.length === 0) {
+    return "# Validation Runs\n\nNo validation runs recorded.\n";
+  }
+  const header = "| Time | Action | Result | Details |";
+  const separator = "|------|--------|--------|---------|";
+  const rows = runs
+    .slice()
+    .reverse()
+    .map(
+      (run) =>
+        `| ${run.timestamp} | ${operatorActionDisplayAction(run.action)} | ${run.status.toUpperCase()} | ${run.sanitizedSummary} |`
+    );
+  return ["# Validation Runs\n", header, separator, ...rows, ""].join("\n");
+}
+
+export function exportValidationRunsToCsv(runs: QaValidationRunEntry[]): string {
+  if (runs.length === 0) {
+    return "Time,Action,Result,Details\n";
+  }
+  const header = "Time,Action,Result,Details";
+  const rows = runs
+    .slice()
+    .reverse()
+    .map((run) => {
+      const time = run.timestamp.replace(/,/g, " ");
+      const action = operatorActionDisplayAction(run.action).replace(/,/g, " ");
+      const status = run.status.toUpperCase();
+      const summary = run.sanitizedSummary.replace(/,/g, ";").replace(/"/g, '""');
+      return `${time},${action},${status},"${summary}"`;
+    });
+  return [header, ...rows, ""].join("\n");
+}
+
+export function exportProductReviewReport(
+  queueItem: DemoQueueItem,
+  draft: TicketDraft,
+  validationRuns: QaValidationRunEntry[],
+  style: "markdown" = "markdown"
+): string {
+  const okRuns = validationRuns.filter((r) => r.status === "ok").length;
+  const blockedRuns = validationRuns.filter((r) => r.status !== "ok").length;
+  const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19);
+
+  const draftDescription = operatorSafeDisplayText(draft.shortDescription.value);
+  const draftCategory = draft.category?.value ?? "(not set)";
+  const draftSubcategory = draft.subcategory?.value ?? "(not set)";
+  const draftPriority = draft.priority?.value ?? "(not set)";
+
+  return [
+    "# Product-Review Report",
+    "",
+    `Generated: ${timestamp}`,
+    `Demo mode: Yes — all data is local, sanitized, and deterministic.`,
+    "",
+    "---",
+    "",
+    "## Demo Scenario",
+    "",
+    `| Field | Value |`,
+    `|-------|-------|`,
+    `| Scenario ID | ${queueItem.scenarioId} |`,
+    `| Subject | ${operatorSafeDisplayText(queueItem.subject)} |`,
+    `| Source channel | ${queueItem.sourceChannel} |`,
+    `| Language | ${queueItem.sourceLanguage} |`,
+    `| Status | ${queueItem.status} |`,
+    `| Requester label | ${queueItem.requesterLabel} |`,
+    "",
+    "---",
+    "",
+    "## TicketDraft Summary",
+    "",
+    `| Field | Value |`,
+    `|-------|-------|`,
+    `| Short Description | ${draftDescription} |`,
+    `| Category | ${draftCategory} |`,
+    `| Subcategory | ${draftSubcategory} |`,
+    `| Priority | ${draftPriority} |`,
+    "",
+    "**Description preview:**",
+    "",
+    `> ${operatorSafeDisplayText(draft.description.value).slice(0, 500)}`,
+    "",
+    "---",
+    "",
+    "## KB / Support Recommendation",
+    "",
+    "The TicketDraft was built from the selected demo source using category mapping rules and demo knowledge-article matching. In a live ServiceNow environment, matching would query the configured KB sources. In this demo run, the matching used local deterministic mock knowledge articles.",
+    "",
+    "Category assigned via keyword matching on the source body and subject. Assignment group was derived from the category/issue mapping in the project profile. No real ServiceNow KB, assignment rules, or escalation logic were queried.",
+    "",
+    "---",
+    "",
+    "## Safety Boundary",
+    "",
+    "| Constraint | Status |",
+    "|------------|--------|",
+    "| Local-only execution | Active — no network calls, no cloud writes, no ServiceNow API |",
+    "| No real ServiceNow write | Enforced — Save, Submit, Update, Resolve, Close are absent or disabled in demo mode |",
+    "| No browser automation beyond Start QA Chromium / Verify current Incident / Autofill | Enforced — runtime is constrained to approved actions only |",
+    "| No screenshots, HAR, traces, cookies, sessions, or storage export | Confirmed — validation entries track counts and sanitized summaries only |",
+    "| No real ticket identifiers | Confirmed — all data is demo/fake |",
+    "| No Excel / Graph / cloud workbook write | Confirmed — export uses browser Blob download only |",
+    "",
+    "---",
+    "",
+    "## Validation Run Summary",
+    "",
+    `| Metric | Count |`,
+    `|--------|-------|`,
+    `| Total runs | ${validationRuns.length} |`,
+    `| Passed | ${okRuns} |`,
+    `| Blocked / Error | ${blockedRuns} |`,
+    "",
+    validationRuns.length > 0
+      ? [
+          "**Recent runs (reverse-chronological):**",
+          "",
+          "| Time | Action | Result | Details |",
+          "|------|--------|--------|---------|",
+          ...validationRuns
+            .slice()
+            .reverse()
+            .slice(0, 10)
+            .map(
+              (run) =>
+                `| ${run.timestamp} | ${operatorActionDisplayAction(run.action)} | ${run.status.toUpperCase()} | ${run.sanitizedSummary} |`
+            ),
+          ""
+        ].join("\n")
+      : "No validation runs recorded.\n",
+    "---",
+    "",
+    "## What This Proves",
+    "",
+    "This report demonstrates that during this demo session:",
+    "",
+    "- The Service Desk intake-to-TicketDraft pipeline processed a source message and produced a structured incident draft (Short Description, Description, Work Notes, Category, Subcategory, Priority) deterministically from local mock data.",
+    "- The app applied category/assignment-group keyword mappings from a project profile — the same mappings that would be configured for a real ServiceNow deployment.",
+    "- The app matched the source text against a demo knowledge-article index and surfaced article titles relevant to the issue.",
+    "- Operator runtime actions (browser launch, page check, autofill) ran within the approved boundary: no prohibited actions were executed, no real ServiceNow writes occurred.",
+    "- All validation events were recorded as sanitized entries visible in the History page and exported here — proving the operator workflow completed without unauthorized side effects.",
+    "",
+    "---",
+    "",
+    "## What Remains Human-Only",
+    "",
+    "The following decisions and actions are NOT automated by this app and remain the responsibility of the human operator:",
+    "",
+    "1. **Final review of the TicketDraft** — the operator must read the generated Short Description, Description, and Work Notes, and edit them for accuracy before any real ServiceNow submission.",
+    "2. **Save / Submit / Update / Resolve / Close in ServiceNow** — these actions are not performed by the app. The operator manually submits the final ticket in the ServiceNow UI.",
+    "3. **Live KB / escalation check** — the app provides demo KB matches and category-based assignment groups  but does not resolve the ticket or make a final escalation decision. The operator must verify routing and KB articles against the live environment.",
+    "4. **Verification of real browser output** — the app inspects the page for approved fields and simulates fill, but the operator must visually confirm the data landed correctly in ServiceNow.",
+    "5. **Screenshots, evidence capture, HAR, traces** — the app does not capture or store any of these. The operator is responsible for gathering session evidence outside the app if needed.",
+    "6. **Live ServiceNow configuration** — the operator must configure the environment URL, profile mappings, and KB sources before any real run. The demo mode ships with mock data only.",
+    "",
+    "---",
+    "",
+    "## Export Safety Notice",
+    "",
+    "This report was generated locally from in-memory demo state. No real ServiceNow data, ticket numbers, sys_ids, credentials, URLs, or customer PII are included. The file was downloaded via browser Blob — no cloud write, no external API call, no Excel/Graph write.",
+    ""
+  ].join("\n");
+}
+
+function triggerStringDownload(content: string, filename: string, mimeType: string): void {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
 }
 
 function operatorActionWorkingDetails(action: OperatorAction): string {
@@ -5980,7 +6659,7 @@ export function buildOperatorActionFinalState(input: OperatorActionFinalStateInp
       operatorStatus: {
         label: `${operatorActionLabel(input.action)} took too long`,
         tone: "blocked",
-        details: `The app cleared the local waiting state after ${timeoutSeconds} seconds so you can retry Start test browser. No ServiceNow action was taken.`
+        details: `The app cleared the local waiting state after ${timeoutSeconds} seconds so you can retry Start QA Chromium. No ServiceNow action was taken.`
       },
       operatorLastResponse: buildOperatorTimeoutResponse(input.action)
     };
@@ -6210,6 +6889,7 @@ function QaOperatorRuntimePanel({
   targetLabel: string;
   workbenchCopy: OperatorWorkbenchCopy;
 }) {
+  const [whatChangedExpanded, setWhatChangedExpanded] = useState(false);
   const canUseRuntime = isQaWorkbenchMode(mode);
   const qaBoundCdpEndpointReady = canUseRuntime && cdpEndpointReady;
   const qaBoundVerifiedPageFingerprintReady = qaBoundCdpEndpointReady && verifiedPageFingerprintReady;
@@ -6383,6 +7063,39 @@ function QaOperatorRuntimePanel({
           <h3 id="runtime-safety-title">{workbenchCopy.runtime.safetyTitle}</h3>
           <p>{workbenchCopy.runtime.safetyNote}</p>
         </div>
+      </section>
+
+      <section className="runtime-what-changed" aria-labelledby="what-changed-title">
+        <button
+          aria-expanded={whatChangedExpanded}
+          aria-controls="what-changed-content"
+          className="what-changed-toggle"
+          type="button"
+          onClick={() => setWhatChangedExpanded((current) => !current)}
+        >
+          <WorkbenchIcon name="chevron" />
+          <h3 id="what-changed-title">{workbenchCopy.runtime.whatChanged.title}</h3>
+        </button>
+        {whatChangedExpanded && (
+          <div id="what-changed-content" className="what-changed-content">
+            <p>{workbenchCopy.runtime.whatChanged.summary}</p>
+            <div className="what-changed-section">
+              <strong>{workbenchCopy.runtime.whatChanged.whatIsAutomated}</strong>
+            </div>
+            <div className="what-changed-section">
+              <strong>{workbenchCopy.runtime.whatChanged.whatIsHumanOnly}</strong>
+            </div>
+            <div className="what-changed-section">
+              <strong>{workbenchCopy.runtime.whatChanged.whyRepeatedValidation}</strong>
+            </div>
+            <ul className="what-changed-limits">
+              {workbenchCopy.runtime.whatChanged.doesNotDo.map((item, i) => (
+                <li key={i}>{item}</li>
+              ))}
+            </ul>
+            <p className="what-changed-footer">{workbenchCopy.runtime.whatChanged.footer}</p>
+          </div>
+        )}
       </section>
     </section>
   );

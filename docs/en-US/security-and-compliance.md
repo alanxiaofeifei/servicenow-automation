@@ -1,28 +1,22 @@
-# Security and Compliance Statement
+# Security and Compliance
 
-## Design principle
+## Demo / P0 guardrail
 
-Automate drafting, not accountability.
+The current demo uses only sanitized, fake, local data.
 
-The tool may help generate draft fields and rehearse form filling, but the human service desk agent remains responsible for final review and any real ITSM action.
-
-## Allowed in P0
-
+Allowed in the demo:
 - Manual paste of sanitized issue context.
 - Demo KB articles with fake or generic content.
-- Deterministic MockAIProvider.
+- Deterministic mock extraction.
 - Mock ServiceNow form.
-- Human review confirmation before fill.
+- Sanitary, local-only runtime evidence.
 
-## Not allowed in P0
-
-- Auto-submit.
-- Auto-close.
-- Auto-update of production tickets.
-- Credential storage in source code.
-- Browser cookies or sessions in Git.
-- Real screenshots or real ticket content in the repository.
-- External AI calls with unredacted customer content.
+Not allowed in the demo:
+- Real ServiceNow pages or real tickets.
+- Customer names, email addresses, or other sensitive details.
+- Cookies, sessions, storage state, HARs, traces, screenshots, or recordings.
+- Save, Submit, Update, Resolve, Close.
+- Any ServiceNow API write.
 
 ## QA/dev test mode
 
@@ -34,4 +28,4 @@ Production validation must remain shadow-mode unless a separate safety review ap
 
 ## Public showcase rule
 
-Before any public showcase, remove customer names, real URLs, real assignment groups, ticket numbers, screenshots, meeting notes, recordings, and environment-specific configuration.
+If the demo is shown publicly, use only sanitized fake examples and keep the runtime evidence compact and local-only.

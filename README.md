@@ -4,8 +4,8 @@
 
 The project goal is to turn support context from manual input, Teams/Web, Outlook/Web, or future adapters into structured ServiceNow-ready ticket drafts, KB-backed troubleshooting steps, and safe form-fill workflows where the human agent remains responsible for final submission.
 
-> Current phase: P0 MVP planning and scaffold.  
-> Demo target: 2026-06-05.  
+> Current phase: Post-manual-validation — PR readiness package preparing phases A-D for merge.  
+> Manual validation: Alan ran Windows app launch + autofill success on 2026-06-05.  
 > Safety rule: AI drafts and fills; humans review and submit.
 
 ## Strategic decision

@@ -2,6 +2,11 @@
 
 This checklist is for supervised local testing of the packaged Windows Operator Preview artifact.
 
+> **Note**: The authoritative next-morning validation checklist is at
+> `docs/status/phase-V1-next-morning-alan-manual-validation-checklist-2026-06-05.md`.
+> This doc is a supplement for package-content verification; use the V1 checklist
+> for full product validation.
+
 ## Scope
 
 The release-candidate package proves that the packaged Windows app can start and run mock/synthetic workflows without relying on a WSL source checkout or dev `node_modules` at runtime.
@@ -46,14 +51,14 @@ pnpm release:windows:rc
 The RC wrapper writes:
 
 ```text
-dist/release/servicenow-automation-windows-v0.1.0-rc.1.zip
-dist/release/servicenow-automation-windows-v0.1.0-rc.1.zip.sha256
+dist/release/servicenow-automation-windows-v0.1.0-rc.2.zip
+dist/release/servicenow-automation-windows-v0.1.0-rc.2.zip.sha256
 ```
 
 Verify checksum from a trusted shell:
 
 ```bash
-sha256sum -c servicenow-automation-windows-v0.1.0-rc.1.zip.sha256
+sha256sum -c servicenow-automation-windows-v0.1.0-rc.2.zip.sha256
 ```
 
 ## Test steps

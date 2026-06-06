@@ -2,42 +2,92 @@
 
 ## Purpose
 
-ServiceNow Automation helps a service desk agent convert scattered support context into a structured, editable Incident draft.
+ServiceNow Automation helps a service desk agent turn scattered support context into a structured, editable Incident draft.
 
-The P0 version is intentionally simple and stable: it uses manual paste, local demo knowledge articles, deterministic mock AI extraction, and a mock ServiceNow form.
+The current local demo is intentionally simple and stable: it uses manual paste, local demo knowledge articles, deterministic mock extraction, and a mock ServiceNow form. The workbench is organized as a warm-light three-column interface so the demo story is easy to follow.
 
-## How to use the P0 demo
+## Workbench map
+
+### Left column
+- Demo Scenario Library — collapsible section with 6 preset fake scenarios (VPN, Windows, Account Access, etc.). Click any scenario to populate the full intake → draft → KB → report pipeline.
+- source / loading information feed
+- intake queue
+- todo list
+- history (including Product-Review Report export button)
+- mode / function switching
+- bottom-left settings access
+
+### Center column (operator workflow order)
+1. **Selected source** — raw sanitized intake text from the chosen scenario.
+2. **Cleaned summary** — normalized, extracted facts from the raw source.
+3. **Incident draft** — editable TicketDraft fields (Short description, Description, Work notes, Category, Subcategory, Assignment group, Impact, Urgency, Priority).
+4. **Guided demo path** — compact stepper showing source → clean → draft → KB → verify/report → optional QA assistance. Read-only reference; derived from local state.
+5. **Local KB recommendations** — KB card(s) with title, match confidence, matched evidence keywords, sanitized excerpt, and recommended support group with routing reason.
+6. **Monthly Excel fill queue** — current/previous month selectors with ticket-fill decision buttons ("Fill this ticket into monthly Excel" / "Do later — keep in pending queue"). Local UI placeholder — no Microsoft Graph or Excel Web write.
+
+### Right column
+- runtime actions
+- Start QA Chromium
+- Verify current Incident
+- Autofill current Incident
+- templates / settings
+- CDP readiness status
+- safety boundary
+- environment controls
+- recent run evidence
+
+## How to use the local demo
 
 1. Open the desktop app.
-2. Choose one scenario:
-   - Load VPN Demo
-   - Load Windows Demo
-   - Load Mock Account Access Demo — no browser login
-3. Review the captured context.
-4. Review and edit the TicketDraft fields.
-5. Check KB Matches, Missing Info, and Risk Flags.
-6. Read the Risk Control Gate.
-7. Confirm human review before fill.
-8. Use the mock ServiceNow form to rehearse how fields would map.
-9. Do not treat the mock form as production submission.
+2. Configure the settings if needed:
+   - QA URL
+   - Dev URL
+   - Production URL
+   - default environment
+   - safety state
+3. Choose one fake scenario from the Demo Scenario Library (left sidebar) or the intake queue.
+4. Review the selected source and the cleaned source in the center column.
+5. Review the Incident draft and edit fields as needed.
+6. Follow the Guided demo path stepper to track pipeline progress.
+7. Check the KB / recommendation detail and the recommended support group.
+8. Use the Monthly Excel fill queue to mark ticket disposition (local placeholder — no actual Excel write).
+9. Use the runtime rail in order:
+   - Start QA Chromium
+   - Verify current Incident
+   - Autofill current Incident
+10. Export a Product-Review Report from the History page if desired.
+11. Read the recent run evidence before handing control back to the human.
+12. Keep the final ServiceNow action manual.
 
 ## Expected output
 
 The tool should show:
 
-- Short Description
-- Description
-- Work Notes
-- Category
-- Subcategory
-- Assignment Group
-- Impact
-- Urgency
-- Priority
-- KB Matches
-- Missing Info questions
-- Risk Flags
-- Mock ServiceNow Incident form
+- Demo Scenario Library (collapsible, left sidebar)
+- source / loading feed
+- intake queue
+- todo list
+- history (with Product-Review Report export)
+- selected source detail
+- cleaned source
+- Incident draft fields
+- Guided demo path stepper
+- Local KB recommendations with evidence and support group
+- Monthly Excel fill queue with fill/defer buttons
+- runtime controls
+- CDP readiness
+- safety boundary
+- recent run evidence
+
+## Safety notes
+
+- Manual review remains required.
+- Fake, local-only demo data only.
+- No external writes.
+- No Save / Submit / Update / Resolve / Close automation.
+- No ServiceNow API writes.
+- No Microsoft Graph or Excel Web writes.
+- No real ServiceNow URLs, ticket IDs, sys_ids, cookies, sessions, or page fingerprints in the demo.
 
 ## QA/dev testing note
 
