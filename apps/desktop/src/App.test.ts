@@ -780,10 +780,9 @@ describe("App", () => {
     expect(settingsMarkupText).toContain("ServiceNow target settings");
     expect(settingsMarkupText).toContain("Templates / Settings");
     expect(settingsMarkupText).toContain("Optional field checklist / Team rules");
-    expect(settingsMarkupText).toContain("QA target");
-    expect(settingsMarkupText).toContain("Production target");
+    expect(settingsMarkupText).toContain("QA URL");
+    expect(settingsMarkupText).toContain("Production URL");
     expect(settingsMarkupText).toContain("Paste replacement target");
-    expect(settingsMarkupText).not.toContain("Production URL");
     expect(settingsMarkupText).not.toContain("Target URL");
     expect(settingsMarkupText).toContain("Clear saved settings");
     expect(settingsMarkupText).toContain("Disabled: no saved settings to clear.");

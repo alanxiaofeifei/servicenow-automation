@@ -1639,7 +1639,12 @@ const englishOperatorWorkbenchCopy = {
     collapseSidebar: "Collapse left sidebar",
     expandSidebar: "Expand left sidebar",
     collapseSidebarShort: "Collapse",
-    expandSidebarShort: "Expand"
+    expandSidebarShort: "Expand",
+    loadingFeed: "Loading feed",
+    intakeQueue: "Intake queue",
+    todoList: "Todo list",
+    historySection: "History",
+    environmentControls: "Environment controls"
   },
   environment: {
     qa: "QA workspace",
@@ -1670,9 +1675,15 @@ const englishOperatorWorkbenchCopy = {
     noHistory: "No recent reviewed copies yet."
   },
   cards: {
-    selectedSource: "Selected source",
+    selectedSource: "Selected source detail",
     cleanedSummary: "Cleaned summary",
     incidentDraft: "Incident draft",
+    selectedSourceEmpty: "Select a source from the left queue to begin.",
+    cleanedSummaryEmpty: "The cleaned summary will appear after normalization.",
+    incidentDraftEmpty: "The draft stays blank until a source is selected.",
+    guidedDemoPathEmpty: "The guided path appears after the draft is ready.",
+    kbRecommendationsEmpty: "Local KB recommendations appear after the draft is generated.",
+    monthlyExcelEmpty: "Items stay local-only until the monthly queue is ready.",
     source: "Source",
     received: "Received",
     language: "Language",
@@ -1736,7 +1747,13 @@ const englishOperatorWorkbenchCopy = {
     sanitizedEvidence: "Sanitized browser status evidence available.",
     noEvidence: "No browser status evidence yet; only sanitized status is shown.",
     safetyTitle: "Safety note",
+    safetyBoundaryTitle: "Safety boundary",
+    environmentControlsTitle: "Environment controls",
     safetyNote: "AI drafts and fills allowed text fields only. Human reviews and submits in ServiceNow.",
+    browserDisconnected: "Browser: disconnected",
+    browserConnecting: "Browser: connecting",
+    browserConnected: "Browser: connected",
+    browserError: "Browser: error",
     whatChanged: {
       title: "What changed in this round",
       summary: "This workbench has been hardened through multiple rounds of automated checks and manual validation since the last release. Every test of the automation proves it is safe and visible before any fill action.",
@@ -1774,8 +1791,9 @@ const englishOperatorWorkbenchCopy = {
     clearSavedSettings: "Clear saved settings",
     clearReady: "Ready: clears local target overrides and resets page-check/Autofill readiness.",
     clearDisabled: "Disabled: no saved settings to clear.",
-    qaUrl: "QA target",
-    productionUrl: "Production target",
+    qaUrl: "QA URL",
+    devUrl: "Dev URL",
+    productionUrl: "Production URL",
     urlDescriptionQa: "Authorized QA landing page for controlled testing; the value is hidden after validation.",
     urlDescriptionProduction: "Production target remains read-only; Start QA Chromium, Verify, and Autofill stay unavailable outside QA.",
     qaSubmitPolicy: "QA fill requires Start, current-page check, and approved text-only autofill checks.",
@@ -1819,7 +1837,12 @@ const operatorWorkbenchTranslations = {
       collapseSidebar: "折叠左侧栏",
       expandSidebar: "展开左侧栏",
       collapseSidebarShort: "折叠",
-      expandSidebarShort: "展开"
+      expandSidebarShort: "展开",
+      loadingFeed: "加载动态",
+      intakeQueue: "受理队列",
+      todoList: "待办列表",
+      historySection: "历史",
+      environmentControls: "环境控件"
     },
     environment: { qa: "QA 工作区", production: "生产" },
     target: { configured: "QA 目标已隐藏", missing: "目标缺失" },
@@ -1839,9 +1862,15 @@ const operatorWorkbenchTranslations = {
       noHistory: "还没有审核副本。"
     },
     cards: {
-      selectedSource: "已选来源",
+      selectedSource: "已选来源详情",
       cleanedSummary: "清理摘要",
       incidentDraft: "Incident 草稿",
+      selectedSourceEmpty: "请从左侧队列中选择一个来源以开始。",
+      cleanedSummaryEmpty: "清理摘要将在规范化后显示。",
+      incidentDraftEmpty: "在选择来源之前，草稿将保持空白。",
+      guidedDemoPathEmpty: "引导路径将在草稿准备好后显示。",
+      kbRecommendationsEmpty: "本地知识库建议将在草稿生成后显示。",
+      monthlyExcelEmpty: "项目将保持本地状态，直到月度队列准备就绪。",
       source: "来源",
       received: "收到时间",
       language: "语言",
@@ -1903,9 +1932,15 @@ const operatorWorkbenchTranslations = {
       cdpReady: "就绪",
       cdpWaiting: "等待中",
       sanitizedEvidence: "仅显示已清理的浏览器状态证据。",
-      noEvidence: "暂无浏览器状态证据；仅显示已清理状态。",
+      noEvidence: "尚无浏览器状态证据；仅显示已清理状态。",
       safetyTitle: "安全说明",
-      safetyNote: "AI 仅起草并填入允许的文本字段。人工审核并在 ServiceNow 中处理记录。",
+      safetyBoundaryTitle: "安全边界",
+      environmentControlsTitle: "环境控件",
+      safetyNote: "AI 仅起草并填入允许的文字字段。人工审核并在 ServiceNow 中处理记录。",
+      browserDisconnected: "浏览器：未连接",
+      browserConnecting: "浏览器：连接中",
+      browserConnected: "浏览器：已连接",
+      browserError: "浏览器：错误",
       whatChanged: {
         title: "本轮更新内容",
         summary: "自上次发布以来，该工作台已通过多轮自动化检查和手动验证不断完善。每次自动化测试都证明在填充前的安全性和可见性。",
@@ -1943,8 +1978,9 @@ const operatorWorkbenchTranslations = {
       clearSavedSettings: "清除已保存设置",
       clearReady: "就绪：清除本地目标覆盖，并重置页面检查/自动填充就绪状态。",
       clearDisabled: "禁用：没有可清除的已保存设置。",
-      qaUrl: "QA 目标",
-      productionUrl: "生产目标",
+      qaUrl: "QA URL",
+      devUrl: "Dev URL",
+      productionUrl: "Production URL",
       urlDescriptionQa: "用于受控测试的授权 QA 落地页；检查后会隐藏该值。",
       urlDescriptionProduction: "生产目标保持只读；启动、检查页面、自动填充仅在 QA 中可用。",
       qaSubmitPolicy: "QA 填入需要先启动、检查当前工单页面，并限制为已批准文本字段。",
@@ -1985,7 +2021,12 @@ const operatorWorkbenchTranslations = {
       collapseSidebar: "收合左側欄",
       expandSidebar: "展開左側欄",
       collapseSidebarShort: "收合",
-      expandSidebarShort: "展開"
+      expandSidebarShort: "展開",
+      loadingFeed: "載入動態",
+      intakeQueue: "受理佇列",
+      todoList: "待辦清單",
+      historySection: "歷史",
+      environmentControls: "環境控制項"
     },
     environment: { qa: "QA 工作區", production: "生產" },
     target: { configured: "QA 目標已隱藏", missing: "目標缺失" },
@@ -2005,9 +2046,15 @@ const operatorWorkbenchTranslations = {
       noHistory: "尚無審核副本。"
     },
     cards: {
-      selectedSource: "已選來源",
+      selectedSource: "已選來源詳細",
       cleanedSummary: "清理後摘要",
       incidentDraft: "Incident 草稿",
+      selectedSourceEmpty: "請從左側佇列中選擇一個來源以開始。",
+      cleanedSummaryEmpty: "清理後摘要將在標準化後顯示。",
+      incidentDraftEmpty: "在選擇來源之前，草稿將保持空白。",
+      guidedDemoPathEmpty: "引導路徑將在草稿準備好後顯示。",
+      kbRecommendationsEmpty: "本地知識庫建議將在草稿產生後顯示。",
+      monthlyExcelEmpty: "項目將保持本地狀態，直到月度佇列準備就緒。",
       source: "來源",
       received: "收到時間",
       language: "語言",
@@ -2071,7 +2118,13 @@ const operatorWorkbenchTranslations = {
       sanitizedEvidence: "僅顯示已清理的瀏覽器狀態證據。",
       noEvidence: "尚無瀏覽器狀態證據；僅顯示已清理狀態。",
       safetyTitle: "安全說明",
+      safetyBoundaryTitle: "安全邊界",
+      environmentControlsTitle: "環境控制項",
       safetyNote: "AI 僅起草並填入允許的文字欄位。人工審核並在 ServiceNow 中處理記錄。",
+      browserDisconnected: "瀏覽器：未連線",
+      browserConnecting: "瀏覽器：連線中",
+      browserConnected: "瀏覽器：已連線",
+      browserError: "瀏覽器：錯誤",
       whatChanged: {
         title: "本輪更新內容",
         summary: "自上次發佈以來，該工作臺已透過多輪自動化檢查和手動驗證不斷完善。每次自動化測試都證明了填入前的安全性和可見性。",
@@ -2109,8 +2162,9 @@ const operatorWorkbenchTranslations = {
       clearSavedSettings: "清除已儲存設定",
             clearReady: "就緒：清除本地目標覆寫，並重設頁面檢查/自動填入就緒狀態。",
       clearDisabled: "停用：沒有可清除的已儲存設定。",
-      qaUrl: "QA 目標",
-      productionUrl: "生產目標",
+      qaUrl: "QA URL",
+      devUrl: "Dev URL",
+      productionUrl: "Production URL",
       urlDescriptionQa: "用於受控測試的授權 QA 落地頁；檢查後會隱藏該值。",
       urlDescriptionProduction: "生產目標保持唯讀；啟動、檢查、自動填入僅在 QA 中可用。",
       qaSubmitPolicy: "QA 填入需要先啟動、檢查目前工單頁面，並限制為已核准文字欄位。",
@@ -2151,7 +2205,12 @@ const operatorWorkbenchTranslations = {
       collapseSidebar: "Contraer barra izquierda",
       expandSidebar: "Expandir barra izquierda",
       collapseSidebarShort: "Contraer",
-      expandSidebarShort: "Expandir"
+      expandSidebarShort: "Expandir",
+      loadingFeed: "Feed de carga",
+      intakeQueue: "Cola de entrada",
+      todoList: "Lista de tareas",
+      historySection: "Historial",
+      environmentControls: "Controles de entorno"
     },
     environment: { qa: "Entorno QA", production: "Producción" },
     target: { configured: "Destino QA oculto", missing: "Destino faltante" },
@@ -2171,9 +2230,15 @@ const operatorWorkbenchTranslations = {
       noHistory: "Aún no hay copias revisadas recientes."
     },
     cards: {
-      selectedSource: "Origen seleccionado",
+      selectedSource: "Detalle del origen seleccionado",
       cleanedSummary: "Resumen depurado",
       incidentDraft: "Borrador de Incident",
+      selectedSourceEmpty: "Selecciona un origen de la cola izquierda para comenzar.",
+      cleanedSummaryEmpty: "El resumen depurado aparecerá después de la normalización.",
+      incidentDraftEmpty: "El borrador permanecerá en blanco hasta que se seleccione un origen.",
+      guidedDemoPathEmpty: "La ruta guiada aparecerá después de que el borrador esté listo.",
+      kbRecommendationsEmpty: "Las recomendaciones KB locales aparecerán después de generar el borrador.",
+      monthlyExcelEmpty: "Los elementos permanecen solo locales hasta que la cola mensual esté lista.",
       source: "Origen",
       received: "Recibido",
       language: "Idioma",
@@ -2237,7 +2302,13 @@ const operatorWorkbenchTranslations = {
       sanitizedEvidence: "Solo evidencia depurada del estado del navegador.",
       noEvidence: "Sin evidencia del estado del navegador; solo se muestra estado depurado.",
       safetyTitle: "Nota de seguridad",
+      safetyBoundaryTitle: "Límite de seguridad",
+      environmentControlsTitle: "Controles de entorno",
       safetyNote: "La IA redacta y rellena solo campos de texto permitidos. El humano revisa y maneja el registro en ServiceNow.",
+      browserDisconnected: "Navegador: desconectado",
+      browserConnecting: "Navegador: conectando",
+      browserConnected: "Navegador: conectado",
+      browserError: "Navegador: error",
       whatChanged: {
         title: "Qué cambió en esta ronda",
         summary: "Este banco de trabajo se ha reforzado a través de múltiples rondas de comprobaciones automatizadas y validación manual desde la última versión. Cada prueba de la automatización demuestra que es segura y visible antes de cualquier acción de relleno.",
@@ -2275,8 +2346,9 @@ const operatorWorkbenchTranslations = {
       clearSavedSettings: "Borrar configuración guardada",
       clearReady: "Listo: borra overrides locales de destino y restablece revisión de página/Autofill.",
       clearDisabled: "Deshabilitado: no hay configuración guardada para borrar.",
-      qaUrl: "Destino QA",
-      productionUrl: "Destino de producción",
+      qaUrl: "QA URL",
+      devUrl: "Dev URL",
+      productionUrl: "Production URL",
       urlDescriptionQa: "Página inicial QA autorizada para pruebas controladas; el valor se oculta tras validar.",
       urlDescriptionProduction: "El destino de producción sigue siendo de solo lectura; Start, Check y Autofill solo están disponibles en QA.",
       qaSubmitPolicy: "El rellenado QA requiere Start, Check y reglas de seguridad para autofill de texto aprobado.",
@@ -3708,6 +3780,7 @@ export function App({
               </nav>
             </section>
 
+            <span className="workbench-section-label">{workbenchCopy.nav.loadingFeed}</span>
             <label className="workbench-search-box">
               <span>{workbenchCopy.search.label}</span>
               <span className="workbench-search-control">
@@ -3717,6 +3790,7 @@ export function App({
               </span>
             </label>
 
+            <span className="workbench-section-label">{workbenchCopy.nav.intakeQueue}</span>
             <div className="workbench-source-filters" aria-label={workbenchCopy.list.recent}>
               <span>{workbenchCopy.list.new}</span>
               <span>{workbenchCopy.list.inReview}</span>
@@ -3789,6 +3863,7 @@ export function App({
               )}
             </section>
 
+            <span className="workbench-section-label">{workbenchCopy.nav.todoList}</span>
             <details className="workbench-demo-library" aria-label="Demo Scenario Library">
               <summary>
                 <span className="workbench-demo-library-heading">Demo Scenario Library</span>
@@ -3963,7 +4038,7 @@ export function App({
           <section className="workbench-card guided-demo-stepper-card" aria-labelledby="guided-demo-stepper-title">
             <div className="workbench-card-header guided-demo-stepper-header">
               <div>
-                <p className="eyebrow">Guided review path</p>
+                <p className="eyebrow">Guided path</p>
                 <h2 id="guided-demo-stepper-title">Guided demo path</h2>
               </div>
               <span className="guided-demo-stepper-chip">Choose source → review context → draft ticket → check KB → verify/report → optional QA/dev assistance</span>

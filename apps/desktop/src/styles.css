@@ -3267,6 +3267,17 @@ body {
   box-shadow: 0 8px 18px rgba(73, 58, 38, 0.06);
 }
 
+.workbench-section-label {
+  display: block;
+  margin: 16px 0 4px;
+  padding: 0 10px;
+  color: var(--muted-text);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .workbench-search-box {
   display: grid;
   gap: 7px;
