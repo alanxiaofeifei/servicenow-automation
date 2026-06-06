@@ -54,29 +54,24 @@ This AA1 gate treats that as authorization to proceed toward GitHub PR/release o
 | Open PR check through `gh pr list --head <branch> --state open` | PASS | Returned `[]`; no open PR currently exists for `next/product-clarity-demo-polish-20260605`. |
 | All-state PR check through `gh pr list --head <branch> --state all` | PASS | Returned `[]`; no PR in any state was found for this head branch. |
 
-## Current pre-push blocker discovered after the green checks
+## Final workspace cleanliness check
 
-After the authenticated retry's local gates completed, `git status --short --branch` showed new unstaged modifications outside this AA1 status doc:
+After the authenticated retry's local gates completed, AA1 briefly observed unstaged modifications outside the AA1 status doc in `README.md`, `docs/design/operator-workbench-three-column-spec.md`, and `docs/releases/windows-v0.1-rc-draft-release-notes.md`. AA1 did not stage or commit those files. Before final handoff, `git status --short --branch` was re-run and the workspace was clean again, with the branch ahead of `origin/next/product-clarity-demo-polish-20260605` by 38 commits at that check before this final doc refresh was committed.
 
-- `README.md`
-- `docs/design/operator-workbench-three-column-spec.md`
-- `docs/releases/windows-v0.1-rc-draft-release-notes.md`
+Final duplicate-PR checks were also re-run after the tree returned clean:
 
-These edits appeared after the retry started from a clean tree and were not intentionally made by AA1. AA1 is leaving them untouched and unstaged. They block a clean pre-push handoff because AA2 should not push/create/update the PR from a workspace with unresolved concurrent or unrelated dirty changes.
+- Open PRs for `next/product-clarity-demo-polish-20260605`: `[]`
+- All-state PRs for `next/product-clarity-demo-polish-20260605`: `[]`
 
 ## AA2 verdict
 
-**AA2 MAY NOT YET PUSH OR CREATE/UPDATE THE PR FROM THIS WORKSPACE.**
+**AA2 MAY PUSH THE COMMITTED BRANCH AND CREATE A NEW PR, PROVIDED IT RE-CHECKS CLEAN STATUS AND DUPLICATE PR STATE IMMEDIATELY BEFORE THE WRITE.**
 
-The GitHub auth and duplicate-PR preflight is now green, the RC artifact checksum is unchanged, and the required local gates pass. However, the workspace became dirty in three non-AA1 files after those checks. AA2 must first resolve the dirty working tree by either committing the intended edits under the right task/profile or reverting/stashing them with explicit owner approval, then immediately re-check:
+The GitHub auth and duplicate-PR preflight is green, the RC artifact checksum is unchanged, the required local gates pass, and the final AA1 workspace state is clean. AA2 should still re-check immediately before writing because GitHub/working-tree state can change between tasks.
 
-- `git status --short --branch`
-- `gh pr list --repo alanxiaofeifei/servicenow-automation --head next/product-clarity-demo-polish-20260605 --state open --json number,title,url,headRefName,baseRefName,isDraft,mergeStateStatus,statusCheckRollup`
-- `pnpm privacy:scan` at minimum after any doc/status changes, and the full gate set again if any non-doc behavior-affecting files changed
+This verdict clears AA2 only for the scoped PR task: push the branch and create/update the PR. AA2 must not merge, tag, or publish a GitHub Release; those remain conditional on later CI/review/release gates.
 
-If the tree is clean and the duplicate-PR check still returns no open PR, AA2 is conditionally cleared to push the committed branch and create the PR. AA2 still must not merge, tag, or publish a GitHub Release; those remain conditional on later CI/review/release gates.
-
-## Precise AA2 execution plan after dirty tree is resolved
+## Precise AA2 execution plan
 
 1. Verify repository context without exposing secrets:
    - `pwd`
@@ -122,6 +117,6 @@ AA1 performed no red-zone or external write operation:
 
 ## Final status
 
-`blocked-on-dirty-worktree-after-authenticated-pre-push-gate`
+`cleared-for-aa2-push-and-pr-create-after-immediate-recheck`
 
-GitHub auth and duplicate-PR checks are now green; required local gates and artifact verification passed. The only remaining AA1 blocker is the unresolved dirty working tree in three non-AA1 files. Resolve that before AA2 performs any GitHub write.
+GitHub auth and duplicate-PR checks are green; required local gates and artifact verification passed; final AA1 working tree state is clean. AA2 may proceed with the scoped push-and-PR task after repeating the immediate pre-write clean-status and duplicate-PR checks.
