@@ -168,6 +168,7 @@ type OperatorRuntimeResponse = {
   launch?: {
     status?: string;
     blockedReason?: string;
+    blockedDescription?: string;
     cdpEndpoint?: string;
     runtimeLogPath?: string;
     safety?: { browserProcessLaunched?: boolean; cdpEndpointReady?: boolean; noWriteMode?: boolean };
@@ -197,6 +198,9 @@ type SdaOperatorApi = {
   verifyCurrentIncident(request: OperatorRuntimeRequest): Promise<OperatorRuntimeResponse>;
   autofillCurrentIncidentDefaults(request: OperatorRuntimeRequest): Promise<OperatorRuntimeResponse>;
   autofillCurrentIncidentTextFields(request: OperatorRuntimeRequest): Promise<OperatorRuntimeResponse>;
+  provisionChromiumRuntime(): Promise<{ ok: boolean; autoProvisioned: boolean; error?: string }>;
+  onProvisionProgress(callback: (_event: unknown, update: unknown) => void): void;
+  offProvisionProgress(callback: (_event: unknown, update: unknown) => void): void;
 };
 
 type OperatorActionStatus = {
@@ -1769,6 +1773,18 @@ const englishOperatorWorkbenchCopy = {
         "All automated actions are limited to text-field fills after a verified page check."
       ],
       footer: "Human reviews and manually submits in ServiceNow."
+    },
+    startupDiagnostic: {
+      heading: "Startup blocked",
+      reasonLabel: "Reason",
+      nextStepLabel: "Next step",
+      runtimeLogPathLabel: "Startup log path",
+      copyDiagnostic: "Copy diagnostic",
+      dismiss: "Dismiss",
+      copied: "Copied",
+      logPathHint: "%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Logs",
+      runtimeLogPathLabelDefault: "check startup log",
+      unknownReason: "Startup was blocked by an unexpected condition."
     }
   },
   settings: {
@@ -3996,42 +4012,57 @@ export function App({
                     <p className="eyebrow">Release Readiness Handoff</p>
                     <h2 id="release-handoff-title">Alan should test this file</h2>
                   </div>
-                  <span>Latest local package</span>
+                  <span className="handoff-latest-badge">Latest local package</span>
                 </div>
                 <div className="handoff-path-line">
-                  <code>\\wsl.localhost\Ubuntu-Compact\home\alanxwsl\projects\servicenow-automation\dist\release\servicenow-automation-windows-v0.1.0-rc.1-ad-20260607-local.zip</code>
+                 <code>\\wsl.localhost\Ubuntu-Compact\home\alanxwsl\projects\servicenow-automation\dist\release\servicenow-automation-windows-v0.1.0-rc.1-ae-20260607-local.zip</code>
                 </div>
                 <dl className="handoff-metadata-strip">
                   <div>
                     <dt>SHA256</dt>
-                    <dd><code>7f5ca5a7e61a2112adfbbe5eb81226c93b3abca55d9db02da0f54e81cb344006</code></dd>
+                    <dd><code>4a9c7a38919acdc20c5c7352fc9a9b07ac11338770aed266bbd8746f19c69cde</code></dd>
                   </div>
                   <div>
                     <dt>mtime</dt>
-                    <dd>2026-06-07 01:32 CST</dd>
+                    <dd>2026-06-07 02:00 CST</dd>
                   </div>
                   <div>
                     <dt>What changed</dt>
-                    <dd>Browser readiness display + center panel states (3 runtime files modified)</dd>
+                    <dd>Stale-archive list, runtime readiness copy, quickstart checklist, updated AE metadata</dd>
                   </div>
                 </dl>
+                <div className="handoff-stale-warning">
+                  Older rc/ad/ab packages are archival only. If a package is not marked <strong>Latest</strong>, do not treat it as the current test target.
+                </div>
                 <div className="handoff-grid-row">
                   <div className="handoff-panel">
-                    <h3>Package facts</h3>
-                    <ul>
-                      <li>Latest build marker: AD-polish dated copy</li>
-                      <li>One-line summary: browser readiness + empty-state copy</li>
-                      <li>Local-only artifact, no publish/upload</li>
-                      <li>Freshness: built 2026-06-07 01:32 CST</li>
-                    </ul>
+                    <h3>Package archive</h3>
+                    <dl className="handoff-archive-list">
+                      <div className="handoff-archive-entry handoff-archive-latest">
+                        <dt>Latest</dt>
+                        <dd><code>rc.1-ae-20260607 (02:00)</code></dd>
+                      </div>
+                      <div className="handoff-archive-entry handoff-archive-stale">
+                        <dt>Stale</dt>
+                        <dd><code>rc.1-ad-20260607 (01:32)</code></dd>
+                      </div>
+                      <div className="handoff-archive-entry handoff-archive-stale">
+                        <dt>Stale</dt>
+                        <dd><code>rc.1-ab-20260607 (01:04)</code></dd>
+                      </div>
+                      <div className="handoff-archive-entry handoff-archive-stale">
+                        <dt>Stale</dt>
+                        <dd><code>rc.1 (01:04)</code></dd>
+                      </div>
+                    </dl>
                   </div>
                   <div className="handoff-panel">
                     <h3>Why retest matters</h3>
                     <ul>
-                      <li>Validates the latest UI polish round</li>
-                      <li>Confirms browser readiness chip displays 4 states</li>
-                      <li>Confirms empty/loading/error copy reads cleanly</li>
-                      <li>Verifies the handoff still matches the artifact</li>
+                      <li>Validates the stale-archive list and warning copy</li>
+                      <li>Confirms runtime readiness and quickstart strip display</li>
+                      <li>Confirms older packages are visibly archival only</li>
+                      <li>Verifies AE metadata still matches the artifact</li>
                     </ul>
                   </div>
                   <div className="handoff-panel">
@@ -4044,19 +4075,37 @@ export function App({
                     </ul>
                   </div>
                 </div>
+                <div className="handoff-runtime-section">
+                  <div className="handoff-runtime-chip-row">
+                    <span className="handoff-chip handoff-chip-blocked">
+                      Dedicated Chromium runtime: not found yet
+                    </span>
+                    <span className="handoff-chip handoff-chip-blocked">
+                      CDP readiness: disconnected
+                    </span>
+                  </div>
+                  <p className="handoff-runtime-note">Start QA Chromium is disabled until the tool-owned runtime is ready. Open the latest local package first, then run the Chromium readiness step from the runtime actions rail.</p>
+                </div>
+                <div className="handoff-quickstart-strip">
+                  <h3 className="handoff-quickstart-title">Quickstart checklist</h3>
+                  <ol className="handoff-quickstart-list">
+                    <li>Open the latest local package first.</li>
+                    <li>Double-click the packaged Windows app.</li>
+                    <li>Run the dedicated Chromium readiness step only from the tool-owned runtime path.</li>
+                    <li>Wait for CDP to show connected before considering Verify.</li>
+                    <li>Stop if the package is stale, the runtime is missing, or the state is ambiguous.</li>
+                  </ol>
+                </div>
                 <div className="handoff-actions-row">
                   <span className="handoff-actions-label">Local actions:</span>
-                  <button type="button" className="local-draft-button" onClick={() => navigator.clipboard.writeText("\\\\wsl.localhost\\Ubuntu-Compact\\home\\alanxwsl\\projects\\servicenow-automation\\dist\\release\\servicenow-automation-windows-v0.1.0-rc.1-ad-20260607-local.zip")}>
+                  <button type="button" className="local-draft-button" onClick={() => navigator.clipboard.writeText("\\wsl.localhost\Ubuntu-Compact\home\alanxwsl\projects\servicenow-automation\dist\release\servicenow-automation-windows-v0.1.0-rc.1-ae-20260607-local.zip")}>
                     Copy path
                   </button>
-                  <button type="button" className="local-draft-button" onClick={() => navigator.clipboard.writeText("7f5ca5a7e61a2112adfbbe5eb81226c93b3abca55d9db02da0f54e81cb344006")}>
+                  <button type="button" className="local-draft-button" onClick={() => navigator.clipboard.writeText("4a9c7a38919acdc20c5c7352fc9a9b07ac11338770aed266bbd8746f19c69cde")}>
                     Copy SHA256
                   </button>
-                  <button type="button" className="local-draft-button" onClick={() => navigator.clipboard.writeText("Browser readiness display + center panel states (3 runtime files modified)")}>
+                  <button type="button" className="local-draft-button" onClick={() => navigator.clipboard.writeText("Stale-archive list, runtime readiness copy, quickstart checklist, updated AE metadata")}>
                     Copy summary
-                  </button>
-                  <button type="button" className="local-draft-button" disabled={true} title="Open the latest local handoff before reviewing the checklist.">
-                    Open checklist
                   </button>
                 </div>
               </section>
@@ -6999,6 +7048,8 @@ function operatorRuntimeBlockedReasonDetails(value: string | undefined, fallback
       return "Could not find one unique approved Incident tab in the test browser. Keep exactly one current Incident form tab open, then retry Check current ticket page. No ServiceNow action was taken.";
     case "qa-runtime-required":
       return "The desktop runtime is locked to QA workspace controls. Choose QA workspace and restart the browser safety steps. No ServiceNow action was taken.";
+    case "dedicated-browser-runtime-missing":
+      return "Dedicated browser runtime not found. Run prepare-chrome-for-testing.ps1 from the scripts/windows folder, then restart the app. No ServiceNow action was taken.";
     default:
       return sanitizeOperatorDiagnosticText(value, fallback);
   }
@@ -7127,6 +7178,8 @@ function QaOperatorRuntimePanel({
   const qaBoundCdpEndpointReady = canUseRuntime && cdpEndpointReady;
   const qaBoundCdpState = canUseRuntime ? cdpState : "disconnected";
   const qaBoundVerifiedPageFingerprintReady = qaBoundCdpEndpointReady && verifiedPageFingerprintReady;
+  const startupBlocked = !cdpEndpointReady && !!lastResponse?.launch?.blockedReason;
+  const [showStartupDiagnostic, setShowStartupDiagnostic] = useState(startupBlocked);
   const launchDisabled = !canUseRuntime || !targetReady || busyAction !== null;
   const verifyDisabled = !canUseRuntime || !targetReady || !qaBoundCdpEndpointReady || busyAction !== null;
   const autofillDisabled = !canUseRuntime || !targetReady || !qaBoundCdpEndpointReady || busyAction !== null || !qaBoundVerifiedPageFingerprintReady;
@@ -7243,6 +7296,17 @@ function QaOperatorRuntimePanel({
         </div>
       </header>
 
+      {showStartupDiagnostic && startupBlocked ? (
+        <StartupDiagnosticBanner
+          blockedDescription={lastResponse?.launch?.blockedDescription}
+          blockedReason={lastResponse?.launch?.blockedReason ?? ""}
+          runtimeLogPath={lastResponse?.launch?.runtimeLogPath}
+          workbenchCopy={workbenchCopy}
+          onDismiss={() => setShowStartupDiagnostic(false)}
+          onLaunchBrowser={onLaunchBrowser}
+        />
+      ) : null}
+
       <div className="runtime-action-list" aria-label={workbenchCopy.runtime.title}>
         {actionCards.map((action) => (
           <article
@@ -7340,6 +7404,233 @@ function QaOperatorRuntimePanel({
           </div>
         )}
       </section>
+    </section>
+  );
+}
+
+function StartupDiagnosticBanner({
+  blockedDescription,
+  blockedReason,
+  runtimeLogPath,
+  workbenchCopy,
+  onDismiss,
+  onLaunchBrowser
+}: {
+  blockedDescription?: string;
+  blockedReason: string;
+  runtimeLogPath?: string;
+  workbenchCopy: OperatorWorkbenchCopy;
+  onDismiss: () => void;
+  onLaunchBrowser?: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [provisionState, setProvisionState] = useState<"idle" | "confirming" | "provisioning" | "done" | "error">("idle");
+  const [provisionMessage, setProvisionMessage] = useState("");
+  const [provisionPercent, setProvisionPercent] = useState(0);
+  const [provisionError, setProvisionError] = useState("");
+
+  const sanitizedReason = operatorSanitizeBlockedReason(blockedReason);
+  const sanitizedLogPath = runtimeLogPath
+    ? sanitizeOperatorRuntimeLogPath(runtimeLogPath)
+    : undefined;
+
+  const isRuntimeMissing = blockedReason === "dedicated-browser-runtime-missing" || blockedReason === "RuntimeNotFound";
+
+  const nextStep = isRuntimeMissing
+    ? "Run prepare-chrome-for-testing.ps1 from the scripts/windows folder, then restart the app."
+    : "Check the startup log for details, resolve the issue, then restart the app.";
+
+  const diagnosticText = [
+    "Startup blocked",
+    `Reason: ${operatorSafeDisplayText(sanitizedReason)}`,
+    `Next step: ${nextStep}`,
+    sanitizedLogPath ? `Log path: ${sanitizedLogPath}` : null
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  async function handleCopyDiagnostic() {
+    try {
+      const ok = await copyTextToBrowserClipboard(diagnosticText);
+      if (ok) setCopied(true);
+    } catch {
+      // silent
+    }
+  }
+
+  function handleStartAutoProvision() {
+    setProvisionState("confirming");
+  }
+
+  function handleCancelAutoProvision() {
+    setProvisionState("idle");
+  }
+
+  async function handleConfirmAutoProvision() {
+    setProvisionState("provisioning");
+    setProvisionMessage("Starting download...");
+    setProvisionPercent(0);
+
+    const api = getSdaOperatorApi();
+    if (!api) {
+      setProvisionState("error");
+      setProvisionError("Desktop backend unavailable");
+      return;
+    }
+
+    // Listen for progress events
+    function onProgress(_event: unknown, update: unknown) {
+      const u = update as { stage?: string; percent?: number; message?: string };
+      if (u.stage === "done") {
+        setProvisionState("done");
+        setProvisionMessage(u.message ?? "Done");
+        // Auto-retry launch after successful provisioning
+        setProvisionPercent(100);
+        setTimeout(() => {
+          onLaunchBrowser?.();
+        }, 300);
+      } else if (u.stage === "error") {
+        setProvisionState("error");
+        setProvisionError(u.message ?? "Provisioning failed");
+      } else if (u.stage === "fetching-metadata") {
+        setProvisionMessage(u.message ?? "Fetching version info...");
+      } else if (u.stage === "downloading") {
+        setProvisionMessage(u.message ?? "Downloading...");
+        if (u.percent !== undefined) setProvisionPercent(u.percent);
+      } else if (u.stage === "extracting") {
+        setProvisionMessage(u.message ?? "Extracting...");
+      }
+    }
+
+    api.onProvisionProgress(onProgress);
+
+    try {
+      const result = await api.provisionChromiumRuntime();
+      if (!result.ok) {
+        setProvisionState("error");
+        setProvisionError(result.error ?? "Provisioning failed");
+      }
+      // If result.ok but we didn't get a "done" progress, transition anyway
+      if (result.ok) {
+        // done state already handled by onProgress callback above
+      }
+    } catch (error) {
+      setProvisionState("error");
+      setProvisionError(error instanceof Error ? error.message : "Provisioning failed");
+    } finally {
+      api.offProvisionProgress(onProgress);
+    }
+  }
+
+  return (
+    <section className="startup-diagnostic-banner" role="alert" aria-labelledby="startup-diagnostic-heading">
+      <div className="startup-diagnostic-header">
+        <WorkbenchIcon name="shield" />
+        <h3 id="startup-diagnostic-heading">Startup blocked</h3>
+      </div>
+      <p className="startup-diagnostic-reason">{sanitizedReason}</p>
+      {blockedDescription ? <p className="startup-diagnostic-description">{blockedDescription}</p> : null}
+
+      {/* Auto-provisioning: confirmation dialog */}
+      {isRuntimeMissing && provisionState === "confirming" ? (
+        <div className="auto-provision-confirm">
+          <p className="auto-provision-confirm-text">
+            This will download the latest stable Chrome for Testing (approx 150 MB) from the official Google
+            metadata endpoint and install it at the tool-owned runtime path. No ServiceNow action will be taken.
+          </p>
+          <div className="auto-provision-confirm-actions">
+            <button
+              className="auto-provision-confirm-yes"
+              type="button"
+              onClick={handleConfirmAutoProvision}
+            >
+              Download and install
+            </button>
+            <button
+              className="auto-provision-confirm-no"
+              type="button"
+              onClick={handleCancelAutoProvision}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Auto-provisioning: progress indicator */}
+      {isRuntimeMissing && provisionState === "provisioning" ? (
+        <div className="auto-provision-progress">
+          <p className="auto-provision-progress-text">{provisionMessage}</p>
+          {provisionPercent > 0 && provisionPercent < 100 ? (
+            <div className="auto-provision-progress-bar-wrapper">
+              <div
+                className="auto-provision-progress-bar"
+                style={{ width: `${provisionPercent}%` }}
+                role="progressbar"
+                aria-valuenow={provisionPercent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              />
+            </div>
+          ) : null}
+          <p className="auto-provision-progress-percent">{provisionPercent}%</p>
+        </div>
+      ) : null}
+
+      {/* Auto-provisioning: done */}
+      {isRuntimeMissing && provisionState === "done" ? (
+        <div className="auto-provision-done">
+          <p>Chrome for Testing installed successfully. Restarting browser launch...</p>
+        </div>
+      ) : null}
+
+      {/* Auto-provisioning: error */}
+      {isRuntimeMissing && provisionState === "error" ? (
+        <div className="auto-provision-error">
+          <p>Auto-provisioning failed: {provisionError}</p>
+          <button
+            className="auto-provision-retry-button"
+            type="button"
+            onClick={() => setProvisionState("idle")}
+          >
+            Try again
+          </button>
+        </div>
+      ) : null}
+
+      <p className="startup-diagnostic-nextstep">
+        <strong>Next step:</strong> {nextStep}
+      </p>
+      {sanitizedLogPath ? (
+        <p className="startup-diagnostic-logpath">
+          <strong>Startup log:</strong> {sanitizedLogPath}
+        </p>
+      ) : null}
+      <div className="startup-diagnostic-actions">
+        {isRuntimeMissing && provisionState === "idle" ? (
+          <button
+            className="startup-diagnostic-auto-provision-button"
+            type="button"
+            onClick={handleStartAutoProvision}
+          >
+            Download Chrome for Testing automatically
+          </button>
+        ) : null}
+        <button
+          className="startup-diagnostic-copy-button"
+          type="button"
+          onClick={handleCopyDiagnostic}
+        >
+          {copied ? "Copied" : "Copy diagnostic"}
+        </button>
+        <button
+          className="startup-diagnostic-dismiss-button"
+          type="button"
+          onClick={onDismiss}
+        >
+          Dismiss
+        </button>
+      </div>
     </section>
   );
 }

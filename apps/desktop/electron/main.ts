@@ -22,9 +22,14 @@ import { getServiceNowEnvironmentConfig } from "@servicenow-automation/profiles"
 
 import { resolveOperatorRuntimeRequestGate } from "./operator-ipc-safety";
 import { resolveDesktopResourcePath, resolveDesktopRuntimePaths } from "./runtime-paths";
+import { checkDedicatedChromiumRuntime } from "./runtime-provisioning-precheck";
 import { createMainWindowWebPreferences } from "./window-preferences";
+import { provisionChromiumRuntime, type ProvisionProgress } from "./chromium-provisioner";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
+
+/* Reference to the main window, used for sending IPC events to renderer */
+let mainWindowRef: BrowserWindow | undefined;
 
 /* Main-process-owned CDP endpoint — never exposed to renderer */
 let mainProcessCdpEndpoint: string | undefined;
@@ -45,7 +50,7 @@ function clearStoredCdpEndpoint(): void {
 }
 
 function createMainWindow(): void {
-  const mainWindow = new BrowserWindow({
+  mainWindowRef = new BrowserWindow({
     width: 1320,
     height: 900,
     minWidth: 980,
@@ -55,9 +60,9 @@ function createMainWindow(): void {
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
-    void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
+    void mainWindowRef.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    void mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
+    void mainWindowRef.loadFile(join(__dirname, "../renderer/index.html"));
   }
 }
 
@@ -66,6 +71,12 @@ function registerOperatorIpc(): void {
     const gate = resolveOperatorRuntimeRequestGate(rawRequest);
     if (gate.status === "blocked") {
       return blockedLaunchResponse(gate.blockedReason);
+    }
+
+    /* Precheck: dedicated Chromium runtime must exist at tool-owned path */
+    const runtimeBlockedReason = checkDedicatedChromiumRuntime();
+    if (runtimeBlockedReason) {
+      return blockedLaunchResponse(runtimeBlockedReason);
     }
 
     const request = gate.request;
@@ -85,6 +96,52 @@ function registerOperatorIpc(): void {
       ok: launch.status === "ready",
       launch: sanitizeLaunchForRenderer(launch)
     };
+  });
+
+  /* Auto-provisioning handler: download + extract Chrome for Testing when
+   * the dedicated runtime is missing. Progress events are sent to the
+   * renderer so the diagnostic overlay can show a text progress indicator. */
+  ipcMain.handle("sda:provision-chromium-runtime", async () => {
+    try {
+      const win = mainWindowRef;
+
+      function sendProgress(update: ProvisionProgress): void {
+        if (win && !win.isDestroyed()) {
+          win.webContents.send("sda:provision-progress", update);
+        }
+      }
+
+      sendProgress({ stage: "fetching-metadata", percent: 0, message: "Fetching version info..." });
+
+      const result = await provisionChromiumRuntime({ onProgress: sendProgress });
+
+      if (result.success) {
+        /* Verify runtime path after provisioning */
+        const runtimeBlockedReason = checkDedicatedChromiumRuntime();
+        if (runtimeBlockedReason) {
+          return {
+            ok: false,
+            autoProvisioned: false,
+            provisionResult: result,
+            blockedReason: runtimeBlockedReason,
+            error: "Provisioning completed but runtime precheck still fails"
+          };
+        }
+      }
+
+      return {
+        ok: result.success,
+        autoProvisioned: result.success,
+        provisionResult: result,
+        error: result.success ? undefined : result.error
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        autoProvisioned: false,
+        error: error instanceof Error ? error.message : "Unknown provisioning error"
+      };
+    }
   });
 
   ipcMain.handle("sda:verify-current-incident", async (_event, rawRequest: unknown = {}) => {

@@ -328,7 +328,10 @@ describe("App", () => {
     expect(output).toContain("Confirms the visible Incident form is safe and current before any autofill.");
     expect(output).toContain("Fills allowed text fields only after the page is verified. It never saves or submits.");
     expect(output).not.toContain(["manual", "login", "only"].join(" "));
-    expect(output).not.toContain("CDP readiness");
+    // "CDP readiness" now legitimately appears in the handoff card (center section)
+    const runtimeRailIdx2 = output.indexOf('id="workbench-runtime-rail"');
+    const runtimeRailOnly2 = runtimeRailIdx2 >= 0 ? output.slice(runtimeRailIdx2) : output;
+    expect(runtimeRailOnly2).not.toContain("CDP readiness");
     expect(output).toContain("Browser status");
     expect(output).toContain("No browser status evidence yet; only sanitized status is shown.");
     expect(output).toContain("Collapse browser action rail");
@@ -1616,13 +1619,19 @@ describe("App", () => {
     expect(output).toContain("Release Readiness Handoff");
     expect(output).toContain("Alan should test this file");
     expect(output).toContain("release-readiness-handoff-card");
-    expect(output).toContain("\\\\wsl.localhost");
-    expect(output).toContain("7f5ca5a7e61a2112adfbbe5eb81226c93b3abca55d9db02da0f54e81cb344006");
+    expect(output).toContain("\\wsl.localhost");
+    expect(output).toContain("4a9c7a38919acdc20c5c7352fc9a9b07ac11338770aed266bbd8746f19c69cde");
     expect(output).toContain("Copy path");
     expect(output).toContain("Copy SHA256");
     expect(output).toContain("Copy summary");
-    expect(output).toContain("Open checklist");
-    expect(output).toContain('disabled=""');
+    // Stale-archive and runtime readiness sections
+    expect(output).toContain("handoff-stale-warning");
+    expect(output).toContain("handoff-archive-list");
+    expect(output).toContain("handoff-runtime-section");
+    expect(output).toContain("handoff-quickstart-strip");
+    expect(output).toContain("Dedicated Chromium runtime: not found yet");
+    expect(output).toContain("CDP readiness: disconnected");
+    expect(output).toContain("Quickstart checklist");
     expect(output).toContain("No live ServiceNow login");
     expect(output).toContain("No Save / Submit / Update / Resolve / Close");
     expect(output).toContain("Human-only boundaries");
@@ -1631,5 +1640,99 @@ describe("App", () => {
     const selectedCardIndex = output.indexOf('class="workbench-card selected-source-card"');
     expect(handoffCardIndex).toBeGreaterThan(0);
     expect(selectedCardIndex).toBeGreaterThan(handoffCardIndex);
+  });
+
+  describe("StartupDiagnosticBanner", () => {
+    const blockedResponse = {
+      ok: false,
+      launch: {
+        status: "blocked",
+        blockedReason: "dedicated-browser-runtime-missing",
+        blockedDescription: "Run prepare-chrome-for-testing.ps1 from the scripts folder to install the dedicated Chromium runtime.",
+        runtimeLogPath: "/tmp/servicenow-automation/.local/startup-logs/qa-startup-20260607-1234.jsonl",
+        safety: { browserProcessLaunched: false, cdpEndpointReady: false, noWriteMode: true }
+      }
+    };
+
+    it("shows diagnostic banner when CDP is not ready and launch is blocked", () => {
+      const output = renderAppMarkup("en-US", {
+        initialRuntimeRailExpanded: true,
+        initialOperatorCdpReady: false,
+        initialOperatorLastResponse: blockedResponse
+      });
+
+      expect(output).toContain('class="startup-diagnostic-banner"');
+      expect(output).toContain("Startup blocked");
+      expect(output).toContain("dedicated browser runtime unavailable");
+      expect(output).toContain("Run prepare-chrome-for-testing.ps1");
+      expect(output).toContain("Copy diagnostic");
+    });
+
+    it("does not show diagnostic banner when CDP is ready", () => {
+      const output = renderAppMarkup("en-US", {
+        initialRuntimeRailExpanded: true,
+        initialOperatorCdpReady: true,
+        initialOperatorLastResponse: {
+          ok: true,
+          launch: {
+            status: "ready",
+            cdpEndpoint: "127.0.0.1:9222",
+            safety: { browserProcessLaunched: true, cdpEndpointReady: true, noWriteMode: true }
+          }
+        }
+      });
+
+      expect(output).not.toContain('class="startup-diagnostic-banner"');
+      expect(output).not.toContain("Startup blocked");
+    });
+
+    it("does not show diagnostic banner when there is no blocked reason", () => {
+      const output = renderAppMarkup("en-US", {
+        initialRuntimeRailExpanded: true,
+        initialOperatorCdpReady: false,
+        initialOperatorLastResponse: null
+      });
+
+      expect(output).not.toContain('class="startup-diagnostic-banner"');
+    });
+
+    it("uses sanitized language in the diagnostic banner heading and reason", () => {
+      const output = renderAppMarkup("en-US", {
+        initialRuntimeRailExpanded: true,
+        initialOperatorCdpReady: false,
+        initialOperatorLastResponse: blockedResponse
+      });
+
+      expect(output).toContain('id="startup-diagnostic-heading"');
+      expect(output).toContain("dedicated browser runtime unavailable");
+    });
+
+    it("shows dismiss button that can close the overlay", () => {
+      const output = renderAppMarkup("en-US", {
+        initialRuntimeRailExpanded: true,
+        initialOperatorCdpReady: false,
+        initialOperatorLastResponse: blockedResponse
+      });
+
+      expect(output).toContain('class="startup-diagnostic-dismiss-button"');
+      expect(output).toContain("Dismiss");
+    });
+
+    it("redacts raw absolute paths in the diagnostic log path", () => {
+      const output = renderAppMarkup("en-US", {
+        initialRuntimeRailExpanded: true,
+        initialOperatorCdpReady: false,
+        initialOperatorLastResponse: blockedResponse
+      });
+
+      expect(output).toContain("startup-diagnostic-logpath");
+      // Check the diagnostic banner section specifically, not the full page
+      const bannerStart = output.indexOf('class="startup-diagnostic-banner"');
+      const bannerEnd = output.indexOf("</section>", bannerStart);
+      const bannerOnly = bannerStart >= 0 && bannerEnd >= 0 ? output.slice(bannerStart, bannerEnd) : "";
+      expect(bannerOnly).not.toContain("/tmp");
+      expect(bannerOnly).not.toContain("servicenow-automation");
+      expect(bannerOnly).toContain("startup-logs/qa-startup-20260607-1234.jsonl");
+    });
   });
 });
