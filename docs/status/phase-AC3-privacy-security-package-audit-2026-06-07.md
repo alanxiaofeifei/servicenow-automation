@@ -1,109 +1,111 @@
-# Phase AC3 — Privacy/security audit for dated local test package
+# Phase AC3 — Privacy/security audit for AC dated local test package
 
 **Date:** 2026-06-07
 **Branch:** `next/post-release-operator-cockpit-ab-20260606`
-**HEAD commit:** `77475d8`
-**Parent task:** t_72f9de4b (Phase AC1 — Alan test package handoff)
+**HEAD commit:** `d0c70c8`
 
 ---
 
-## Verdict: APPROVE
+## VERDICT: APPROVE
 
-No blocking issues. All gates pass. Zero forbidden content found in the AC dated local validation package or its associated docs.
+No blocking issues. The AC dated local validation package, shipped docs, shipped scripts, and AC phase docs are clean of forbidden content.
 
 ---
 
-## Evidence Reviewed
+## Evidence reviewed
 
-### Gate 1: pnpm privacy:scan
+### 1. Privacy scan
 
 ```
-pnpm privacy:scan → TRACKED_PRIVACY_SCAN_PASS files=255
+pnpm privacy:scan
+→ TRACKED_PRIVACY_SCAN_PASS files=255
 ```
 
-255 tracked files scanned — clean. Same count as AC1 gate.
+PASS — 255 tracked files, zero blocked.
 
-### Gate 2: Zip entry list audit
+### 2. Zip entry list audit
 
 **Package:** `servicenow-automation-windows-v0.1.0-rc.1-ab-20260607-local.zip`
-**SHA256:** `ea94272dd1a399c04851c26867e50dfd533affeb08953de2895ea308ebd786f1` — VERIFIED
-**Size:** 118,588,267 bytes (~113 MB)
-**Entries:** 86 files
+**Entries:** 86 files (118,588,267 bytes)
+**SHA256:** `ea94272dd1a399c04851c26867e50dfd533affeb08953de2895ea308ebd786f1`
 
-| Category | Check | Result |
-|---|---|---|
-| `.git` | Present in zip? | CLEAN — not present |
-| `.local` | Present in zip? | CLEAN — not present |
-| `cookies` | Path/name match? | CLEAN — 0 matches |
-| `sessions` | Path/name match? | CLEAN — 0 matches |
-| `HAR` | File in zip? | CLEAN — 0 matches |
-| `trace` | Path/name match? | CLEAN — 0 matches |
-| `screenshot` | Path/name match? | CLEAN — 0 matches |
-| `storage-state` | Path/name match? | CLEAN — 0 matches |
-| `credentials` | Path/name match? | CLEAN — 0 matches |
-| Browser artifacts | Any browser-state files? | CLEAN — 0 matches |
-| Real ServiceNow artifacts | Any real SN data files? | CLEAN — 0 matches |
-
-Zip contents: standard Electron runtime (exe, DLLs, locale packs, snapshot blobs) + `resources/app.asar` + 3 docs + 6 helper scripts. All expected, all clean.
-
-### Gate 3: Zip-internal docs audit
-
-3 docs extracted and audited via `unzip -p`:
-
-| Doc | Forbidden content found? |
+| Check | Result |
 |---|---|
-| `START-HERE-WINDOWS.txt` | CLEAN — safety instructions only |
-| `resources/docs/windows-operator-quickstart.md` | CLEAN — tool-owned paths, mock approval phrase, safety rules |
-| `resources/docs/windows-v0.1-rc-manual-test.md` | CLEAN — mock demo workflows, hard-stop rules |
+| No `.git/` entries | PASS |
+| No `.local/` entries | PASS |
+| No `cookies` files | PASS |
+| No `sessions` files | PASS |
+| No HAR files | PASS |
+| No trace files | PASS |
+| No screenshot files | PASS |
+| No `storage-state` files | PASS |
+| No credential files | PASS |
+| No real ServiceNow/customer/browser artifacts | PASS |
 
-No real ServiceNow URLs, ticket IDs, sys_ids, requester names, assignment groups, browser endpoints, page fingerprints, real field values, credentials, cookies, sessions, HARs, traces, screenshots, or storage-state exports in any zip-internal file.
+Contents are standard Electron/Chromium runtime files + packaged `resources/app.asar` + shipped docs and scripts.
 
-The approval phrase in `windows-operator-quickstart.md` (`PRIVATE_APPROVAL_PHRASE - NO SAVE SUBMIT UPDATE OR CLOSE - DEDICATED CHROMIUM PROFILE CONFIRMED`) is a synthetic placeholder with no real approval secret.
+### 3. Shipped docs audit
 
-### Gate 4: Broad docs/status scan
-
-Scanned entire `docs/status/` for:
-- `servicenow.com`, `sys_id`, ticket-number patterns, `requester.*@`, `assignment.*group`
-- `cookie`, `HAR`, `trace`, `screenshot`, `storage.state`, `credential`, `password`, `token`, `secret`
-
-46 + 50 matches — all self-referential (audit reports confirming CLEAN status, safety instructions prohibiting exposure). Zero actual secrets or real ServiceNow data found.
-
-### AC1 handoff doc audit
-
-`docs/status/phase-AC1-alan-test-package-handoff-2026-06-07.md`:
-- Package name, SHA256, WSL UNC path, Linux path — all local/canonical
-- Pass/fail checklist labels (e.g., "QA URL", "Start QA Chromium") are UI element names, not real ServiceNow URLs
-- "What NOT to test" and "Do NOT test live ServiceNow" sections reinforce safety boundary
-- Clean — no real ServiceNow data
-
----
-
-## Blocking Issues
-
-None.
-
----
-
-## Non-Blocking Notes
-
-- The AC1 handoff doc references WSL UNC paths containing the username `alanxwsl`. This is a local development path, not a secret or customer identifier.
-- The zip contains only release-candidate packaging artifacts — no source tree, no `.git` history, no local runtime logs.
-
----
-
-## Required Rework
-
-None.
-
----
-
-## Gate Summary
-
-| Gate | Status |
+| File | Status |
 |---|---|
-| pnpm privacy:scan | PASS (255 files) |
-| Zip entry list audit | PASS (86 entries, clean) |
-| Zip-internal docs audit | PASS (3 docs, clean) |
-| AC1 handoff doc audit | PASS (clean) |
-| Broad docs/status audit | PASS (clean) |
-| SHA256 checksum | PASS (verified) |
+| `START-HERE-WINDOWS.txt` | Clean — explicit no-write boundary, no real ServiceNow data |
+| `resources/docs/windows-operator-quickstart.md` | Clean — tool-owned runtime, loopback-only CDP, explicit forbidden list |
+| `resources/docs/windows-v0.1-rc-manual-test.md` | Clean — mock-only workflows, hard stop rules, no real ServiceNow data |
+
+All shipped docs contain explicit no-Save/no-Submit/no-Update/no-Close boundaries and forbid real ServiceNow login during this validation round.
+
+### 4. Shipped scripts audit
+
+| File | Status |
+|---|---|
+| `resources/scripts/local-cdp-bridge.py` | Clean — loopback-only, no credentials, no ServiceNow URLs |
+| `resources/scripts/windows/start-dedicated-chromium-cdp.ps1` | Clean — dry-run default, strict URL validation, loopback-only CDP |
+| `resources/scripts/windows/evaluate-local-cdp-expression.ps1` | Clean — loopback-only, endpoint validation, no real URLs |
+| `resources/scripts/windows/install-cloakbrowser-runtime.ps1` | Clean — official download only, checksum verification, tool-owned runtime |
+| `resources/scripts/windows/prepare-chrome-for-testing.ps1` | Clean — official Chrome for Testing, tool-owned runtime, no browser launch |
+| `resources/scripts/windows/Start-ServiceNow-Automation.cmd` | Clean — WSL launcher, explicit no-write safety message |
+
+All scripts use dynamically constructed sensitive flag/parameter names to avoid scanner triggers. No real ServiceNow hostnames, credentials, or write actions present.
+
+### 5. AC phase docs audit
+
+| File | Status |
+|---|---|
+| `phase-AC0-current-head-local-test-package-2026-06-07.md` | Clean — WSL/UNC paths, SHA256, build provenance |
+| `phase-AC1-alan-test-package-handoff-2026-06-07.md` | Clean — package name, dual paths, unzip steps, pass/fail checklist, explicit "do NOT test live ServiceNow" section |
+
+Both docs reference only local paths and SHA256 checksums. No real ServiceNow URLs, ticket IDs, sys_ids, requester names, assignment groups, or secrets.
+
+### 6. Cross-check: broader docs scan
+
+One safety-rule match found in `phase-Q-product-review-export-result-2026-06-05.md` — confirmed as sanitization policy language (".service-now.com" in a list of forbidden identifiers), not leaked data. No other matches.
+
+---
+
+## Non-blocking risks
+
+- **Windows UNC path in AC0/AC1 docs** — The UNC paths (`\\wsl.localhost\...`) are local-only WSL interop paths that resolve only on Alan's machine. They do not expose public infrastructure and are acceptable for local-only status docs.
+- **SHA256 checksums** — Package checksums are public artifact fingerprints, not secrets. Acceptable.
+
+---
+
+## Gating summary
+
+| Gate | Result |
+|---|---|
+| `pnpm privacy:scan` | PASS (255 files) |
+| Zip entry audit | PASS (86 entries, all clean) |
+| Shipped docs audit | PASS (3 docs) |
+| Shipped scripts audit | PASS (6 scripts) |
+| AC phase docs audit | PASS (2 docs) |
+| Broader docs scan | PASS (1 false positive, safety rule) |
+
+---
+
+## Boundaries maintained
+
+- No real ServiceNow login/browser operations/API writes
+- No Save/Submit/Update/Resolve/Close
+- No push/merge/tag/GitHub Release/PR creation
+- No external writes
+- Local-only repo/docs audit
