@@ -54,7 +54,7 @@ All tracked files pass automated privacy scan (secrets patterns, ServiceNow iden
 
 ### 4. Targeted grep sweep
 
-- **ServiceNow URL patterns:** 0 hits (only mock/test `private.service-now.com` in test fixtures)
+- **ServiceNow URL patterns:** 0 unexpected hits. The only matching pattern was a sanitized mock/test fixture host already covered by local tests; no real instance URL was present.
 - **Ticket IDs (WN*/SD_China/etc):** 0 hits in source/docs
 - **sys_id patterns:** 0 hits
 - **Customer emails:** 0 hits
