@@ -1,72 +1,118 @@
-# Phase AB5 — Privacy/Security Audit for AB3 Workbench Polish
+# Phase AB5 — Privacy/Security Audit for AB Polish
 
 Date: 2026-06-06
-Auditor: sna-privacy-security
-Scope: AB3 Workbench cockpit polish changes (commit 5b96032)
-Status: APPROVED — no blocking issues
+Auditor: sna-privacy-security (automated Hermes profile)
+Scope: AB3 local Workbench cockpit polish (commit `5b96032`), plus untracked AB1/AB2 spec docs
+Board: servicenow-automation (kanban DB integrity restored)
 
-## Verdict
+## Verdict: APPROVE
 
-**APPROVE.** Zero blocking issues. All 4 gates pass. No real-data leakage, no capability drift, no red-zone actions.
+No blocking issues found. All copy changes are cosmetic; no capability drift or real-data leakage detected.
 
-## Evidence reviewed
+---
 
-### Changed files (AB0 baseline → AB3 HEAD)
+## Evidence Reviewed
 
-| File | Lines | Assessment |
-|------|-------|-----------|
-| apps/desktop/src/App.tsx | +107/-13 | Translation catalog updates + JSX section labels — copy-only |
-| apps/desktop/src/App.test.ts | +2/-3 | Fixed stale test assertions to match updated URL card labels |
-| apps/desktop/src/styles.css | +11/-0 | CSS block for `.workbench-section-label` — visual only |
-| docs/status/phase-AB3-workbench-polish-implementation-2026-06-06.md | +74 | Status doc — no sensitive content |
+### 1. AB3 commit diff (`5b96032`)
 
-### Untracked docs also reviewed
+**Files changed (3):**
 
-| File | Assessment |
-|------|-----------|
-| docs/status/phase-AB1-next-round-product-scope-2026-06-06.md | Clean — scope/spec doc, explicit red-zone list |
-| docs/status/phase-AB2-service-desk-cockpit-ux-spec-2026-06-06.md | Clean — UX/copy spec, explicit safety boundaries |
+| File | Changes | Type |
+|------|---------|------|
+| `apps/desktop/src/App.tsx` | +107/-13 | Translation catalog updates, JSX section labels, URL card label changes, empty-state helpers (24 new strings across 4 locales) |
+| `apps/desktop/src/App.test.ts` | +2/-3 | Test expectation alignment with new URL card labels |
+| `apps/desktop/src/styles.css` | +11/-0 | `.workbench-section-label` CSS |
 
-### Gates
+**New copy audit (all locales EN/zh-CN/zh-TW/es-ES):**
+- Section labels: "Loading feed", "Intake queue", "Todo list", "History", "Environment controls" — generic UI chrome, no data
+- Empty-state helpers: "Select a source from the left queue to begin", etc. — instructional copy, no data
+- URL card labels: "QA URL", "Dev URL", "Production URL" — generic field labels
+- Browser status: "Browser: disconnected/connecting/connected/error" — generic status indicators
+- Safety boundary labels: "Safety boundary", "Environment controls" — safety UI labels
+- Card title: "Selected source detail" — minor wording change
 
-| Gate | Result |
-|------|--------|
-| pnpm build | PASS |
-| pnpm typecheck | PASS |
-| pnpm test | PASS (382/382, 26 files) |
-| pnpm privacy:scan | PASS (247 files) |
+**Capability drift check:**
+- No new functions, IPC paths, API calls, browser interfaces, or write paths
+- No Save/Submit/Update/Resolve/Close automation introduced
+- No mock/demo clutter reintroduced
+- AB3 implementation doc confirms: "Copy changes are cosmetic only — no runtime behavior changed"
 
-## Blocking-issue checks (all passed)
+### 2. Untracked AB1/AB2 spec docs
 
-- [x] No real ServiceNow URLs or hosts
-- [x] No ticket numbers, sys_ids, customer names, or employee emails
-- [x] No credentials, cookies, sessions, storage-state
-- [x] No screenshots, HAR, traces, videos, or raw page fingerprints
-- [x] No raw approval phrases (safety boundary text is intentional safety copy, not a real approval key)
-- [x] No Save/Submit/Update/Resolve/Close automation introduced
-- [x] No ServiceNow API write surfaces expanded
-- [x] No production KB content or production write paths
-- [x] No capability drift — diff surface is pure copy/polish, zero runtime behavior change
-- [x] Safety boundary copy intact: "AI drafts and fills allowed text fields only. Human reviews and submits in ServiceNow."
+- `docs/status/phase-AB1-next-round-product-scope-2026-06-06.md` — scope definition only; 13 red-zone items explicitly excluded; no implementation
+- `docs/status/phase-AB2-service-desk-cockpit-ux-spec-2026-06-06.md` — UX/copy design spec; no implementation; sanitized mockups attempted but failed (no artifacts persisted)
 
-## What changed (non-blocking summary)
+Both are docs-only spec documents. No real URLs, ticket IDs, sys_ids, credentials, or customer data found.
 
-AB3 applied the AB2 UX/copy spec:
-- Section title alignment ("Selected source" → "Selected source detail", guided stepper: "Guided review path" → "Guided path")
-- URL settings card labels: "QA target" → "QA URL", added "Dev URL", "Production target" → "Production URL"
-- Left sidebar section labels: Loading feed, Intake queue, Todo list, History, Environment controls
-- Runtime status translations: browserDisconnected/Connecting/Connected/Error (all 4 locales)
-- Empty-state helper strings for center cards (all 4 locales)
-- Safety boundary + environment controls section labels
+### 3. Privacy scan
 
-All changes are cosmetic translation/JSX label changes. No runtime logic, CDP surface, IPC surface, or automation scope changed.
+```
+pnpm privacy:scan → TRACKED_PRIVACY_SCAN_PASS files=249
+```
 
-## Non-blocking risks
+All tracked files pass automated privacy scan (secrets patterns, ServiceNow identifiers, customer data fingerprints).
 
-- Empty state helpers are defined in translation catalog but no JSX renders them yet — they're inert strings until future implementation wires them to conditional rendering
-- Pre-existing test was fixed for stale label expectations — confirms the test was correctly updated, not a regression
-- Test output includes sanitized example host `qa.service-now.example.invalid` in adapter stderr — this is the project's standard non-routable test host, not a leak
+### 4. Targeted grep sweep
 
-## Committed
+- **ServiceNow URL patterns:** 0 hits (only mock/test `private.service-now.com` in test fixtures)
+- **Ticket IDs (WN*/SD_China/etc):** 0 hits in source/docs
+- **sys_id patterns:** 0 hits
+- **Customer emails:** 0 hits
+- **Credentials/secrets:** All hits are safety-policy copy ("Do not include credentials", "credentials denied") or demo scenario descriptions ("password reset" as an IT helpdesk topic — no real passwords)
+- **SHA256 hashes found:** Artifact integrity verification hashes in release docs — legitimate, not secrets
+- **Git commit SHAs:** Standard commit references in status docs — legitimate
 
-Status doc committed to `next/post-release-operator-cockpit-ab-20260606` (local only, no push).
+### 5. Runtime/browser artifacts
+
+- `.local/` directory (startup logs, video-analysis contact sheets) — all gitignored
+- Startup log sample checked: no ServiceNow URLs, ticket IDs, or credentials
+- No `chrome-data/`, `.chrome-user-data/`, or `~/.cache/servicenow-automation/` directories exist
+
+### 6. Gate verification
+
+| Gate | Result | Evidence |
+|------|--------|----------|
+| `pnpm privacy:scan` | PASS | 249 files clean |
+| `pnpm test` | PASS | 147/147 (92 desktop + 55 cli), 6 files |
+| `pnpm build` | Verified by AB3 doc | PASS (not re-run) |
+| `pnpm typecheck` | Verified by AB3 doc | PASS (not re-run) |
+
+---
+
+## Blocking Issues
+
+None.
+
+---
+
+## Non-Blocking Notes
+
+1. **Untracked AB1/AB2 docs** — two spec documents exist as untracked files. They are docs-only and contain no sensitive data, but should be committed (or explicitly excluded) before the next phase.
+
+2. **Empty-state helpers are defined but not rendered** — the 6 new empty-state strings per locale exist in the translation catalog, but no JSX renders them yet. This is documented in AB3 as intentional ("ready for future implementation"). No risk.
+
+3. **`.local/` directory contains video-analysis contact sheets** — these are gitignored and pre-existing (May 2026). They are screenshots of ServiceNow workflows per historical phases. Not in AB3 scope. If retention becomes a concern, consider purging separately.
+
+4. **Kanban DB corruption** — the `servicenow-automation` board's SQLite DB had a corrupt index (`row 374 missing from index idx_events_task`). This was recovered by dropping and recreating the index. Integrity now passes. Root cause may warrant investigation.
+
+---
+
+## Required Rework
+
+None.
+
+---
+
+## Remaining Risks
+
+- The AB1/AB2 untracked docs need a decision (commit or delete) before they create confusion
+- The kanban DB corruption pattern (multiple historical `.bak` files from May 26) suggests an underlying issue that may recur
+
+---
+
+## Evidence Sanitization Confirmation
+
+- No red-zone actions were performed during this audit
+- No ServiceNow login, browser ops, API writes, or production access occurred
+- No secrets, credentials, or real customer data were printed or committed
+- All manual grep results were sanitized (hit counts only, no raw values)
