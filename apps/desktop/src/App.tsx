@@ -3990,6 +3990,76 @@ export function App({
         <section className="workbench-center" data-active-page={activePage} aria-label={activeNavLabel}>
           {activePage === "workbench" ? (
             <div className="workbench-page-shell">
+              <section className="workbench-card release-readiness-handoff-card" aria-labelledby="release-handoff-title">
+                <div className="workbench-card-header">
+                  <div>
+                    <p className="eyebrow">Release Readiness Handoff</p>
+                    <h2 id="release-handoff-title">Alan should test this file</h2>
+                  </div>
+                  <span>Latest local package</span>
+                </div>
+                <div className="handoff-path-line">
+                  <code>\\wsl.localhost\Ubuntu-Compact\home\alanxwsl\projects\servicenow-automation\dist\release\servicenow-automation-windows-v0.1.0-rc.1-ad-20260607-local.zip</code>
+                </div>
+                <dl className="handoff-metadata-strip">
+                  <div>
+                    <dt>SHA256</dt>
+                    <dd><code>7f5ca5a7e61a2112adfbbe5eb81226c93b3abca55d9db02da0f54e81cb344006</code></dd>
+                  </div>
+                  <div>
+                    <dt>mtime</dt>
+                    <dd>2026-06-07 01:32 CST</dd>
+                  </div>
+                  <div>
+                    <dt>What changed</dt>
+                    <dd>Browser readiness display + center panel states (3 runtime files modified)</dd>
+                  </div>
+                </dl>
+                <div className="handoff-grid-row">
+                  <div className="handoff-panel">
+                    <h3>Package facts</h3>
+                    <ul>
+                      <li>Latest build marker: AD-polish dated copy</li>
+                      <li>One-line summary: browser readiness + empty-state copy</li>
+                      <li>Local-only artifact, no publish/upload</li>
+                      <li>Freshness: built 2026-06-07 01:32 CST</li>
+                    </ul>
+                  </div>
+                  <div className="handoff-panel">
+                    <h3>Why retest matters</h3>
+                    <ul>
+                      <li>Validates the latest UI polish round</li>
+                      <li>Confirms browser readiness chip displays 4 states</li>
+                      <li>Confirms empty/loading/error copy reads cleanly</li>
+                      <li>Verifies the handoff still matches the artifact</li>
+                    </ul>
+                  </div>
+                  <div className="handoff-panel">
+                    <h3>Human-only boundaries</h3>
+                    <ul>
+                      <li>No live ServiceNow login</li>
+                      <li>No Save / Submit / Update / Resolve / Close</li>
+                      <li>No external write paths</li>
+                      <li>No raw customer or ticket data</li>
+                    </ul>
+                  </div>
+                </div>
+                <div className="handoff-actions-row">
+                  <span className="handoff-actions-label">Local actions:</span>
+                  <button type="button" className="local-draft-button" onClick={() => navigator.clipboard.writeText("\\\\wsl.localhost\\Ubuntu-Compact\\home\\alanxwsl\\projects\\servicenow-automation\\dist\\release\\servicenow-automation-windows-v0.1.0-rc.1-ad-20260607-local.zip")}>
+                    Copy path
+                  </button>
+                  <button type="button" className="local-draft-button" onClick={() => navigator.clipboard.writeText("7f5ca5a7e61a2112adfbbe5eb81226c93b3abca55d9db02da0f54e81cb344006")}>
+                    Copy SHA256
+                  </button>
+                  <button type="button" className="local-draft-button" onClick={() => navigator.clipboard.writeText("Browser readiness display + center panel states (3 runtime files modified)")}>
+                    Copy summary
+                  </button>
+                  <button type="button" className="local-draft-button" disabled={true} title="Open the latest local handoff before reviewing the checklist.">
+                    Open checklist
+                  </button>
+                </div>
+              </section>
               <section className="workbench-card selected-source-card" aria-labelledby="selected-source-title">
             <div className="workbench-card-header">
               <div>

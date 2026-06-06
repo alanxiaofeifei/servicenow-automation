@@ -264,8 +264,19 @@ describe("App", () => {
     const legacyEnvironmentLabel = ["QA Test", "Environment"].join(" ");
     const staleManualLoginOnlyCopy = ["manual", "login", "only"].join(" ");
 
+    // Allow "Alan" in the release-readiness handoff card only (it is a first-line instruction to the operator, not an operator label)
+    const handoffCardMarker = "release-readiness-handoff-card";
+    const handoffStart = desktopSource.indexOf(handoffCardMarker);
+    const handoffEnd = desktopSource.indexOf("</section>", handoffStart);
+    const beforeHandoff = handoffStart >= 0 ? desktopSource.slice(0, handoffStart) : desktopSource;
+    const handoffOnly = handoffStart >= 0 && handoffEnd >= 0 ? desktopSource.slice(handoffStart, handoffEnd) : "";
+
+    expect(beforeHandoff).not.toContain(legacyPersonName);
+    // The handoff card is allowed to contain a personal instruction name
+    expect(handoffOnly).not.toContain(legacyCustomerToken);
+    expect(handoffOnly).not.toContain(legacyEnvironmentLabel);
+
     expect(desktopSource).not.toMatch(new RegExp(legacyCustomerToken, "i"));
-    expect(desktopSource).not.toContain(legacyPersonName);
     expect(desktopSource).not.toContain(legacyEnvironmentLabel);
     expect(desktopSource).not.toContain(staleManualLoginOnlyCopy);
     expect(desktopSource).toContain("saved sign-in can be reused");
@@ -1597,5 +1608,28 @@ describe("App", () => {
     expect(output).toContain("Draft generation encountered an issue.");
     expect(output).toContain("KB recommendation lookup encountered an issue.");
     expect(output).toContain('class="center-placeholder blocked"');
+  });
+
+  it("renders release-readiness handoff card before the center cards", () => {
+    const output = renderAppMarkup("en-US");
+
+    expect(output).toContain("Release Readiness Handoff");
+    expect(output).toContain("Alan should test this file");
+    expect(output).toContain("release-readiness-handoff-card");
+    expect(output).toContain("\\\\wsl.localhost");
+    expect(output).toContain("7f5ca5a7e61a2112adfbbe5eb81226c93b3abca55d9db02da0f54e81cb344006");
+    expect(output).toContain("Copy path");
+    expect(output).toContain("Copy SHA256");
+    expect(output).toContain("Copy summary");
+    expect(output).toContain("Open checklist");
+    expect(output).toContain('disabled=""');
+    expect(output).toContain("No live ServiceNow login");
+    expect(output).toContain("No Save / Submit / Update / Resolve / Close");
+    expect(output).toContain("Human-only boundaries");
+
+    const handoffCardIndex = output.indexOf('class="workbench-card release-readiness-handoff-card"');
+    const selectedCardIndex = output.indexOf('class="workbench-card selected-source-card"');
+    expect(handoffCardIndex).toBeGreaterThan(0);
+    expect(selectedCardIndex).toBeGreaterThan(handoffCardIndex);
   });
 });
