@@ -71,9 +71,7 @@ fi
 
 # Extract phase from filename
 PHASE=""
-if [[ "$CURRENT_FILENAME" =~ -rc\.1-([a-z0-9]+)-([0-9]{8}) ]]; then
-  PHASE="${BASH_REMATCH[1]^^}"
-elif [[ "$CURRENT_FILENAME" =~ -rc\.1-([a-z0-9]{2,4})-local ]]; then
+if [[ "$CURRENT_FILENAME" =~ -([a-z0-9]+)-([0-9]{8})(-local)?\.zip$ ]]; then
   PHASE="${BASH_REMATCH[1]^^}"
 fi
 

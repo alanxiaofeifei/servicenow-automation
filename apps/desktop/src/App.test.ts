@@ -1647,13 +1647,13 @@ describe("App", () => {
     };
     const output = renderAppMarkup("en-US", { initialPackageMetadata: mockMetadata });
 
-    expect(output).toContain("Release Readiness Handoff");
-    expect(output).toContain("Alan should test this file");
+    expect(output).toContain("Release readiness");
+    expect(output).toContain("Open the current package first and verify it locally.");
     expect(output).toContain("release-readiness-handoff-card");
-    expect(output).toContain("\\\\wsl.localhost");
+    expect(output).toContain("\\\\\\\\wsl.localhost");
     expect(output).toContain("4a9c7a38919acdc20c5c7352fc9a9b07ac11338770aed266bbd8746f19c69cde");
     // Source-of-truth marker
-    expect(output).toContain("Source of truth");
+    expect(output).toContain("Current package source");
     expect(output).toContain("CURRENT.txt");
     expect(output).toContain("test-package.zip");
     // Current-phase chip
@@ -1671,12 +1671,12 @@ describe("App", () => {
     expect(output).toContain("handoff-path-line");
     expect(output).toContain("handoff-actions-row");
     expect(output).toContain("handoff-manual-checklist");
-    expect(output).toContain("Manual checklist");
+    expect(output).toContain("Verification checklist");
 
-    const handoffCardIndex = output.indexOf('class="workbench-card release-readiness-handoff-card"');
-    const selectedCardIndex = output.indexOf('class="workbench-card selected-source-card"');
+    const handoffCardIndex = output.indexOf("class=\"workbench-card release-readiness-handoff-card\"");
+    const selectedCardIndex = output.indexOf("class=\"workbench-card selected-source-card\"");
     expect(handoffCardIndex).toBeGreaterThan(0);
-    expect(selectedCardIndex).toBeGreaterThan(handoffCardIndex);
+    expect(handoffCardIndex).toBeGreaterThan(selectedCardIndex);
   });
 
   it("renders unavailable state when package metadata returns ok:false", () => {
@@ -1686,7 +1686,7 @@ describe("App", () => {
     };
     const output = renderAppMarkup("en-US", { initialPackageMetadata: mockFailedMetadata });
 
-    expect(output).toContain("Release Readiness Handoff");
+    expect(output).toContain("Release readiness");
     // Should show unavailable text, not "still loading"
     expect(output).toContain("Current package metadata is unavailable.");
     expect(output).toContain("Current package path is unavailable.");
@@ -1858,10 +1858,10 @@ describe("handoff section", () => {
     expect(buttonAttrs(output, "Open checklist")).not.toContain("disabled");
   });
 
-  it("renders the manual checklist section", () => {
+  it("renders the verification checklist section", () => {
     const output = renderAppMarkup("en-US");
 
-    expect(output).toContain("Manual checklist");
+    expect(output).toContain("Verification checklist");
   });
 });
 
@@ -1874,8 +1874,8 @@ describe("P0 Re-Acceptance Checklist", () => {
     const output = renderAppMarkup("en-US");
 
     expect(output).toContain('class="workbench-card p0-checklist-card"');
-    expect(output).toContain("P0 Re-Acceptance Checklist");
-    expect(output).toContain("Use this checklist to re-validate all 8 P0 criteria from PR #97.");
+    expect(output).toContain("PO re-acceptance checklist");
+    expect(output).toContain("Use this checklist to re-validate all 8 PO criteria from PR #97.");
     expect(output).toContain("Local-only: Verify only. No live ServiceNow writes.");
     expect(output).toContain("Target package");
     expect(output).toContain("Current cumulative package");

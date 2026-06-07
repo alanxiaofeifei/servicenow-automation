@@ -7155,6 +7155,25 @@ body {
   padding: 1px 0;
 }
 
+/* Release and package details section (collapsible, separated) */
+.release-package-details {
+  margin-top: 24px;
+  border-top: 1px solid var(--panel-border);
+  border-radius: 8px;
+}
+
+.release-package-details[open] {
+  padding-bottom: 8px;
+}
+
+.release-package-details > .release-package-summary {
+  list-style: none;
+}
+
+.release-package-details > .release-package-summary::-webkit-details-marker {
+  display: none;
+}
+
 /* Per-button disabled reason for the repo-hygiene action rail */
 .worktree-accept-action-disabled-reason {
   color: var(--muted-text);
