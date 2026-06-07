@@ -1,8 +1,8 @@
 # Phase BL0 — release-line workspace stabilization
 
-Date: 2026-06-07 23:46 +08:00
+Date: 2026-06-07 23:48 +08:00
 Task: `t_4a1c6139`
-Status: READY FOR BASELINE COMMIT — operator hold cleared, workspace classified, intended baseline staged, and all required local gates passed.
+Status: COMMITTED BASELINE — operator hold cleared, workspace classified, intended baseline committed, and all required local gates passed.
 
 ## Safety boundary
 
@@ -81,4 +81,7 @@ Commit the curated local-only baseline rather than hiding or deleting the accumu
 
 ## Commit/status
 
-This document is part of the BL0 stabilization baseline. The exact baseline commit hash is recorded in the follow-up finalization update and in the Kanban handoff after `git commit` completes.
+- BL0 stabilization baseline commit: `883d6c6725ed96c477d075a45a865d106518c48f` (`chore: stabilize BL0 release-line baseline`).
+- Baseline commit contents: 218 paths total (`205` added, `13` modified), retaining the curated local-only product/test/docs/scripts baseline and audit evidence.
+- Worktree status immediately after the baseline commit: clean; branch `next/post-release-operator-cockpit-ab-20260606` ahead of `origin/main` by 38 commits.
+- This final status update is docs-only and records the exact baseline commit for downstream BL UI fix work.
