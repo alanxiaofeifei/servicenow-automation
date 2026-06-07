@@ -11,7 +11,7 @@ const electronViteConfigSource = readFileSync(resolve(desktopRoot, "electron.vit
 
 describe("Windows packaging contract", () => {
   it("exposes a real Windows package script and Electron Builder dependency", () => {
-    expect(desktopPackageJson.scripts?.["package:windows"]).toBe("pnpm build && electron-builder --win zip");
+    expect(desktopPackageJson.scripts?.["package:windows"]).toBe("pnpm build && pnpm generate:release-metadata && electron-builder --win zip");
     expect(desktopPackageJson.devDependencies?.["electron-builder"]).toBeDefined();
   });
 

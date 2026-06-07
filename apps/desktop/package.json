@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "package:windows": "pnpm build && electron-builder --win zip",
+    "generate:release-metadata": "../../scripts/generate-release-metadata.sh",
+    "package:windows": "pnpm build && pnpm generate:release-metadata && electron-builder --win zip",
     "start": "electron .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
@@ -61,6 +62,10 @@
       {
         "from": "../../docs/releases/windows-v0.1-rc-manual-test.md",
         "to": "docs/windows-v0.1-rc-manual-test.md"
+      },
+      {
+        "from": "../../dist/release/release-metadata.json",
+        "to": "release-metadata.json"
       }
     ],
     "win": {
