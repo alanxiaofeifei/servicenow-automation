@@ -81,6 +81,12 @@ No real ServiceNow login, browser operation, ServiceNow API write, Microsoft Gra
 
 No real customer/ticket/browser/session data was added to this document.
 
+## BM4 remediation note
+
+BM4 subsequently remediated the repository visibility mismatch: the repository is now PUBLIC, anonymous access to the release page returns HTTP 200, both release assets return HTTP 200 anonymously, and checksum verification against the anonymous ZIP download passes.
+
+See `docs/status/phase-BM4-public-release-visibility-remediation-2026-06-08.md` for the focused remediation and verification record.
+
 ## Summary and handoff for Alan
 
 ### What was verified
