@@ -6,6 +6,12 @@
 # extraResources so the app can display current package identity even when
 # the repo dist/release/ directory is not available.
 #
+# IMPORTANT: This script runs BEFORE electron-builder creates the target zip.
+# The zip being built does not exist yet, so SHA256 cannot be self-referential.
+# The generated metadata has checksumScope="external", meaning the authoritative
+# checksum lives in the outer dist/release/release-metadata.json and .zip.sha256.
+# The inner sidecar identifies the package by filename, phase, and path only.
+#
 # Output: dist/release/release-metadata.json
 #
 # Usage: ./scripts/generate-release-metadata.sh [project-root]
@@ -23,7 +29,7 @@ if [ ! -d "$DIST_RELEASE" ]; then
   exit 1
 fi
 
-# Read CURRENT.txt to find the current zip
+# Read CURRENT.txt to find the target zip filename
 CURRENT_TXT="$DIST_RELEASE/CURRENT.txt"
 if [ ! -f "$CURRENT_TXT" ]; then
   echo "ERROR: $CURRENT_TXT not found. No current package to generate metadata for." >&2
@@ -46,35 +52,21 @@ if [ -z "$CURRENT_FILENAME" ]; then
 fi
 
 ZIP_PATH="$DIST_RELEASE/$CURRENT_FILENAME"
-if [ ! -f "$ZIP_PATH" ]; then
-  echo "ERROR: Referenced zip $CURRENT_FILENAME not found at $ZIP_PATH" >&2
-  exit 1
-fi
 
-# Compute SHA256
-SHA256="$(sha256sum "$ZIP_PATH" | cut -d' ' -f1)"
+# NOTE: The zip does NOT need to exist. electron-builder creates it AFTER
+# this script runs. We only need the target filename from CURRENT.txt
+# to populate the sidecar identity fields (filename, phase, linuxPath).
 
-# File size and mtime (Unix timestamp)
-SIZE="$(stat --format=%s "$ZIP_PATH")"
-MTIME="$(stat --format=%Y "$ZIP_PATH")"
+# Pre-compute the path the zip will have (before it exists), for display.
+# realpath will fail if the file doesn't exist, so construct the path directly.
+LINUX_PATH="$ZIP_PATH"
 
-# Linux path
-LINUX_PATH="$(realpath "$ZIP_PATH")"
-
-# Windows UNC path (if running under WSL)
+# Windows UNC path (if running under WSL) — derived from the target path
 WINDOWS_UNC=""
 if grep -qi microsoft /proc/version 2>/dev/null; then
-  LINUX_ABS="$(realpath "$ZIP_PATH")"
-  # Convert /home/alanxwsl/... to \\wsl.localhost\Ubuntu\home\alanxwsl\...
-  # Derive WSL distro name from /proc/version or /etc/wsl.conf
-  DISTRO_NAME=""
-  if [ -f /etc/wsl.conf ] && grep -q '\[automount\]' /etc/wsl.conf 2>/dev/null; then
-    DISTRO_NAME="$(grep -oP '(?<=root = /mnt/)[a-zA-Z]+' /etc/wsl.conf 2>/dev/null || echo "")"
-  fi
-  if [ -z "$DISTRO_NAME" ]; then
-    DISTRO_NAME="Ubuntu"
-  fi
-  WINDOWS_UNC="\\\\wsl.localhost\\${DISTRO_NAME}${LINUX_ABS//\//\\}"
+  # Construct the WSL UNC path directly without requiring the file to exist
+  # Use wslpath -m for a non-existence-tolerant path, or construct from the linux path
+  WINDOWS_UNC="$(wslpath -w "$ZIP_PATH" 2>/dev/null || true)"
 fi
 
 # Extract phase from filename
@@ -87,26 +79,42 @@ fi
 
 SOURCE="packaged-metadata"
 
-# Write sidecar
-cat > "$SIDECAR" <<JSON
-{
-  "version": 1,
-  "filename": "$CURRENT_FILENAME",
-  "sha256": "$SHA256",
-  "size": $SIZE,
-  "mtime": $MTIME,
-  "linuxPath": "$LINUX_PATH",
-  "windowsUncPath": "$WINDOWS_UNC",
-  "phase": "$PHASE",
-  "source": "$SOURCE"
-}
-JSON
+# Write sidecar using Python for correct JSON escaping
+# Export Windows UNC via env var to avoid backslash escaping in shell→Python string interpolation
+if [ -n "$WINDOWS_UNC" ]; then
+  export SNA_WINDOWS_UNC="$WINDOWS_UNC"
+fi
 
-echo "OK: $SIDECAR generated"
+python3 -c "
+import json, os
+
+windows_unc = os.environ.get('SNA_WINDOWS_UNC', '')
+
+data = {
+    'version': 1,
+    'filename': '$CURRENT_FILENAME',
+    # sha256 is empty because the zip being built does not exist yet.
+    # The authoritative checksum is in dist/release/release-metadata.json (post-build)
+    # and <filename>.zip.sha256. checksumScope='external' signals that the
+    # checksum, if present, is not self-referential to this package.
+    'sha256': '',
+    'checksumScope': 'external',
+    'size': 0,
+    'mtime': 0,
+    'linuxPath': '$LINUX_PATH',
+    'windowsUncPath': windows_unc,
+    'phase': '$PHASE',
+    'source': '$SOURCE',
+}
+
+with open('$SIDECAR', 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\\n')
+"
+
+echo "OK: $SIDECAR generated (pre-build sequencing — checksum is external)"
 echo "  filename: $CURRENT_FILENAME"
-echo "  sha256: ${SHA256:0:16}..."
-echo "  size: $SIZE bytes"
-echo "  mtime: $MTIME"
+echo "  checksumScope: external (authoritative checksum in outer .zip.sha256)"
 if [ -n "$WINDOWS_UNC" ]; then
   echo "  windowsUncPath: $WINDOWS_UNC"
 fi
