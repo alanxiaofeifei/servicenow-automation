@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -25,6 +25,17 @@ import { resolveDesktopResourcePath, resolveDesktopRuntimePaths } from "./runtim
 import { checkDedicatedChromiumRuntime } from "./runtime-provisioning-precheck";
 import { createMainWindowWebPreferences } from "./window-preferences";
 import { provisionChromiumRuntime, type ProvisionProgress } from "./chromium-provisioner";
+import {
+  handleCleanupExecute,
+  handleCleanupPreview,
+  handleHygieneScan,
+  handleWorktreeGitDiff,
+  handleWorktreeOpenDistRelease,
+  handleWorktreeOpenFile,
+  handleWorktreeOpenWorkspaceRoot,
+  handleWorktreePackageMetadata,
+  handleWorktreeStatus,
+} from "./worktree-ipc";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -270,6 +281,53 @@ function registerOperatorIpc(): void {
     } catch (error) {
       return blockedAutofillResponse(operatorCdpRuntimeBlockedReasonFromError(error) ?? "browser-runtime-error");
     }
+  });
+
+  /* ---- Worktree local-only operations ---- */
+
+  ipcMain.handle("sda:worktree-git-diff", async () => {
+    const projectRoot = findProjectRoot();
+    return handleWorktreeGitDiff(projectRoot, process.env.HOME);
+  });
+
+  ipcMain.handle("sda:worktree-open-dist-release", async () => {
+    const projectRoot = findProjectRoot();
+    return handleWorktreeOpenDistRelease(projectRoot);
+  });
+
+  ipcMain.handle("sda:worktree-open-workspace-root", async () => {
+    const projectRoot = findProjectRoot();
+    return handleWorktreeOpenWorkspaceRoot(projectRoot);
+  });
+
+  ipcMain.handle("sda:worktree-open-file", async (_event, relativePath: string) => {
+    const projectRoot = findProjectRoot();
+    return handleWorktreeOpenFile(projectRoot, relativePath);
+  });
+
+  ipcMain.handle("sda:worktree-status", async () => {
+    const projectRoot = findProjectRoot();
+    return handleWorktreeStatus(projectRoot);
+  });
+
+  ipcMain.handle("sda:worktree-package-metadata", async () => {
+    const projectRoot = findProjectRoot();
+    return handleWorktreePackageMetadata(projectRoot);
+  });
+
+  ipcMain.handle("sda:hygiene-scan", async () => {
+    const projectRoot = findProjectRoot();
+    return handleHygieneScan(projectRoot);
+  });
+
+  ipcMain.handle("sda:cleanup-preview", async () => {
+    const projectRoot = findProjectRoot();
+    return handleCleanupPreview(projectRoot);
+  });
+
+  ipcMain.handle("sda:cleanup-execute", async () => {
+    const projectRoot = findProjectRoot();
+    return handleCleanupExecute(projectRoot);
   });
 }
 

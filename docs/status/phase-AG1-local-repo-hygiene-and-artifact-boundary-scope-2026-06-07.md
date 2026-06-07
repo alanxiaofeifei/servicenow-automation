@@ -63,19 +63,20 @@ AF7 (final local readiness gate for Windows operator packaging/runtime readiness
 
 | Check | Result |
 |-------|--------|
-| `.local/video-analysis/` directory exists? | **NO** — does not exist |
-| Any file in `.local/` matching `*video*` or `*contact*sheet*` | **ZERO** |
-| Any file anywhere in the repo matching `video-analysis` | **ZERO** |
+| `.local/video-analysis/` directory exists? | **YES** — local-only artifacts exist and are gitignored |
+| Any file in `.local/` matching `*video*` or `*contact*sheet*` | **PRESENT** — local-only, gitignored |
+| Any file anywhere in the repo matching `video-analysis` | **YES** — confined to `.local/video-analysis/` |
 
 `.local/` contents (verified):
 - `.local/startup-logs/` — CDP startup logs (jsonl) and desktop start logs
 - `.local/overnight/` — overnight phase docs (late May 2026)
 - `.local/review/` — PR review diffs and scan results
 - `.local/tmp-*.ps1` — temporary PowerShell helper scripts
+- `.local/video-analysis/` — local-only workflow artifacts (gitignored)
 
-**Honest assessment:** There are no video-analysis contact sheets in this repository. The backlog item appears to be a stale reference from an earlier phase where the possibility was discussed but never realized. The `.local/` directory is correctly gitignored (`.gitignore` line 14: `.local/`).
+**Honest assessment:** The repository contains pre-existing local-only video-analysis artifacts under `.local/video-analysis/`. They are already covered by the `.local/` ignore rules, so no repo cleanup is needed. This is a documentation-only clarification, not a deletion task.
 
-**→ Scope decision: Mark as N/A — no review needed. The directory does not exist. If Alan wants to retain the possibility of video-analysis contact sheets in the future, a neutral comment can be added to `.gitignore` acknowledging this as reserved namespace.**
+**→ Scope decision: Mark as closed with a clarifying `.gitignore` comment. The namespace is local-only, already gitignored, and does not require a cleanup action.**
 
 ---
 
@@ -117,12 +118,12 @@ AF7 (final local readiness gate for Windows operator packaging/runtime readiness
 
 ### 3.2 Deliverable B — `.local/video-analysis/` Backlog Resolution
 
-**Problem:** The backlog item "review of `.local/video-analysis/` contact sheets" exists as a stale reference. The directory does not exist and never existed. This creates confusion for Alan reviewing the backlog — is this item still open, or can it be closed?
+**Problem:** The backlog item "review of `.local/video-analysis/` contact sheets" is a stale reference. The namespace exists in the local workspace, but it is already covered by `.local/` ignore rules, so the only question is whether to document it for future clarity.
 
 **Goal:** Close the backlog item by:
-1. Documenting the finding that `.local/video-analysis/` does not exist and no contact-sheet files exist anywhere in the repo
-2. Adding a reserved-namespace comment to `.gitignore` under the `.local/` section noting that `.local/video-analysis/` is reserved for future use (if Alan wants it) but currently unused
-3. Recording the closure in this scope document
+1. Adding a neutral `.gitignore` comment that documents `.local/video-analysis/` as local-only workflow artifacts
+2. Recording in this scope document that the namespace is local-only and already gitignored
+3. Avoiding any deletion, upload, or external action
 
 **Non-goals:**
 - Creating the `video-analysis/` directory or any contact-sheet files
@@ -130,12 +131,12 @@ AF7 (final local readiness gate for Windows operator packaging/runtime readiness
 - Any code changes outside `.gitignore` comment addition
 
 **Acceptance criteria:**
-1. A comment in `.gitignore` under the `.local/` section acknowledges `# .local/video-analysis/ — reserved namespace, currently unused`
-2. The backlog item is explicitly closed (not deferred) with evidence
-3. `pnpm privacy:scan` still passes (comment-only change)
+1. A comment in `.gitignore` under the `.local/` section acknowledges `# .local/video-analysis/ — local-only workflow artifacts (gitignored)`
+2. The backlog item is explicitly closed with evidence that no repo cleanup is needed
+3. `pnpm privacy:scan` still passes (comment-only / docs-only change)
 4. All four mandatory gates pass
 
-**Likely scope:** 1 comment added to `.gitignore` + this scope document's closure record
+**Likely scope:** 1 comment line added to `.gitignore` + this scope document's closure record
 
 **Change budget:** 1 line (comment in `.gitignore`)
 
@@ -223,7 +224,7 @@ C ──→ (to same QA)
 |---|---|---|
 | `.gitignore` remediation for `.codegraph/` and `.worktrees/` | Verify existing fix is complete (Deliverable C) | **CLOSED** — already done June 5 |
 | Cleanup of stale `dist/` artifacts | Delete stale intermediate builds (Deliverable A) | **RESOLVED** — stale artifacts removed |
-| `.local/video-analysis/` contact-sheet review | Acknowledge directory does not exist; close item (Deliverable B) | **CLOSED** — N/A, directory never existed |
+| `.local/video-analysis/` contact-sheet review | Document local-only namespace and keep it gitignored (Deliverable B) | **CLOSED** — local-only namespace documented |
 
 ---
 
@@ -279,9 +280,9 @@ Downstream deliverables defined: 3
   - C: gitignore remediation verification     → sna-release-docs      [standalone]
 
 Backlog items addressed: 3
-  - .gitignore remediation: CLOSED (already done)
-  - Stale dist artifacts: RESOLVED (cleanup script)
-  - video-analysis contact sheets: CLOSED (N/A, never existed)
+  - `.gitignore` remediation: CLOSED (already done)
+  - Cleanup of stale `dist/` artifacts: RESOLVED (cleanup script)
+  - `.local/video-analysis/` contact-sheet review: CLOSED (local-only, gitignored)
 
 Red-zone items excluded: 14
 Non-goals: 9

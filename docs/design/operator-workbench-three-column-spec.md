@@ -1,46 +1,81 @@
-# Operator Workbench — Three-Column Demo Walkthrough Spec
+# Operator Workbench — Three-Column Operator Workbench Spec
 
-Date: 2026-06-05
-Scope: ServiceNow Automation demo walkthrough clarity, local-only fake flow, warm-light operator workbench
+Date: 2026-06-07
+Status: design/spec only — no implementation in this task
+Audience: Alan first, then `sna-frontend-workbench` after approval
+Privacy level: sanitized. All examples are fake. Do not include real ServiceNow URLs/hosts, ticket IDs, sys_ids, fingerprints, screenshots, logs, cookies, sessions, HAR, traces, credentials, or customer data.
 
-## 1) Purpose
+## 0. Goal
 
-Turn the current local demo into a readable operator workbench story:
+Replace the overloaded vertical stream with a calm warm-light three-column Operator Workbench that feels like a real operator command center.
 
-- left column = intake + queue + history + navigation
-- center column = selected source → cleaned source → TicketDraft → field preview → autofill plan → KB recommendation
-- right column = runtime actions + safety + environment controls + recent evidence
+Primary story:
+1. source arrives
+2. source is cleaned and normalized
+3. TicketDraft is generated
+4. required/common fields are previewed
+5. autofill plan is reviewed
+6. the operator can start QA Chromium, verify the current Incident, and autofill allowed fields only
 
-This spec is intentionally small and demo-focused. It is not a redesign system and it does not introduce production automation or external writes.
+Non-goals:
+- no mock/demo playground in the primary UI
+- no mode tabs such as Queue / Source Review / TicketDraft
+- no Save / Submit / Update / Resolve / Close automation
+- no ServiceNow API writes
+- no vertical card dump
+- no raw sensitive values in the UI
 
-## 2) Research cues used
+## 1. Research and design inputs
 
-Public reference pattern notes:
+Public reference patterns used as direction, not as branding:
+- Codex-style command center: navigation/context separated from active work and execution status
+- Claude Code-style workbench: calm desktop surface, visible work state, strong runtime affordances
+- Antigravity-style manager/editor/artifact model: separate source management, working artifact, and runtime evidence
+- Modern agent workbench patterns: show readiness and disabled reasons near the action, not hidden in logs
 
-- Claude Code desktop emphasizes one place to manage parallel work, inspect results, and see progress without bouncing between screens.
-- The best agent workbenches keep the current task obvious, the supporting evidence nearby, and the action rail compact.
-- Modern command-center UIs use progressive disclosure instead of always-expanded panels.
+OpenDesign note:
+- the project already has an OpenDesign binding and editorial warm-light baseline
+- this spec uses that warm editorial direction as a supporting reference only
 
-Design takeaways for this app:
+## 2. Layout wireframe in text
 
-- keep one primary work narrative in view
-- make settings visible, not buried
-- keep safety language compact but always present
-- use large targets and calm colors
-- do not make the user hunt for the next action
+```text
+┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+│ ServiceNow Automation   Env: QA / Dev / Production Shadow   Target: Configured   [Settings]  │
+│ AI drafts and fills allowed fields only. Human reviews the draft in ServiceNow.              │
+├──────────────────────────┬──────────────────────────────────────────────┬─────────────────────┤
+│ LEFT: SOURCE + QUEUE     │ CENTER: WORK PRODUCT                         │ RIGHT: RUNTIME      │
+│                          │                                              │                     │
+│ Loading feed             │ Selected source detail                       │ 1 Start QA Chromium │
+│ Intake queue             │ Cleaned / normalized source                  │ 2 Verify Incident   │
+│ Todo list                │ Generated TicketDraft                        │ 3 Autofill Incident │
+│ History                  │ Required/common field preview                │                     │
+│ Mode / function switch   │ Autofill plan                                │ CDP readiness       │
+│ Bottom-left Settings     │ KB / recommendation detail                   │ Safety boundary     │
+│                          │                                              │ Env controls        │
+│                          │                                              │ Recent evidence     │
+└──────────────────────────┴──────────────────────────────────────────────┴─────────────────────┘
+```
 
-## 3) Layout wireframe in text
+Behavioral notes:
+- top bar stays fixed
+- each column may scroll internally if needed
+- center keeps the current source and draft visible without becoming a long scroll wall
+- right rail keeps the three runtime actions visible without requiring page scroll
+- settings must remain first-class and easy to find
 
-Top bar
-- product name
-- environment status chip
-- safety chip
-- Settings button
-- compact runtime / connection summary
+## 3. Column responsibilities
 
-Main shell: three columns
+### Left column
+Owns orientation and selection.
 
-Left column: Intake and navigation
+It should answer:
+- What arrived?
+- What is waiting?
+- What did I already touch?
+- Where are settings?
+
+Include:
 - source / loading information feed
 - intake queue
 - todo list
@@ -48,189 +83,267 @@ Left column: Intake and navigation
 - mode / function switching
 - bottom-left settings access
 
-Center column: Work product
+Rules:
+- keep it compact and task-oriented
+- avoid demo scenario clutter
+- avoid expanding every item by default
+- do not show raw URLs, ticket IDs, or customer data
+
+### Center column
+Owns the work product.
+
+It should answer:
+- What is the selected source?
+- What did normalization produce?
+- What draft am I reviewing?
+- What will autofill touch?
+- What KB/recommendation detail matters here?
+
+Include:
 - selected source detail
-- cleaned / normalized source text
+- cleaned / normalized source
 - generated TicketDraft
 - ServiceNow required/common field preview
 - autofill plan
 - KB / recommendation detail when selected
-- small report / export outcome area when the demo reaches the end
 
-Right column: Runtime and controls
+Rules:
+- keep the draft and field preview readable at a glance
+- collapse secondary detail by default
+- keep the work product visible as the main focus
+
+### Right column
+Owns action readiness and safety.
+
+It should answer:
+- Can I start QA Chromium now?
+- Is the current Incident verifiable yet?
+- Is autofill allowed yet?
+- What environment am I in?
+- What evidence was just produced?
+
+Include:
+- runtime actions
 - Start QA Chromium
 - Verify current Incident
 - Autofill current Incident
-- templates / settings
+- templates / settings quick access
 - CDP readiness status
 - safety boundary
 - environment controls
 - recent run evidence
 
-## 4) Column responsibilities
+Rules:
+- runtime actions must be large and obvious
+- disabled actions must explain why
+- safety state must be compact but always visible
+- environment controls must include QA URL, Dev URL, Production URL, default environment, and a compact safety state
 
-### Left column
-Owns orientation and queue management.
-
-The user should immediately see:
-
-- what arrived
-- what is waiting
-- what was already handled
-- how to switch between modes or views
-
-### Center column
-Owns the work the agent is producing.
-
-The user should see a clean progression:
-
-1. raw source detail
-2. cleaned source
-3. TicketDraft
-4. field preview
-5. autofill plan
-6. KB recommendation or report evidence
-
-### Right column
-Owns actions, safety, and runtime status.
-
-The user should immediately know:
-
-- whether the QA browser is ready
-- whether current Incident verification is allowed
-- whether autofill is blocked and why
-- whether the environment is QA / dev / production / local-only
-- what evidence was just produced
-
-## 5) State matrix
+## 4. State matrix
 
 | State | Left column | Center column | Right column |
-| --- | --- | --- | --- |
-| Empty | Shows onboarding copy and example intake sources | Shows placeholder cards for source, cleaned source, draft, and KB recommendation | Shows disabled actions with explanations |
-| Loading intake | Queue item highlights; history unchanged | Source detail skeleton / spinner | Runtime buttons remain disabled until the browser state is ready |
-| Source selected | Queue row active | Selected source detail + cleaned source preview | Start QA Chromium can be enabled if settings are valid |
-| Draft ready | Queue row active; history can show prior examples | TicketDraft and field preview are the main focus | Verify current Incident becomes the next step |
+|---|---|---|---|
+| Empty | Onboarding copy + example intake sources | Placeholder cards for source, cleaned source, draft, and KB detail | Disabled actions with explanations |
+| Loading intake | Selected row highlights; history unchanged | Skeleton source/detail cards | Runtime remains disabled until readiness exists |
+| Source selected | Queue row active | Source detail + cleaned summary | Start QA Chromium may enable if settings are valid |
+| Draft ready | Queue row active; history may show prior example | TicketDraft and field preview are primary | Verify current Incident becomes the next step |
 | Browser ready | Queue row active | Field preview and autofill plan are prominent | Verify current Incident is enabled |
-| Page verified | Queue row active | Autofill plan is primary | Autofill current Incident is enabled; safety copy stays visible |
-| Autofill complete | Queue row active | Draft + filled field summary + KB / report evidence | Recent run evidence updates; runtime buttons reset or remain context-dependent |
-| Blocked / error | Queue may still show selected item | The blocked panel explains the last safe checkpoint | Disabled buttons show plain-language reasons |
+| Page verified | Queue row active | Autofill plan is primary | Autofill current Incident is enabled |
+| Autofill complete | Queue row active | Draft + filled field summary + evidence visible | Recent evidence updates; actions reset or remain context-dependent |
+| Blocked / error | Queue may still show selection | Blocked panel explains the last safe checkpoint | Disabled buttons show plain-language reasons |
 
-## 6) Main components
+## 5. Main components
 
-- top chrome with product identity, environment, and safety
-- left rail for source queue, todo, history, and navigation
-- center workstack cards
-  - source detail
-  - cleaned source
-  - TicketDraft
-  - required/common fields
-  - autofill plan
-  - KB recommendation
-- right runtime rail
-  - browser launch
-  - page verification
-  - autofill
-  - templates/settings
-  - CDP readiness
-  - recent evidence
-- compact safety banner
-- settings drawer / panel
-- what-changed release-readiness card
+Keep the component set small. Do not introduce a large design system.
 
-## 7) Empty, loading, and error states
+### Shell and top bar
+- `OperatorWorkbenchShell`
+- `WorkbenchTopBar`
+- `CompactSafetyBadge`
+
+### Left rail
+- `SourceFeedCard`
+- `IntakeQueueRail`
+- `TodoListCard`
+- `HistoryCard`
+- `ModeSwitchRow`
+- `BottomSettingsEntry`
+
+### Center workspace
+- `SelectedSourceCard`
+- `CleanedSummaryCard`
+- `TicketDraftCard`
+- `RequiredFieldPreviewCard`
+- `AutofillPlanCard`
+- `RecommendationDetailCard` (collapsed by default)
+
+### Right rail
+- `RuntimeActionRail`
+- `RuntimeActionButton`
+- `CdpReadinessCard`
+- `SafetyBoundaryCard`
+- `EnvironmentControlCard`
+- `RecentEvidenceCard`
+- `TemplatesSettingsLink`
+
+### Settings
+- `SettingsPanel`
+- `EnvironmentUrlFields`
+  - QA URL
+  - Dev URL
+  - Production URL
+  - default environment selector
+- `DisplaySettings`
+- `ClearSavedSettings`
+
+## 6. Empty, loading, and error states
 
 ### Empty states
-- Use one sentence and one next action.
-- Avoid giant blank panels.
-- Suggest a fake/local demo source, not a real ServiceNow record.
+Use one sentence, one next action, and one calm placeholder.
+
+Recommended copy:
+- `No source selected.`
+- `Paste or load a sanitized source to begin.`
+- `Configure QA, Dev, or Production Shadow in Settings before starting the browser.`
 
 ### Loading states
-- Skeletons or muted placeholders only.
-- Keep the current item visible if the user already selected one.
-- Prefer progress language over generic spinners.
+Use skeleton cards or muted placeholders only.
+
+Rules:
+- keep the current item visible if the user already selected one
+- avoid generic spinners where a step label is clearer
+- use progress language such as `Launching dedicated browser...` or `Waiting for CDP readiness...`
 
 ### Error states
-- Show the exact step that failed.
-- Keep the previous safe state visible.
-- Explain why a button is disabled instead of only graying it out.
-- Never imply the system wrote to ServiceNow when it did not.
+Explain the safe stop point, not just the failure.
 
-## 8) Button enable / disable logic
+Rules:
+- show the exact step that failed
+- keep the previous safe state visible
+- do not imply ServiceNow changed when it did not
+- explain why a button is disabled in plain language
 
-Start QA Chromium
-- enabled when QA / allowed environment settings are configured
-- disabled when settings are missing or another browser step is still running
-- disabled reason must explain the missing setting or current wait state
+## 7. Button enable / disable logic
 
-Verify current Incident
-- enabled only after CDP readiness / browser connection is ready
-- disabled until the browser is started and connected
-- disabled reason must say to start the QA browser first
+### Start QA Chromium
+Enabled when:
+- QA or Dev environment is selected
+- a valid target is configured
+- no other runtime action is busy
 
-Autofill current Incident
-- enabled only after the current page has been verified
-- disabled until the Incident page is confirmed as current and safe
-- disabled reason must say to verify the current Incident first
+Disabled copy:
+- `Configure a QA or Dev target in Settings before launching.`
+- `Another runtime action is running.`
 
-General rules
+### Verify current Incident
+Enabled when:
+- CDP readiness is present
+- QA or Dev environment is selected
+- no busy action is running
+
+Disabled copy:
+- `Start QA Chromium and wait for CDP ready first.`
+- `Select QA or Dev mode to verify.`
+
+### Autofill current Incident
+Enabled when:
+- the current page has been verified
+- the page is safe and fresh
+- the draft and allowed-field plan are safe
+- no busy action is running
+
+Disabled copy:
+- `Verify current Incident first.`
+- `Review required fields before autofill.`
+- `Production Shadow is comparison-only.`
+
+### General rules
 - never hide an important action without explaining the condition
-- keep disabled reasons short and non-technical
-- do not imply any save / submit / update / resolve / close action exists
+- disabled reasons must be visible next to the control, not hidden in a tooltip
+- never imply Save / Submit / Update / Resolve / Close exists
+- keep safety language short and readable
 
-## 9) Copy text
+## 8. Copy text
 
 Recommended core copy:
+- `Manual paste only. Fake data only. Local demo only.`
+- `AI drafts and fills allowed text fields only. Human reviews the draft in ServiceNow.`
+- `Start QA Chromium`
+- `Verify current Incident`
+- `Autofill current Incident`
+- `No Save, Submit, Update, Resolve, Close.`
+- `Settings: QA URL, Dev URL, Production URL, default environment, and safety state.`
+- `Recent run evidence is sanitized and local-only.`
 
-- "Manual paste only. Fake data only. Local demo only."
-- "AI drafts and fills allowed text fields only. Human reviews and submits in ServiceNow."
-- "Start QA Chromium"
-- "Verify current Incident"
-- "Autofill current Incident"
-- "No Save, Submit, Update, Resolve, Close."
-- "Settings: QA URL, Dev URL, Production URL, default environment, and safety state."
-- "Recent run evidence is sanitized and local-only."
+Preferred operator labels:
+- `Prepare draft` instead of `Create draft` when the action is only local/demo preparation
+- `Open Settings` as the universal escape hatch for missing targets
+- `Source feed` and `Intake queue` instead of dense status essays
+- `Required/common fields` instead of a long form taxonomy dump
 
-What-changed panel copy:
+Copy to avoid in the primary UI:
+- MockAIProvider
+- language simulation wording
+- high-severity simulator wording
+- Excel dry-run wording that sounds like a write action
+- any copy that hints at real submission or service write
 
-- title: "What changed in this round"
-- summary: explain that the workbench is being hardened through repeated validation and that the UI now makes the demo story visible
-- footer: "Human reviews and manually submits in ServiceNow."
-
-## 10) Accessibility notes
+## 9. Accessibility notes
 
 - warm/light theme by default; avoid pure black surfaces
-- large touch/click targets
-- strong but not harsh contrast for key text
+- large touch/click targets, especially on the right runtime rail
+- calm contrast and generous spacing for eye comfort
 - progressive disclosure instead of always-expanded panels
-- keep line length readable for astigmatism / eye comfort
-- disabled states must explain why
-- use clear section headers so the three-column structure is obvious at a glance
-- preserve keyboard navigation and focus visibility in the settings and runtime rail
+- readable line length for astigmatism / eye comfort
+- disabled reasons must be explicit and readable
+- preserve keyboard navigation and visible focus states in settings and runtime controls
+- keep the three-column shell obvious at a glance
 
-## 11) GPT Images 2 mockup notes
+## 10. GPT Images 2 mockup notes
 
-Attempted sanitized mockups with GPT Images 2 / image_generate using fake data only:
-
-- landscape three-column workbench prompt
-- portrait runtime-rail detail prompt
+Attempted sanitized mockup generation with `image_generate` using fake/demo data only.
 
 Result:
-- image generation returned FalClientHTTPError in this run
-- no usable mockup files were produced
+- the backend returned `FalClientHTTPError`
+- no usable raster mockup was produced in this run
 
-## 12) Implementation handoff for sna-frontend-workbench
+If a later run gets a working image backend, generate:
+- one landscape three-column cockpit concept
+- one tighter right-rail/runtime concept
 
-If this spec is implemented further in frontend code, keep the change set surgical:
+## 11. Implementation handoff for `sna-frontend-workbench`
 
+If this spec is implemented in frontend code, keep the change set surgical and preserve the accepted order.
+
+Implementation requirements:
 1. Preserve the current local-only safety model.
 2. Keep settings first-class and visible.
 3. Keep the left / center / right responsibilities stable.
-4. Keep the what-changed panel compact and optional.
-5. Keep disabled button reasons plain-language.
-6. Do not reintroduce demo clutter such as mock-provider labels, language simulation noise, or always-open debug surfaces.
-7. Verify with the normal gates before asking for Alan approval.
+4. Keep the what-changed / guidance copy compact.
+5. Keep disabled button reasons plain-language and visible.
+6. Keep KB recommendations visible.
+7. Keep Monthly Excel fill queue present and non-destructive.
+8. Keep Incident draft below Cleaned summary and above Guided Review Path.
+9. Do not reintroduce demo clutter, mock-provider labels, or always-open debug surfaces.
+10. Verify with the normal gates before asking for Alan approval.
 
-Suggested next implementation steps:
-- align remaining labels to the three-column story
-- keep the demo walkthrough copy short enough for a 3–5 minute narration
-- add or refresh one small UI test for the workbench narrative and safety copy
+Suggested implementation files, if needed later:
+- `apps/desktop/src/App.tsx`
+- `apps/desktop/src/styles.css`
+- `apps/desktop/src/App.test.ts`
+
+## 12. Acceptance criteria
+
+This spec is ready for frontend implementation only when all of the following are true:
+- the app presents a warm/light three-column operator workbench
+- the left column owns source, queue, todo, history, mode/function switching, and bottom-left settings
+- the center column owns selected source detail, cleaned source, TicketDraft, field preview, autofill plan, and KB/recommendation detail
+- the right column owns runtime actions, CDP readiness, safety boundary, environment controls, and recent evidence
+- Start QA Chromium is visible and clearly labeled
+- Verify current Incident is visibly gated by readiness
+- Autofill current Incident is visibly gated by verification and safe-field rules
+- disabled buttons explain why they are disabled
+- settings remain first-class and editable for QA URL, Dev URL, Production URL, and default environment
+- no real URLs, ticket IDs, sys_ids, credentials, cookies, screenshots, logs, or raw fingerprints are exposed
+- no Save / Submit / Update / Resolve / Close automation is introduced
+- no mock/demo clutter reappears in the primary UI

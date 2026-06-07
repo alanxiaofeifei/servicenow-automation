@@ -14,7 +14,20 @@ const sdaOperator = {
   },
 };
 
+const worktreeApi = {
+  getGitDiff: () => ipcRenderer.invoke("sda:worktree-git-diff"),
+  openDistRelease: () => ipcRenderer.invoke("sda:worktree-open-dist-release"),
+  openWorkspaceRoot: () => ipcRenderer.invoke("sda:worktree-open-workspace-root"),
+  openFile: (relativePath: string) => ipcRenderer.invoke("sda:worktree-open-file", relativePath),
+  getWorktreeStatus: () => ipcRenderer.invoke("sda:worktree-status"),
+  worktreePackageMetadata: () => ipcRenderer.invoke("sda:worktree-package-metadata"),
+  hygieneScan: () => ipcRenderer.invoke("sda:hygiene-scan"),
+  cleanupPreview: () => ipcRenderer.invoke("sda:cleanup-preview"),
+  cleanupExecute: () => ipcRenderer.invoke("sda:cleanup-execute"),
+};
+
 contextBridge.exposeInMainWorld("sdaOperator", sdaOperator);
+contextBridge.exposeInMainWorld("worktreeApi", worktreeApi);
 contextBridge.exposeInMainWorld("serviceNowAutomation", {
   version: "0.1.0",
   mode: "desktop",

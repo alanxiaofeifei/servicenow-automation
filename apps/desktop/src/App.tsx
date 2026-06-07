@@ -182,6 +182,7 @@ export interface PackageMetadataResult {
   archivalAliases?: string[];
   source?: string;
   error?: string;
+  displayPath?: string;
 }
 
 export interface WorktreeApi {
@@ -4270,7 +4271,7 @@ export function App({
                 </div>
                 <div className="handoff-section-label">Current package path</div>
                 <div className="handoff-path-line">
-                 <code>{formatPackagePathForDisplay(packageMetadata?.path, packageMetadata?.ok)}</code>
+                 <code>{formatPackagePathForDisplay(packageMetadata?.path, packageMetadata?.ok, packageMetadata?.displayPath)}</code>
                 </div>
                 <div className="handoff-section-label">Current package summary</div>
                 <p className="handoff-summary-line">
@@ -4308,8 +4309,9 @@ export function App({
                   }}>
                     Copy CURRENT marker
                   </button>
-                  <button type="button" className="local-draft-button" disabled={!packageMetadata?.path} title={!packageMetadata?.path ? (packageMetadata?.ok === false ? "Current package metadata is unavailable." : "Current package metadata is still loading.") : undefined} onClick={() => {
-                    if (packageMetadata?.path) void navigator.clipboard.writeText(packageMetadata.path);
+                  <button type="button" className="local-draft-button" disabled={!packageMetadata?.path && !packageMetadata?.displayPath} title={!packageMetadata?.path && !packageMetadata?.displayPath ? (packageMetadata?.ok === false ? "Current package metadata is unavailable." : "Current package metadata is still loading.") : undefined} onClick={() => {
+                    if (packageMetadata?.displayPath) void navigator.clipboard.writeText(packageMetadata.displayPath);
+                    else if (packageMetadata?.path) void navigator.clipboard.writeText(packageMetadata.path);
                   }}>
                     Copy current package path
                   </button>
@@ -4317,7 +4319,7 @@ export function App({
                     if (packageMetadata?.filename) {
                       const summaryParts = [
                         `Current package: ${packageMetadata.filename}`,
-                        packageMetadata.path ? `path: ${formatPackagePathForDisplay(packageMetadata.path)}` : null,
+                        packageMetadata.displayPath ?? `path: ${formatPackagePathForDisplay(packageMetadata.path, undefined, undefined)}`,
                         packageMetadata.sha256 ? `SHA256: ${packageMetadata.sha256}` : null,
                         packageMetadata.mtime ? `mtime: ${formatPackageMtimeForDisplay(packageMetadata.mtime)}` : null,
                         packageMetadata.archivalAliases?.length ? `archival-only aliases: ${formatAliasesForDisplay(packageMetadata.archivalAliases)}` : null
@@ -8757,7 +8759,8 @@ function formatSourceTime(receivedAt: string): string {
   return receivedAt.split(" ").at(1) ?? receivedAt;
 }
 
-function formatPackagePathForDisplay(path: string | undefined, ok?: boolean): string {
+function formatPackagePathForDisplay(path: string | undefined, ok?: boolean, displayPath?: string): string {
+  if (displayPath) return displayPath;
   if (!path) {
     if (ok === false) return "Current package path is unavailable.";
     return "Current package path is still loading.";

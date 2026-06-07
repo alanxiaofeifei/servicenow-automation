@@ -2,21 +2,21 @@
 
 **Date:** 2026-06-07
 **Branch:** `next/post-release-operator-cockpit-ab-20260606`
-**Package:** `servicenow-automation-windows-v0.1.0-rc.1-ae-20260607-local.zip`
-**Profile:** `sna-release-docs`
+**Package:** `servicenow-automation-windows-v0.1.0-rc.1-bh6-20260607-local.zip`
+**Profile:** `sna-windows-runtime`
 **Status:** Runbook — products not yet tested (Alan must execute)
 
 ---
 
 ## 1. Purpose
 
-This runbook validates that the packaged Windows Electron artifact (the `ae` package)
+This runbook validates that the packaged Windows Electron artifact (the `bh6` package)
 can be extracted and launched on a **clean Windows machine** that has **no Node.js,
 no pnpm, no WSL, no developer toolchain**. The only prerequisite is a Windows
 machine with File Explorer and the ability to extract a ZIP archive.
 
 The goal is to confirm the full double-click-to-functionality path, including
-the new AF1 startup diagnostics overlay and Chromium runtime provisioning precheck:
+the BD3 UNC prefix derivation and startup diagnostics overlay:
 
 - App starts without crash on a clean machine
 - If startup fails, a visible diagnostic overlay explains why
@@ -52,33 +52,31 @@ Use a truly clean Windows VM or a colleague's non-dev machine.
 
 ## 3. Package location
 
-The `ae` Windows local package to test:
+The BH6 Windows local package to test:
 
 **Windows UNC path (paste into File Explorer):**
 ```text
-\\wsl.localhost\Ubuntu-Compact\home\alanxwsl\projects\servicenow-automation\dist\release\servicenow-automation-windows-v0.1.0-rc.1-ae-20260607-local.zip
+\\wsl.localhost\Ubuntu-Compact\home\alanxwsl\projects\servicenow-automation\dist\release\servicenow-automation-windows-v0.1.0-rc.1-bh6-20260607-local.zip
 ```
 
 **SHA-256 checksum:**
 ```text
-4a9c7a38919acdc20c5c7352fc9a9b07ac11338770aed266bbd8746f19c69cde
+583929076a1dd5fcb50b876ad199c7318e2407deb6bc74e158a2284eef7d5d1d
 ```
 
-**File size:** 118,590,385 bytes (~114 MB)
+**File size:** `118,607,782 bytes (~113.1 MB)`
 
-**Gate status (AE7-verified before AF1 implementation):**
+**Gate status (current local verification state):**
 - Build: PASS
 - Typecheck: PASS
-- Test: 389/389 PASS
-- Privacy:scan: PASS
+- Test: PASS (459 tests)
+- Privacy:scan: PASS (288 files)
 
 **What is inside:**
 - `ServiceNow Automation.exe` — packaged Electron app
 - `resources/app.asar` — bundled web app + Node modules
-- `resources/scripts/windows/` — helper PowerShell scripts (including
-  `prepare-chrome-for-testing.ps1`)
-- `servicenow-automation-windows-v0.1.0-rc.1-START-HERE-WINDOWS.txt` — safety
-  instructions (read this first)
+- `resources/scripts/windows/` — helper PowerShell scripts (including `prepare-chrome-for-testing.ps1`)
+- `servicenow-automation-windows-v0.1.0-rc.1-bh6-20260607-local-START-HERE-WINDOWS.txt` — safety instructions (read this first)
 - Electron runtime files (DLLs, locales, Chromium binary, etc.)
 
 ---
@@ -91,7 +89,7 @@ The `ae` Windows local package to test:
 |------|--------|-----------------|-----------|
 | 1 | Open File Explorer and paste the UNC path from §3 | The zip file appears in the file listing | |
 | 2 | Copy the zip to a local folder (e.g., Desktop) | File copies without error | |
-| 3 | Right-click → Extract All (or use 7-Zip) | Creates a folder named `servicenow-automation-windows-v0.1.0-rc.1-ae-20260607-local` | |
+| 3 | Right-click → Extract All (or use 7-Zip) | Creates a folder named `servicenow-automation-windows-v0.1.0-rc.1-bh6-20260607-local` | |
 | 4 | Open the extracted folder | Contains `ServiceNow Automation.exe` and many DLL/locale files. Also contains `START-HERE-WINDOWS.txt` | |
 | 5 | **Read** `START-HERE-WINDOWS.txt` | Safety instructions visible. No WSL paths, no Node commands | |
 
@@ -149,7 +147,7 @@ downloaded and extracted using the included provisioning script.
 | Step | Action | Expected result | Pass/Fail |
 |------|--------|-----------------|-----------|
 | 14 | Open a **PowerShell** window (as normal user, **not** Administrator) | PowerShell opens at a prompt | |
-| 15 | Navigate to the extracted package folder: `cd "$env:USERPROFILE\Desktop\servicenow-automation-windows-v0.1.0-rc.1-ae-20260607-local"` | No error | |
+| 15 | Navigate to the extracted package folder: `cd "$env:USERPROFILE\Desktop\servicenow-automation-windows-v0.1.0-rc.1-bh6-20260607-local"` | No error | |
 | 16 | Run: `.\resources\scripts\windows\prepare-chrome-for-testing.ps1` | Script downloads Chrome for Testing from the official Google endpoint. A progress indicator or text output appears | |
 | 17 | Wait for the script to complete | Completion message appears: "Chrome for Testing installed at %LOCALAPPDATA%\ServiceNowAutomation\Runtime\Chromium\chrome.exe" | |
 | 18 | Verify the runtime exists: `Test-Path "$env:LOCALAPPDATA\ServiceNowAutomation\Runtime\Chromium\chrome.exe"` | Returns `True` | |

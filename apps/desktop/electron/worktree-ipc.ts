@@ -161,6 +161,13 @@ function readCurrentTxt(distReleaseDir: string): string | null {
  * Try to read and parse a release-metadata.json sidecar at the given path.
  * Returns parsed data on success, null on any failure (missing, malformed JSON,
  * missing required fields).
+ *
+ * Checksum semantics:
+ * - When `checksumScope` is "external", the sha256 field is optional — the
+ *   authoritative checksum lives in the outer dist/release/ sidecar or .zip.sha256.
+ * - When `checksumScope` is absent or "self", sha256 is required.
+ * - The renderer treats empty/falsy sha256 as "not available" and does not
+ *   display it as authoritative.
  */
 function readReleaseMetadataSidecar(
   sidecarPath: string
@@ -172,6 +179,8 @@ function readReleaseMetadataSidecar(
   path: string;
   phase: string;
   source: string;
+  checksumScope?: string;
+  displayPath?: string;
 } | null {
   if (!existsSync(sidecarPath)) return null;
 
@@ -179,17 +188,25 @@ function readReleaseMetadataSidecar(
     const content = readFileSync(sidecarPath, "utf-8");
     const parsed = JSON.parse(content);
     if (!parsed || parsed.version !== 1) return null;
-    if (!parsed.filename || !parsed.sha256 || typeof parsed.size !== "number") return null;
+    if (!parsed.filename || typeof parsed.size !== "number") return null;
     if (typeof parsed.mtime !== "number") return null;
+
+    const checksumScope = parsed.checksumScope;
+    // Require non-empty sha256 unless checksumScope is "external"
+    if (checksumScope !== "external") {
+      if (!parsed.sha256) return null;
+    }
 
     return {
       filename: parsed.filename,
-      sha256: parsed.sha256,
+      sha256: parsed.sha256 ?? "",
       size: parsed.size,
       mtime: parsed.mtime,
       path: parsed.linuxPath ?? parsed.path ?? "",
       phase: parsed.phase ?? extractPhasePrefix(parsed.filename).toUpperCase(),
       source: parsed.source ?? "packaged-metadata",
+      checksumScope: checksumScope ?? undefined,
+      displayPath: parsed.windowsUncPath ?? undefined,
     };
   } catch {
     // Malformed JSON — treat as not found
@@ -217,6 +234,7 @@ export function handleWorktreePackageMetadata(
   archivalAliases?: string[];
   source?: string;
   error?: string;
+  displayPath?: string;
 } {
   try {
     const distReleaseDir = join(projectRoot, "dist", "release");
@@ -236,6 +254,7 @@ export function handleWorktreePackageMetadata(
           size: sidecar.size,
           phase: sidecar.phase,
           source: sidecar.source,
+          displayPath: sidecar.displayPath,
         };
       }
       return { ok: false, error: "dist/release/ directory does not exist", source: "unavailable" };
@@ -297,6 +316,7 @@ export function handleWorktreePackageMetadata(
         size: distSidecar.size,
         phase: distSidecar.phase,
         source: distSidecar.source,
+        displayPath: distSidecar.displayPath,
       };
     }
 

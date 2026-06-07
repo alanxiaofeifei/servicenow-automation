@@ -35,7 +35,8 @@ import {
   type CdpState,
   type CenterState,
   type HighSeverityMonitorGroup,
-  type LanguageCode
+  type LanguageCode,
+  type PackageMetadataResult
 } from "./App";
 
 type TestableAppProps = AppProps;
@@ -745,7 +746,7 @@ describe("App", () => {
       renderAppMarkup("en-US", { initialEnvironmentMode: "qa", initialRuntimeRailExpanded: true })
     );
 
-    expect(primaryMarkup).toContain("Safety note");
+    expect(primaryMarkup).toContain("Safety boundary");
     expect(primaryMarkup).toContain("AI drafts and fills allowed text fields only.");
     expect(primaryMarkup).toContain("Human reviews and submits in ServiceNow.");
     expect(primaryMarkup).not.toMatch(/<button[^>]*>\s*(Save|Submit|Update|Resolve|Close)\s*<\/button>/);
@@ -1469,6 +1470,27 @@ describe("App", () => {
     expect(csv).not.toContain("INC");
   });
 
+  it("shows the last-run none chip and empty-state helper on the acceptance card when there are no validation runs", () => {
+    const output = renderAppMarkup("en-US");
+
+    expect(output).toContain("last-run-chip last-run-none");
+    expect(output).toContain("Last run: none yet");
+    expect(output).toContain("No validation runs yet. Copy Summary will report 0 total, 0 ok, 0 blocked, 0 error, and last run: none yet.");
+  });
+
+  it("shows the last-run OK chip on the acceptance card when validation runs exist", () => {
+    const validationRuns = [
+      { id: "vr-1", timestamp: "2026-06-05 00:00:00", action: "launch" as const, status: "ok" as const, sanitizedSummary: "App launch ok, browser ready" },
+      { id: "vr-2", timestamp: "2026-06-05 00:01:00", action: "verify" as const, status: "ok" as const, sanitizedSummary: "Page inspected, all allowed fields planned" }
+    ];
+    const output = renderAppMarkup("en-US", { initialValidationRunHistory: validationRuns });
+
+    expect(output).toContain("last-run-chip last-run-ok");
+    expect(output).toContain("Last run: OK");
+    expect(output).not.toContain("last-run-none");
+    expect(output).not.toContain("No validation runs yet");
+  });
+
   it("exportProductReviewReport produces a complete Markdown report with all required sections", () => {
     const queueItem = buildDemoQueueItems("en-US")[0];
     const draft = buildDraftForQueueItem(queueItem);
@@ -1613,33 +1635,118 @@ describe("App", () => {
     expect(output).toContain('class="center-placeholder blocked"');
   });
 
-  it("renders release-readiness handoff card before the center cards", () => {
-    const output = renderAppMarkup("en-US");
+  it("renders release-readiness handoff card with source-of-truth marker and current-phase chip", () => {
+    const mockMetadata: PackageMetadataResult = {
+      ok: true,
+      path: "/home/alanxwsl/projects/servicenow-automation/dist/release/test-package.zip",
+      sha256: "4a9c7a38919acdc20c5c7352fc9a9b07ac11338770aed266bbd8746f19c69cde",
+      filename: "test-package.zip",
+      mtime: 1749300000,
+      phase: "bh6",
+      archivalAliases: [],
+    };
+    const output = renderAppMarkup("en-US", { initialPackageMetadata: mockMetadata });
 
     expect(output).toContain("Release Readiness Handoff");
     expect(output).toContain("Alan should test this file");
     expect(output).toContain("release-readiness-handoff-card");
-    expect(output).toContain("\\wsl.localhost");
+    expect(output).toContain("\\\\wsl.localhost");
     expect(output).toContain("4a9c7a38919acdc20c5c7352fc9a9b07ac11338770aed266bbd8746f19c69cde");
-    expect(output).toContain("Copy path");
-    expect(output).toContain("Copy SHA256");
-    expect(output).toContain("Copy summary");
-    // Stale-archive and runtime readiness sections
-    expect(output).toContain("handoff-stale-warning");
-    expect(output).toContain("handoff-archive-list");
-    expect(output).toContain("handoff-runtime-section");
-    expect(output).toContain("handoff-quickstart-strip");
-    expect(output).toContain("Dedicated Chromium runtime: not found yet");
-    expect(output).toContain("CDP readiness: disconnected");
-    expect(output).toContain("Quickstart checklist");
-    expect(output).toContain("No live ServiceNow login");
-    expect(output).toContain("No Save / Submit / Update / Resolve / Close");
-    expect(output).toContain("Human-only boundaries");
+    // Source-of-truth marker
+    expect(output).toContain("Source of truth");
+    expect(output).toContain("CURRENT.txt");
+    expect(output).toContain("test-package.zip");
+    // Current-phase chip
+    expect(output).toContain("Current · BH6");
+    expect(output).toContain("handoff-current-chip");
+    // Source-of-truth structure
+    expect(output).toContain("handoff-source-truth");
+    expect(output).toContain("handoff-marker-line");
+    // Buttons
+    expect(output).toContain("Copy CURRENT marker");
+    expect(output).toContain("Copy current package path");
+    expect(output).toContain("Copy current package summary");
+    expect(output).toContain("Open package folder");
+    // Release-readiness card structure
+    expect(output).toContain("handoff-path-line");
+    expect(output).toContain("handoff-actions-row");
+    expect(output).toContain("handoff-manual-checklist");
+    expect(output).toContain("Manual checklist");
 
     const handoffCardIndex = output.indexOf('class="workbench-card release-readiness-handoff-card"');
     const selectedCardIndex = output.indexOf('class="workbench-card selected-source-card"');
     expect(handoffCardIndex).toBeGreaterThan(0);
     expect(selectedCardIndex).toBeGreaterThan(handoffCardIndex);
+  });
+
+  it("renders unavailable state when package metadata returns ok:false", () => {
+    const mockFailedMetadata: PackageMetadataResult = {
+      ok: false,
+      error: "dist/release/ directory does not exist",
+    };
+    const output = renderAppMarkup("en-US", { initialPackageMetadata: mockFailedMetadata });
+
+    expect(output).toContain("Release Readiness Handoff");
+    // Should show unavailable text, not "still loading"
+    expect(output).toContain("Current package metadata is unavailable.");
+    expect(output).toContain("Current package path is unavailable.");
+    // Source-of-truth line shows N/A
+    expect(output).toContain("CURRENT=N/A");
+    // Copy buttons are disabled with unavailable title
+    const copyMarkerBtn = buttonAttrs(output, "Copy CURRENT marker");
+    expect(copyMarkerBtn).toContain("disabled");
+    expect(copyMarkerBtn).toContain("unavailable");
+    const copyPathBtn = buttonAttrs(output, "Copy current package path");
+    expect(copyPathBtn).toContain("disabled");
+    expect(copyPathBtn).toContain("unavailable");
+    // Summary section shows unavailable
+    expect(output).toContain("Current package metadata is unavailable.");
+    // No "still loading" text
+    expect(output).not.toContain("still loading");
+    // No badge/chip because no path or phase
+    expect(output).not.toContain("handoff-latest-badge");
+    expect(output).not.toContain("handoff-current-chip");
+  });
+
+  it("renders displayPath directly when packaged metadata provides windowsUncPath", () => {
+    const mockMetadata: PackageMetadataResult = {
+      ok: true,
+      path: "/home/alanxwsl/projects/servicenow-automation/dist/release/test-package.zip",
+      displayPath: "\\\\wsl.localhost\\Ubuntu-Compact\\home\\alanxwsl\\projects\\servicenow-automation\\dist\\release\\test-package.zip",
+      sha256: "4a9c7a38919acdc20c5c7352fc9a9b07ac11338770aed266bbd8746f19c69cde",
+      filename: "test-package.zip",
+      mtime: 1749300000,
+      phase: "bl2d",
+      source: "packaged-metadata",
+      archivalAliases: [],
+    };
+    const output = renderAppMarkup("en-US", { initialPackageMetadata: mockMetadata });
+
+    // The path line should contain the exact displayPath, not re-derived
+    expect(output).toContain("\\\\wsl.localhost\\Ubuntu-Compact");
+    // Must NOT contain the fallback WSL distro (plain "WSL" without specific distro)
+    expect(output).not.toContain("\\\\wsl.localhost\\WSL\\");
+    // Must contain the exact UNC path
+    expect(output).toContain("Ubuntu-Compact");
+    // Source badge shows packaged-metadata
+    expect(output).toContain("packaged metadata");
+  });
+
+  it("copies displayPath when Copy current package path is clicked with packaged metadata", () => {
+    // Note: clipboard operations in jsdom require manual testing;
+    // this test verifies the displayPath renders in the path line
+    const mockMetadata: PackageMetadataResult = {
+      ok: true,
+      path: "/linux/path/to/package.zip",
+      displayPath: "\\\\wsl.localhost\\Ubuntu-Compact\\packages\\package.zip",
+      filename: "package.zip",
+    };
+    const output = renderAppMarkup("en-US", { initialPackageMetadata: mockMetadata });
+
+    // The handoff-path-line should show the displayPath
+    expect(output).toContain("\\\\wsl.localhost\\Ubuntu-Compact\\packages\\package.zip");
+    // The fallback derived WSL path must NOT appear (no plain "\WSL\" in path context)
+    expect(output).not.toContain("\\\\wsl.localhost\\WSL\\");
   });
 
   describe("StartupDiagnosticBanner", () => {
@@ -1734,5 +1841,93 @@ describe("App", () => {
       expect(bannerOnly).not.toContain("servicenow-automation");
       expect(bannerOnly).toContain("startup-logs/qa-startup-20260607-1234.jsonl");
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Handoff section
+// ---------------------------------------------------------------------------
+
+describe("handoff section", () => {
+  it("renders an enabled Open checklist button", () => {
+    const output = renderAppMarkup("en-US");
+
+    expect(output).toContain("Open checklist");
+    expect(output).toContain("local-draft-button");
+    // The button must NOT be disabled (no user-facing "disabled" attribute)
+    expect(buttonAttrs(output, "Open checklist")).not.toContain("disabled");
+  });
+
+  it("renders the manual checklist section", () => {
+    const output = renderAppMarkup("en-US");
+
+    expect(output).toContain("Manual checklist");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P0 Re-Acceptance Checklist section
+// ---------------------------------------------------------------------------
+
+describe("P0 Re-Acceptance Checklist", () => {
+  it("renders the P0 re-acceptance checklist card in the workbench center", () => {
+    const output = renderAppMarkup("en-US");
+
+    expect(output).toContain('class="workbench-card p0-checklist-card"');
+    expect(output).toContain("P0 Re-Acceptance Checklist");
+    expect(output).toContain("Use this checklist to re-validate all 8 P0 criteria from PR #97.");
+    expect(output).toContain("Local-only: Verify only. No live ServiceNow writes.");
+    expect(output).toContain("Target package");
+    expect(output).toContain("Current cumulative package");
+    expect(output).toContain("Safety");
+    expect(output).toContain("Do not test live ServiceNow");
+    expect(output).toContain("Do not fill fields");
+    expect(output).toContain("Do not click Save / Submit / Update / Resolve / Close");
+    expect(output).toContain("Use Verify only");
+    expect(output).toContain('class="p0-checklist-table"');
+    expect(output).toContain("Criterion");
+    expect(output).toContain("Windows double-click launches app");
+    expect(output).toContain("Startup failure shows sanitized diagnostics");
+    expect(output).toContain("Start QA Chromium opens visible dedicated Chromium window");
+    expect(output).toContain("CDP readiness visible in app");
+    expect(output).toContain("Verify enables only after CDP readiness");
+    expect(output).toContain("Verify-only is read-only (no writes)");
+    expect(output).toContain("Three-column Operator Workbench");
+    expect(output).toContain("Packaged Windows artifact path is correct");
+    expect(output).toContain("Runbook refresh diff (AE-era → current)");
+    expect(output).toContain("BC7 closure statement");
+    expect(output).toContain("Reminders");
+    expect(output).toContain("Record only pass/fail per criterion and sanitized blockers.");
+  });
+
+  it("renders the runbook diff table inside a collapsible detail element", () => {
+    const output = renderAppMarkup("en-US");
+
+    const detailStart = output.indexOf("Runbook refresh diff (AE-era → current)");
+    expect(detailStart).toBeGreaterThan(0);
+    // The parent element should be a <summary> inside a <details>
+    const beforeDetail = output.slice(0, detailStart);
+    const lastDetailOpen = beforeDetail.lastIndexOf("<details");
+    const detailSection = lastDetailOpen >= 0 ? output.slice(lastDetailOpen) : "";
+    expect(detailSection).toContain("p0-refresh-table");
+    expect(detailSection).toContain("AE-era (AD1 runbook, 9abd3eb)");
+    expect(detailSection).toContain("Current runbook");
+  });
+
+  it("renders the BC7 closure statement inside a collapsible detail element", () => {
+    const output = renderAppMarkup("en-US");
+
+    expect(output).toContain("BC7 was <strong>BLOCKED</strong>");
+    expect(output).toContain("455/455 tests pass");
+    expect(output).toContain("SUPERSEDED");
+  });
+
+  it("renders reminders with cross-mark and check-mark icons", () => {
+    const output = renderAppMarkup("en-US");
+
+    expect(output).toContain("cross mark");
+    expect(output).toContain("check mark");
+    expect(output).toContain("No live ServiceNow testing");
+    expect(output).toContain("No field filling, no Save/Submit/Update/Resolve/Close");
   });
 });

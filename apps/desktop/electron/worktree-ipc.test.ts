@@ -549,6 +549,7 @@ describe("handleWorktreePackageMetadata", () => {
         linuxPath: "/home/user/dist/release/packaged.zip",
         phase: "PACKAGED",
         source: "packaged-metadata",
+        checksumScope: "self",
       })
     );
 
@@ -562,6 +563,62 @@ describe("handleWorktreePackageMetadata", () => {
     expect(result.source).toBe("packaged-metadata");
     expect(result.path).toContain("packaged.zip");
     expect(result.error).toBeUndefined();
+  });
+
+  it("accepts sidecar with empty sha256 and checksumScope 'external' (pre-build packaged mode)", () => {
+    // This simulates metadata generated BEFORE electron-builder creates the zip.
+    // The inner sidecar identifies package by filename/phase/path; checksum is external.
+    vi.mocked(existsSync).mockImplementation((path) => {
+      if (String(path).includes("release-metadata.json")) return true;
+      return false;
+    });
+    vi.mocked(readFileSync).mockReturnValueOnce(
+      JSON.stringify({
+        version: 1,
+        filename: "servicenow-automation-windows-v0.1.0-rc.1-bl3e-20260607-local.zip",
+        sha256: "",
+        checksumScope: "external",
+        size: 0,
+        mtime: 0,
+        linuxPath: "/home/user/dist/release/servicenow-automation-windows-v0.1.0-rc.1-bl3e-20260607-local.zip",
+        phase: "BL3E",
+        source: "packaged-metadata",
+      })
+    );
+
+    const result = handleWorktreePackageMetadata(PROJECT_ROOT);
+
+    expect(result.ok).toBe(true);
+    expect(result.filename).toBe("servicenow-automation-windows-v0.1.0-rc.1-bl3e-20260607-local.zip");
+    // Empty sha256 with external scope — renderer treats falsy sha256 as "not displayed"
+    expect(result.sha256).toBe("");
+    expect(result.size).toBe(0);
+    expect(result.mtime).toBe(0);
+    expect(result.phase).toBe("BL3E");
+    expect(result.source).toBe("packaged-metadata");
+    expect(result.error).toBeUndefined();
+  });
+
+  it("returns unavailable with missing sha256 and no checksumScope (not external)", () => {
+    vi.mocked(existsSync).mockImplementation((path) => {
+      if (String(path).includes("release-metadata.json")) return true;
+      return false;
+    });
+    vi.mocked(readFileSync).mockReturnValueOnce(
+      JSON.stringify({
+        version: 1,
+        filename: "some.zip",
+        // sha256 missing, no checksumScope
+        size: 100,
+        mtime: 1,
+      })
+    );
+
+    const result = handleWorktreePackageMetadata(PROJECT_ROOT);
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("dist/release/ directory does not exist");
+    expect(result.source).toBe("unavailable");
   });
 
   it("returns unavailable when dist/release/ missing and no sidecar found (packaged mode fallthrough)", () => {
@@ -656,6 +713,7 @@ describe("handleWorktreePackageMetadata", () => {
         linuxPath: "/home/user/dist/release/dev-sidecar.zip",
         phase: "DEV",
         source: "packaged-metadata",
+        checksumScope: "self",
       })
     );
 
