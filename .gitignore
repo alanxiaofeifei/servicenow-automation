@@ -15,6 +15,7 @@ coverage/
 .local*/
 **/.local/
 **/.local*/
+# .local/video-analysis/ — local-only workflow artifacts (gitignored)
 .codegraph/
 .worktrees/
 browser-profiles/

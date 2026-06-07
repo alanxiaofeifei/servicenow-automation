@@ -26,33 +26,32 @@ require_command() {
 }
 
 write_start_here() {
-  cat > "$START_HERE_PATH" <<'START_HERE'
+  local sha256="${1:-}"
+  local unc_path="${SDA_UNC_PATH:-\\\\wsl.localhost\\Ubuntu-Compact\\home\\alanxwsl\\projects\\servicenow-automation\\dist\\release\\$PACKAGE_NAME.zip}"
+  local phase="${VERSION#v0.1.0-rc.1-}"
+  phase="${phase%%-*}"
+  cat > "$START_HERE_PATH" <<START_HERE
 ServiceNow Automation Windows Operator Preview
 
-This release candidate is for supervised local testing of a packaged Windows artifact.
+This package is for supervised local validation of the ${phase} release artifact.
 It does not approve live ServiceNow operation.
 
-## Critical restriction
+Package: ${PACKAGE_NAME}.zip
+
+Windows UNC path (paste into File Explorer):
+${unc_path}
+
+SHA-256 checksum:
+${sha256:-See the accompanying .sha256 sidecar file.}
+
+Before you continue:
+- Open the in-app P0 Re-Acceptance Checklist card and confirm the package name.
+- If the app shows a startup diagnostic, copy the visible error text only.
+- Do not paste raw URLs, ticket IDs, sys_ids, requester names, assignment groups, cookies, sessions, or field values.
+
+Critical restriction:
 No Save / Submit / Update / Resolve / Close automation.
-
-Full forbidden list during this test:
-- automatic login
-- Save / Submit / Update / Resolve / Close (repeated for emphasis)
-- upload / email / bulk action
-- ServiceNow API write
-- production or production-shadow write
-- screenshots / HAR / trace / video capture from real ServiceNow pages
-- cookies / sessions / storage-state export
-- raw QA URLs, ticket IDs, sys_ids, requester names, assignment groups, browser endpoints, page fingerprints, or real field values
-
-Quick test path:
-
-1. Extract this zip on Windows.
-2. Double-click the packaged ServiceNow Automation executable.
-3. Use mock/demo workflows first.
-4. For dedicated browser smoke, use about:blank only and confirm the dedicated profile is tool-owned.
-5. Stop before any real ServiceNow login or field interaction unless a separate checkpoint explicitly approves it.
-6. If the app does not start, copy only the visible error text and the startup log path. Do not paste ServiceNow URLs, ticket data, cookies, sessions, HARs, screenshots, or real field values.
+Human reviews and manually submits in ServiceNow.
 START_HERE
 }
 
@@ -128,6 +127,11 @@ main() {
   verify_archive_listing "$ARCHIVE_PATH"
 
   (cd "$RELEASE_ROOT" && sha256sum "$PACKAGE_NAME.zip" > "$PACKAGE_NAME.zip.sha256")
+
+  # Re-write companion START-HERE with actual checksum
+  local actual_sha256
+  actual_sha256="$(cut -d' ' -f1 "$CHECKSUM_PATH")"
+  write_start_here "$actual_sha256"
 
   echo "Packaged Windows release archive ready: $ARCHIVE_PATH"
   echo "Checksum ready: $CHECKSUM_PATH"

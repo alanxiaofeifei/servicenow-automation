@@ -1,6 +1,6 @@
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, type WheelEvent, useEffect, useMemo, useRef, useState } from "react";
 
-import { demoManualPasteScenarios, type ManualPasteScenario } from "@servicenow-automation/adapters/browser";
+import { demoManualPasteScenarios, resolveWslDistroName, type ManualPasteScenario } from "@servicenow-automation/adapters/browser";
 import { generateMockTicketDraft } from "@servicenow-automation/ai";
 import { demoKnowledgeArticles, searchKnowledgeArticles } from "@servicenow-automation/kb/browser";
 import {
@@ -151,6 +151,52 @@ type QaValidationRunEntry = {
 
 export const OPERATOR_RUNTIME_ACTION_TIMEOUT_MS = 90_000;
 
+export interface CleanupPreviewFile {
+  name: string;
+  size: number;
+  phase: string;
+}
+
+export interface CleanupPreviewResult {
+  staleFiles: CleanupPreviewFile[];
+  totalFiles: number;
+  totalSizeBytes: number;
+  totalSizeMb: number;
+}
+
+export interface CleanupExecuteResult {
+  archived: number;
+  failed: number;
+  archiveDir: string;
+  details: string;
+}
+
+export interface PackageMetadataResult {
+  ok: boolean;
+  path?: string;
+  sha256?: string;
+  mtime?: number;
+  filename?: string;
+  size?: number;
+  phase?: string;
+  archivalAliases?: string[];
+  source?: string;
+  error?: string;
+  displayPath?: string;
+}
+
+export interface WorktreeApi {
+  getGitDiff(): Promise<{ ok: boolean; result?: string; error?: string }>;
+  openDistRelease(): Promise<{ ok: boolean; error?: string }>;
+  openWorkspaceRoot(): Promise<{ ok: boolean; error?: string }>;
+  openFile(path: string): Promise<{ ok: boolean; error?: string }>;
+  getWorktreeStatus(): Promise<{ ok: boolean; dirty: boolean; result?: string }>;
+  worktreePackageMetadata(): Promise<PackageMetadataResult>;
+  hygieneScan(): Promise<{ ok: boolean; result?: HygieneScanResult; error?: string }>;
+  cleanupPreview(): Promise<{ ok: boolean; result?: CleanupPreviewResult; error?: string }>;
+  cleanupExecute(): Promise<{ ok: boolean; result?: CleanupExecuteResult; error?: string }>;
+}
+
 type OperatorRuntimeRequest = {
   mode: ServiceNowEnvironmentMode;
   targetUrl?: string;
@@ -168,6 +214,7 @@ type OperatorRuntimeResponse = {
   launch?: {
     status?: string;
     blockedReason?: string;
+    blockedDescription?: string;
     cdpEndpoint?: string;
     runtimeLogPath?: string;
     safety?: { browserProcessLaunched?: boolean; cdpEndpointReady?: boolean; noWriteMode?: boolean };
@@ -197,6 +244,9 @@ type SdaOperatorApi = {
   verifyCurrentIncident(request: OperatorRuntimeRequest): Promise<OperatorRuntimeResponse>;
   autofillCurrentIncidentDefaults(request: OperatorRuntimeRequest): Promise<OperatorRuntimeResponse>;
   autofillCurrentIncidentTextFields(request: OperatorRuntimeRequest): Promise<OperatorRuntimeResponse>;
+  provisionChromiumRuntime(): Promise<{ ok: boolean; autoProvisioned: boolean; error?: string }>;
+  onProvisionProgress(callback: (_event: unknown, update: unknown) => void): void;
+  offProvisionProgress(callback: (_event: unknown, update: unknown) => void): void;
 };
 
 type OperatorActionStatus = {
@@ -1627,6 +1677,7 @@ const englishOperatorWorkbenchCopy = {
   layoutAria: "Operator workbench columns",
   languageAria: "Display language",
   languageChip: "EN / 中文",
+  workProduct: "Work product",
   nav: {
     primaryAria: "Primary workbench navigation",
     workbenchSections: "Workbench sections",
@@ -1639,7 +1690,13 @@ const englishOperatorWorkbenchCopy = {
     collapseSidebar: "Collapse left sidebar",
     expandSidebar: "Expand left sidebar",
     collapseSidebarShort: "Collapse",
-    expandSidebarShort: "Expand"
+    expandSidebarShort: "Expand",
+    loadingFeed: "Loading feed",
+    intakeQueue: "Intake queue",
+    sources: "Sources",
+    todoList: "Todo list",
+    historySection: "History",
+    environmentControls: "Environment controls"
   },
   environment: {
     qa: "QA workspace",
@@ -1670,9 +1727,17 @@ const englishOperatorWorkbenchCopy = {
     noHistory: "No recent reviewed copies yet."
   },
   cards: {
-    selectedSource: "Selected source",
+    selectedSource: "Selected source detail",
     cleanedSummary: "Cleaned summary",
     incidentDraft: "Incident draft",
+    selectedSourceEmpty: "Select a source from the left queue to begin.",
+    sourceLoading: "Preparing source content...",
+    sourceError: "Source preparation encountered an issue.",
+    cleanedSummaryEmpty: "The cleaned summary will appear after normalization.",
+    incidentDraftEmpty: "The draft stays blank until a source is selected.",
+    guidedDemoPathEmpty: "The guided path appears after the draft is ready.",
+    kbRecommendationsEmpty: "Local KB recommendations appear after the draft is generated.",
+    monthlyExcelEmpty: "Items stay local-only until the monthly queue is ready.",
     source: "Source",
     received: "Received",
     language: "Language",
@@ -1735,8 +1800,14 @@ const englishOperatorWorkbenchCopy = {
     cdpWaiting: "Waiting",
     sanitizedEvidence: "Sanitized browser status evidence available.",
     noEvidence: "No browser status evidence yet; only sanitized status is shown.",
-    safetyTitle: "Safety note",
+    recentEvidenceTitle: "Recent evidence",
+    safetyBoundaryTitle: "Safety boundary",
+    environmentControlsTitle: "Environment controls",
     safetyNote: "AI drafts and fills allowed text fields only. Human reviews and submits in ServiceNow.",
+    browserDisconnected: "Browser: disconnected",
+    browserConnecting: "Browser: connecting",
+    browserConnected: "Browser: connected",
+    browserError: "Browser: error",
     whatChanged: {
       title: "What changed in this round",
       summary: "This workbench has been hardened through multiple rounds of automated checks and manual validation since the last release. Every test of the automation proves it is safe and visible before any fill action.",
@@ -1750,6 +1821,18 @@ const englishOperatorWorkbenchCopy = {
         "All automated actions are limited to text-field fills after a verified page check."
       ],
       footer: "Human reviews and manually submits in ServiceNow."
+    },
+    startupDiagnostic: {
+      heading: "Startup blocked",
+      reasonLabel: "Reason",
+      nextStepLabel: "Next step",
+      runtimeLogPathLabel: "Startup log path",
+      copyDiagnostic: "Copy diagnostic",
+      dismiss: "Dismiss",
+      copied: "Copied",
+      logPathHint: "%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\Logs",
+      runtimeLogPathLabelDefault: "check startup log",
+      unknownReason: "Startup was blocked by an unexpected condition."
     }
   },
   settings: {
@@ -1774,8 +1857,9 @@ const englishOperatorWorkbenchCopy = {
     clearSavedSettings: "Clear saved settings",
     clearReady: "Ready: clears local target overrides and resets page-check/Autofill readiness.",
     clearDisabled: "Disabled: no saved settings to clear.",
-    qaUrl: "QA target",
-    productionUrl: "Production target",
+    qaUrl: "QA URL",
+    devUrl: "Dev URL",
+    productionUrl: "Production URL",
     urlDescriptionQa: "Authorized QA landing page for controlled testing; the value is hidden after validation.",
     urlDescriptionProduction: "Production target remains read-only; Start QA Chromium, Verify, and Autofill stay unavailable outside QA.",
     qaSubmitPolicy: "QA fill requires Start, current-page check, and approved text-only autofill checks.",
@@ -1807,6 +1891,7 @@ const operatorWorkbenchTranslations = {
     layoutAria: "操作工作台列布局",
     languageAria: "显示语言",
     languageChip: "EN / 中文",
+    workProduct: "工作产品",
     nav: {
       primaryAria: "主要工作台导航",
       workbenchSections: "工作台区域",
@@ -1819,7 +1904,13 @@ const operatorWorkbenchTranslations = {
       collapseSidebar: "折叠左侧栏",
       expandSidebar: "展开左侧栏",
       collapseSidebarShort: "折叠",
-      expandSidebarShort: "展开"
+      expandSidebarShort: "展开",
+      loadingFeed: "加载动态",
+      intakeQueue: "受理队列",
+      sources: "来源",
+      todoList: "待办列表",
+      historySection: "历史",
+      environmentControls: "环境控件"
     },
     environment: { qa: "QA 工作区", production: "生产" },
     target: { configured: "QA 目标已隐藏", missing: "目标缺失" },
@@ -1839,9 +1930,17 @@ const operatorWorkbenchTranslations = {
       noHistory: "还没有审核副本。"
     },
     cards: {
-      selectedSource: "已选来源",
+      selectedSource: "已选来源详情",
       cleanedSummary: "清理摘要",
       incidentDraft: "Incident 草稿",
+      selectedSourceEmpty: "请从左侧队列中选择一个来源以开始。",
+      sourceLoading: "正在准备来源内容...",
+      sourceError: "来源准备过程中遇到问题。",
+      cleanedSummaryEmpty: "清理摘要将在规范化后显示。",
+      incidentDraftEmpty: "在选择来源之前，草稿将保持空白。",
+      guidedDemoPathEmpty: "引导路径将在草稿准备好后显示。",
+      kbRecommendationsEmpty: "本地知识库建议将在草稿生成后显示。",
+      monthlyExcelEmpty: "项目将保持本地状态，直到月度队列准备就绪。",
       source: "来源",
       received: "收到时间",
       language: "语言",
@@ -1903,9 +2002,15 @@ const operatorWorkbenchTranslations = {
       cdpReady: "就绪",
       cdpWaiting: "等待中",
       sanitizedEvidence: "仅显示已清理的浏览器状态证据。",
-      noEvidence: "暂无浏览器状态证据；仅显示已清理状态。",
-      safetyTitle: "安全说明",
-      safetyNote: "AI 仅起草并填入允许的文本字段。人工审核并在 ServiceNow 中处理记录。",
+      noEvidence: "尚无浏览器状态证据；仅显示已清理状态。",
+      recentEvidenceTitle: "近期证据",
+      safetyBoundaryTitle: "安全边界",
+      environmentControlsTitle: "环境控件",
+      safetyNote: "AI 仅起草并填入允许的文字字段。人工审核并在 ServiceNow 中处理记录。",
+      browserDisconnected: "浏览器：未连接",
+      browserConnecting: "浏览器：连接中",
+      browserConnected: "浏览器：已连接",
+      browserError: "浏览器：错误",
       whatChanged: {
         title: "本轮更新内容",
         summary: "自上次发布以来，该工作台已通过多轮自动化检查和手动验证不断完善。每次自动化测试都证明在填充前的安全性和可见性。",
@@ -1943,8 +2048,9 @@ const operatorWorkbenchTranslations = {
       clearSavedSettings: "清除已保存设置",
       clearReady: "就绪：清除本地目标覆盖，并重置页面检查/自动填充就绪状态。",
       clearDisabled: "禁用：没有可清除的已保存设置。",
-      qaUrl: "QA 目标",
-      productionUrl: "生产目标",
+      qaUrl: "QA URL",
+      devUrl: "Dev URL",
+      productionUrl: "Production URL",
       urlDescriptionQa: "用于受控测试的授权 QA 落地页；检查后会隐藏该值。",
       urlDescriptionProduction: "生产目标保持只读；启动、检查页面、自动填充仅在 QA 中可用。",
       qaSubmitPolicy: "QA 填入需要先启动、检查当前工单页面，并限制为已批准文本字段。",
@@ -1973,6 +2079,7 @@ const operatorWorkbenchTranslations = {
     layoutAria: "操作工作臺欄位布局",
     languageAria: "顯示語言",
     languageChip: "EN / 中文",
+    workProduct: "工作產品",
     nav: {
       primaryAria: "主要工作臺導覽",
       workbenchSections: "工作臺區域",
@@ -1985,7 +2092,13 @@ const operatorWorkbenchTranslations = {
       collapseSidebar: "收合左側欄",
       expandSidebar: "展開左側欄",
       collapseSidebarShort: "收合",
-      expandSidebarShort: "展開"
+      expandSidebarShort: "展開",
+      loadingFeed: "載入動態",
+      intakeQueue: "受理佇列",
+      sources: "來源",
+      todoList: "待辦清單",
+      historySection: "歷史",
+      environmentControls: "環境控制項"
     },
     environment: { qa: "QA 工作區", production: "生產" },
     target: { configured: "QA 目標已隱藏", missing: "目標缺失" },
@@ -2005,9 +2118,17 @@ const operatorWorkbenchTranslations = {
       noHistory: "尚無審核副本。"
     },
     cards: {
-      selectedSource: "已選來源",
+      selectedSource: "已選來源詳細",
       cleanedSummary: "清理後摘要",
       incidentDraft: "Incident 草稿",
+      selectedSourceEmpty: "請從左側佇列中選擇一個來源以開始。",
+      sourceLoading: "正在準備來源內容...",
+      sourceError: "來源準備過程中遇到問題。",
+      cleanedSummaryEmpty: "清理後摘要將在標準化後顯示。",
+      incidentDraftEmpty: "在選擇來源之前，草稿將保持空白。",
+      guidedDemoPathEmpty: "引導路徑將在草稿準備好後顯示。",
+      kbRecommendationsEmpty: "本地知識庫建議將在草稿產生後顯示。",
+      monthlyExcelEmpty: "項目將保持本地狀態，直到月度佇列準備就緒。",
       source: "來源",
       received: "收到時間",
       language: "語言",
@@ -2070,8 +2191,14 @@ const operatorWorkbenchTranslations = {
       cdpWaiting: "等待中",
       sanitizedEvidence: "僅顯示已清理的瀏覽器狀態證據。",
       noEvidence: "尚無瀏覽器狀態證據；僅顯示已清理狀態。",
-      safetyTitle: "安全說明",
+      recentEvidenceTitle: "近期證據",
+      safetyBoundaryTitle: "安全邊界",
+      environmentControlsTitle: "環境控制項",
       safetyNote: "AI 僅起草並填入允許的文字欄位。人工審核並在 ServiceNow 中處理記錄。",
+      browserDisconnected: "瀏覽器：未連線",
+      browserConnecting: "瀏覽器：連線中",
+      browserConnected: "瀏覽器：已連線",
+      browserError: "瀏覽器：錯誤",
       whatChanged: {
         title: "本輪更新內容",
         summary: "自上次發佈以來，該工作臺已透過多輪自動化檢查和手動驗證不斷完善。每次自動化測試都證明了填入前的安全性和可見性。",
@@ -2109,8 +2236,9 @@ const operatorWorkbenchTranslations = {
       clearSavedSettings: "清除已儲存設定",
             clearReady: "就緒：清除本地目標覆寫，並重設頁面檢查/自動填入就緒狀態。",
       clearDisabled: "停用：沒有可清除的已儲存設定。",
-      qaUrl: "QA 目標",
-      productionUrl: "生產目標",
+      qaUrl: "QA URL",
+      devUrl: "Dev URL",
+      productionUrl: "Production URL",
       urlDescriptionQa: "用於受控測試的授權 QA 落地頁；檢查後會隱藏該值。",
       urlDescriptionProduction: "生產目標保持唯讀；啟動、檢查、自動填入僅在 QA 中可用。",
       qaSubmitPolicy: "QA 填入需要先啟動、檢查目前工單頁面，並限制為已核准文字欄位。",
@@ -2139,6 +2267,7 @@ const operatorWorkbenchTranslations = {
     layoutAria: "Columnas del banco de trabajo del operador",
     languageAria: "Idioma de visualización",
     languageChip: "ES / 中文",
+    workProduct: "Producto de trabajo",
     nav: {
       primaryAria: "Navegación principal del banco de trabajo",
       workbenchSections: "Secciones del banco de trabajo",
@@ -2151,7 +2280,13 @@ const operatorWorkbenchTranslations = {
       collapseSidebar: "Contraer barra izquierda",
       expandSidebar: "Expandir barra izquierda",
       collapseSidebarShort: "Contraer",
-      expandSidebarShort: "Expandir"
+      expandSidebarShort: "Expandir",
+      loadingFeed: "Feed de carga",
+      intakeQueue: "Cola de entrada",
+      sources: "Fuentes",
+      todoList: "Lista de tareas",
+      historySection: "Historial",
+      environmentControls: "Controles de entorno"
     },
     environment: { qa: "Entorno QA", production: "Producción" },
     target: { configured: "Destino QA oculto", missing: "Destino faltante" },
@@ -2171,9 +2306,17 @@ const operatorWorkbenchTranslations = {
       noHistory: "Aún no hay copias revisadas recientes."
     },
     cards: {
-      selectedSource: "Origen seleccionado",
+      selectedSource: "Detalle del origen seleccionado",
       cleanedSummary: "Resumen depurado",
       incidentDraft: "Borrador de Incident",
+      selectedSourceEmpty: "Selecciona un origen de la cola izquierda para comenzar.",
+      sourceLoading: "Preparando contenido del origen...",
+      sourceError: "La preparación del origen encontró un problema.",
+      cleanedSummaryEmpty: "El resumen depurado aparecerá después de la normalización.",
+      incidentDraftEmpty: "El borrador permanecerá en blanco hasta que se seleccione un origen.",
+      guidedDemoPathEmpty: "La ruta guiada aparecerá después de que el borrador esté listo.",
+      kbRecommendationsEmpty: "Las recomendaciones KB locales aparecerán después de generar el borrador.",
+      monthlyExcelEmpty: "Los elementos permanecen solo locales hasta que la cola mensual esté lista.",
       source: "Origen",
       received: "Recibido",
       language: "Idioma",
@@ -2236,8 +2379,14 @@ const operatorWorkbenchTranslations = {
       cdpWaiting: "Esperando",
       sanitizedEvidence: "Solo evidencia depurada del estado del navegador.",
       noEvidence: "Sin evidencia del estado del navegador; solo se muestra estado depurado.",
-      safetyTitle: "Nota de seguridad",
+      recentEvidenceTitle: "Evidencia reciente",
+      safetyBoundaryTitle: "Límite de seguridad",
+      environmentControlsTitle: "Controles de entorno",
       safetyNote: "La IA redacta y rellena solo campos de texto permitidos. El humano revisa y maneja el registro en ServiceNow.",
+      browserDisconnected: "Navegador: desconectado",
+      browserConnecting: "Navegador: conectando",
+      browserConnected: "Navegador: conectado",
+      browserError: "Navegador: error",
       whatChanged: {
         title: "Qué cambió en esta ronda",
         summary: "Este banco de trabajo se ha reforzado a través de múltiples rondas de comprobaciones automatizadas y validación manual desde la última versión. Cada prueba de la automatización demuestra que es segura y visible antes de cualquier acción de relleno.",
@@ -2275,8 +2424,9 @@ const operatorWorkbenchTranslations = {
       clearSavedSettings: "Borrar configuración guardada",
       clearReady: "Listo: borra overrides locales de destino y restablece revisión de página/Autofill.",
       clearDisabled: "Deshabilitado: no hay configuración guardada para borrar.",
-      qaUrl: "Destino QA",
-      productionUrl: "Destino de producción",
+      qaUrl: "QA URL",
+      devUrl: "Dev URL",
+      productionUrl: "Production URL",
       urlDescriptionQa: "Página inicial QA autorizada para pruebas controladas; el valor se oculta tras validar.",
       urlDescriptionProduction: "El destino de producción sigue siendo de solo lectura; Start, Check y Autofill solo están disponibles en QA.",
       qaSubmitPolicy: "El rellenado QA requiere Start, Check y reglas de seguridad para autofill de texto aprobado.",
@@ -2824,6 +2974,20 @@ export function buildDemoQueueItems(
   });
 }
 
+export type CenterState = "populated" | "empty" | "loading" | "error";
+export type CdpState = "disconnected" | "connecting" | "connected" | "error";
+
+export type HygieneScanResult = {
+  gitignoreVerified: boolean;
+  gitignoreDetails: string;
+  staleArtifactCount: number;
+  staleArtifactSizeMb: number;
+  staleArtifactDetails: string;
+  videoAnalysisExists: boolean;
+  videoAnalysisDetails: string;
+  archiveDetails: string;
+};
+
 export type AppProps = {
   initialLanguage?: LanguageCode;
   initialEnvironmentMode?: ServiceNowEnvironmentMode;
@@ -2844,6 +3008,16 @@ export type AppProps = {
   initialLeftSidebarExpanded?: boolean;
   initialRuntimeRailExpanded?: boolean;
   initialActivePage?: OperatorWorkbenchPageKey;
+  initialCenterState?: CenterState;
+  initialHygieneScanResult?: HygieneScanResult | null;
+  initialCleanupPreviewResult?: CleanupPreviewResult | null;
+  initialWorktreeHasDirtyChanges?: boolean;
+  initialWorktreeReviewed?: boolean;
+  initialWorktreeAccepted?: boolean;
+  initialWorktreeDiffReviewed?: boolean;
+  initialPackageMetadata?: PackageMetadataResult | null;
+  initialJustReviewed?: boolean;
+  initialValidationRunHistory?: QaValidationRunEntry[];
 };
 
 export function updateQaSmokeWriteActionSelection(nextAction: QaManualFillWriteAction) {
@@ -2877,7 +3051,17 @@ export function App({
   initialDisplayTheme = "warm",
   initialLeftSidebarExpanded = true,
   initialRuntimeRailExpanded = false,
-  initialActivePage = "workbench"
+  initialActivePage = "workbench",
+  initialCenterState,
+  initialHygieneScanResult = null,
+  initialCleanupPreviewResult = null,
+  initialWorktreeHasDirtyChanges = false,
+  initialWorktreeReviewed = false,
+  initialWorktreeAccepted = false,
+  initialWorktreeDiffReviewed = false,
+  initialJustReviewed = false,
+  initialPackageMetadata = null,
+  initialValidationRunHistory = undefined
 }: AppProps = {}) {
   const [language, setLanguage] = useState<LanguageCode>(initialLanguage);
   const [displayTheme, setDisplayTheme] = useState<DisplayTheme>(initialDisplayTheme);
@@ -2943,8 +3127,37 @@ export function App({
   );
   const operatorActionSequenceRef = useRef(0);
   const operatorActionTimeoutRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
-  const [validationRunHistory, setValidationRunHistory] = useState<QaValidationRunEntry[]>([]);
+  const [validationRunHistory, setValidationRunHistory] = useState<QaValidationRunEntry[]>(initialValidationRunHistory ?? []);
   const [monthlyExcelFillState, setMonthlyExcelFillState] = useState<"pending" | "queued" | "deferred">("pending");
+  const [hygieneScanResult, setHygieneScanResult] = useState<HygieneScanResult | null>(initialHygieneScanResult);
+  const [cleanupPreviewResult, setCleanupPreviewResult] = useState<CleanupPreviewResult | null>(initialCleanupPreviewResult);
+  const [cleanupPreviewOpen, setCleanupPreviewOpen] = useState(false);
+  const [confirmCleanupVisible, setConfirmCleanupVisible] = useState(false);
+  const [cleanupArchiveInProgress, setCleanupArchiveInProgress] = useState(false);
+  const [cleanupArchiveDone, setCleanupArchiveDone] = useState(false);
+  const [worktreeHasDirtyChanges, setWorktreeHasDirtyChanges] = useState(initialWorktreeHasDirtyChanges);
+  const [worktreeReviewed, setWorktreeReviewed] = useState(initialWorktreeReviewed);
+  const [worktreeAccepted, setWorktreeAccepted] = useState(initialWorktreeAccepted);
+  const [worktreeDiffReviewed, setWorktreeDiffReviewed] = useState(initialWorktreeDiffReviewed);
+  const [packageMetadata, setPackageMetadata] = useState<PackageMetadataResult | null>(initialPackageMetadata);
+  const currentPhase = packageMetadata?.phase;
+  const [diffResult, setDiffResult] = useState<string | null>(null);
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [justReviewed, setJustReviewed] = useState(initialJustReviewed);
+
+  const cdpState = useMemo<CdpState>(() => {
+    if (operatorBusyAction === "launch") return "connecting";
+    if (operatorCdpReady) return "connected";
+    if (operatorLastResponse?.launch?.blockedReason) return "error";
+    return "disconnected";
+  }, [operatorBusyAction, operatorCdpReady, operatorLastResponse]);
+
+  const centerState = useMemo<CenterState>(() => {
+    if (initialCenterState) return initialCenterState;
+    if (operatorBusyAction === "launch" || operatorBusyAction === "verify") return "loading";
+    if (operatorLastResponse?.launch?.blockedReason || operatorLastResponse?.fieldInspection?.blockedReason) return "error";
+    return "populated";
+  }, [initialCenterState, operatorBusyAction, operatorLastResponse]);
 
   useEffect(() => {
     return () => {
@@ -2954,6 +3167,35 @@ export function App({
         operatorActionTimeoutRef.current = null;
       }
     };
+  }, []);
+
+  // Run hygiene scan on mount
+  useEffect(() => {
+    const api = getWorktreeApi();
+    if (!api) return;
+    api.hygieneScan().then((result) => {
+      if (result.ok && result.result) {
+        setHygieneScanResult(result.result);
+      }
+    }).catch(() => {
+      // Silent — IPC not available in test/SSR context
+    });
+
+    // Also load package metadata on mount
+    api.worktreePackageMetadata().then((meta) => {
+      setPackageMetadata(meta);
+    }).catch(() => {
+      // Silent
+    });
+
+    // Fetch worktree status on mount
+    api.getWorktreeStatus().then((status) => {
+      if (status.ok) {
+        setWorktreeHasDirtyChanges(status.dirty);
+      }
+    }).catch(() => {
+      // Silent — IPC not available in test/SSR context
+    });
   }, []);
 
   useEffect(() => {
@@ -3575,6 +3817,120 @@ export function App({
     resetOperatorBrowserReadiness("Check current ticket page is disabled until Start test browser reports a safe browser connection after settings are cleared.");
   }
 
+  async function handleHygieneRefresh() {
+    const api = getWorktreeApi();
+    if (!api) return;
+    const response = await api.hygieneScan();
+    if (response.ok && response.result) {
+      setHygieneScanResult(response.result);
+      setCleanupPreviewResult(null);
+      setCleanupPreviewOpen(false);
+      setCleanupArchiveDone(false);
+    }
+  }
+
+  function handleCleanupPreviewAction() {
+    if (cleanupPreviewResult && cleanupPreviewOpen) {
+      setCleanupPreviewOpen(false);
+      return;
+    }
+    void (async () => {
+      const api = getWorktreeApi();
+      if (!api) return;
+      const response = await api.cleanupPreview();
+      if (response.ok && response.result) {
+        setCleanupPreviewResult(response.result);
+        setCleanupPreviewOpen(true);
+        setCleanupArchiveDone(false);
+      }
+    })();
+  }
+
+  function handleConfirmArchiveOpen() {
+    setConfirmCleanupVisible(true);
+  }
+
+  function handleCancelArchive() {
+    setConfirmCleanupVisible(false);
+  }
+
+  async function handleReviewDiff() {
+    const api = getWorktreeApi();
+    if (!api) return;
+    const response = await api.getGitDiff();
+    if (response.ok && response.result) {
+      void navigator.clipboard.writeText(response.result);
+      setDiffResult(response.result);
+      setDiffOpen(true);
+    } else if (!response.ok) {
+      setDiffResult(response.error ?? "Could not retrieve diff.");
+      setDiffOpen(true);
+    }
+  }
+
+  function handleCopyPackagePath() {
+    if (packageMetadata?.path) {
+      void navigator.clipboard.writeText(packageMetadata.path);
+    }
+  }
+
+  function handleOpenDistReleaseAction() {
+    const api = getWorktreeApi();
+    if (!api) return;
+    void api.openDistRelease();
+  }
+
+  function handleMarkReviewed() {
+    setWorktreeReviewed(true);
+    setWorktreeDiffReviewed(true);
+    setWorktreeAccepted(true);
+    setJustReviewed(true);
+  }
+
+  function handleCopySummary() {
+    const worktreeState = worktreeHasDirtyChanges ? "Dirty" : "Fresh";
+    const reviewState = worktreeReviewed ? "reviewed" : "not reviewed";
+    const acceptanceState = worktreeAccepted ? "accepted" : "not accepted";
+    const filename = packageMetadata?.filename ?? "N/A";
+    const fileSize = packageMetadata?.size ? `${(packageMetadata.size / 1024 / 1024).toFixed(1)} MB` : "N/A";
+    const packagePath = packageMetadata?.path ?? "N/A";
+    const total = validationRunHistory.length;
+    const okCount = validationRunHistory.filter((r) => r.status === "ok").length;
+    const blockedCount = validationRunHistory.filter((r) => r.status === "blocked").length;
+    const errorCount = validationRunHistory.filter((r) => r.status === "error" || r.status === "timeout").length;
+    let validationSummary: string;
+    if (total === 0) {
+      validationSummary = "Validation runs: 0 total (0 ok, 0 blocked, 0 error). Last run: none yet.";
+    } else {
+      const lastRun = validationRunHistory[total - 1] as QaValidationRunEntry;
+      const lastRunStatus = lastRun.status.toUpperCase();
+      const lastRunActionLabel = operatorActionDisplayAction(lastRun.action);
+      validationSummary = `Validation runs: ${total} total (${okCount} ok, ${blockedCount} blocked, ${errorCount} error). Last run: ${lastRunStatus} · ${lastRunActionLabel} · ${lastRun.sanitizedSummary}`;
+    }
+    const summary = `Worktree ${worktreeState}, ${reviewState}, ${acceptanceState}. Package: ${filename} (${fileSize}) — ${packagePath}. ${validationSummary}`;
+    void navigator.clipboard.writeText(summary);
+  }
+
+  async function handleConfirmArchive() {
+    setConfirmCleanupVisible(false);
+    setCleanupArchiveInProgress(true);
+    try {
+      const api = getWorktreeApi();
+      if (!api) {
+        setCleanupArchiveInProgress(false);
+        return;
+      }
+      const response = await api.cleanupExecute();
+      if (response.ok && response.result) {
+        setCleanupArchiveDone(true);
+        setCleanupPreviewOpen(false);
+        void handleHygieneRefresh();
+      }
+    } finally {
+      setCleanupArchiveInProgress(false);
+    }
+  }
+
   return (
     <main
       className={`app-shell operator-workbench-v2-shell ${leftSidebarExpanded ? "left-sidebar-expanded" : "left-sidebar-collapsed"} ${runtimeRailExpanded ? "runtime-rail-expanded" : "runtime-rail-collapsed"}`}
@@ -3708,6 +4064,8 @@ export function App({
               </nav>
             </section>
 
+            <p className="eyebrow workbench-column-header" style={{fontSize: "10px", margin: "8px 0 4px", letterSpacing: "0.06em", color: "var(--muted-text)"}}>{workbenchCopy.nav.sources}</p>
+            <span className="workbench-section-label">{workbenchCopy.nav.loadingFeed}</span>
             <label className="workbench-search-box">
               <span>{workbenchCopy.search.label}</span>
               <span className="workbench-search-control">
@@ -3717,6 +4075,7 @@ export function App({
               </span>
             </label>
 
+            <span className="workbench-section-label">{workbenchCopy.nav.intakeQueue}</span>
             <div className="workbench-source-filters" aria-label={workbenchCopy.list.recent}>
               <span>{workbenchCopy.list.new}</span>
               <span>{workbenchCopy.list.inReview}</span>
@@ -3789,6 +4148,7 @@ export function App({
               )}
             </section>
 
+            <span className="workbench-section-label">{workbenchCopy.nav.todoList}</span>
             <details className="workbench-demo-library" aria-label="Demo Scenario Library">
               <summary>
                 <span className="workbench-demo-library-heading">Demo Scenario Library</span>
@@ -3888,6 +4248,8 @@ export function App({
         <section className="workbench-center" data-active-page={activePage} aria-label={activeNavLabel}>
           {activePage === "workbench" ? (
             <div className="workbench-page-shell">
+              <p className="eyebrow workbench-column-header" style={{fontSize: "10px", margin: "0 0 8px", letterSpacing: "0.06em", color: "var(--muted-text)"}}>{workbenchCopy.workProduct}</p>
+
               <section className="workbench-card selected-source-card" aria-labelledby="selected-source-title">
             <div className="workbench-card-header">
               <div>
@@ -3895,6 +4257,8 @@ export function App({
               </div>
               <span>{formatQueueStatus(selectedQueueItem.status, workbenchCopy)}</span>
             </div>
+            {centerState === "populated" ? (
+            <>
             <dl className="workbench-source-meta">
               <div>
                 <dt>{workbenchCopy.cards.source}</dt>
@@ -3913,6 +4277,14 @@ export function App({
               <summary>{workbenchCopy.cards.sourcePreview}</summary>
               <p>{operatorSafeDisplayText(selectedQueueItem.bodyPreview)}</p>
             </details>
+            </>
+            ) : centerState === "empty" ? (
+              <p className="center-placeholder">{workbenchCopy.cards.selectedSourceEmpty}</p>
+            ) : centerState === "loading" ? (
+              <p className="center-placeholder working">{workbenchCopy.cards.sourceLoading}</p>
+            ) : (
+              <p className="center-placeholder blocked">{workbenchCopy.cards.sourceError}</p>
+            )}
           </section>
 
           <section className="workbench-card cleaned-summary-card" aria-labelledby="cleaned-summary-title">
@@ -3921,6 +4293,7 @@ export function App({
                 <h2 id="cleaned-summary-title">{workbenchCopy.cards.cleanedSummary}</h2>
               </div>
             </div>
+            {centerState === "populated" ? (
             <div className="summary-row-list">
               {cleanedSummaryRows.map((row) => (
                 <div key={row.label} className="summary-row">
@@ -3929,6 +4302,13 @@ export function App({
                 </div>
               ))}
             </div>
+            ) : centerState === "empty" ? (
+              <p className="center-placeholder">{workbenchCopy.cards.cleanedSummaryEmpty}</p>
+            ) : centerState === "loading" ? (
+              <p className="center-placeholder working">Normalizing source content...</p>
+            ) : (
+              <p className="center-placeholder blocked">Normalization encountered an issue.</p>
+            )}
           </section>
 
           <section className="workbench-card incident-draft-card" aria-labelledby="incident-draft-title">
@@ -3937,6 +4317,8 @@ export function App({
                 <h2 id="incident-draft-title">{workbenchCopy.cards.incidentDraft}</h2>
               </div>
             </div>
+            {centerState === "populated" ? (
+            <>
             <DraftTextField
               label={workbenchCopy.cards.shortDescription}
               fieldName="shortDescription"
@@ -3958,16 +4340,26 @@ export function App({
             <footer className="incident-draft-footer">
               <small>{workbenchCopy.cards.localOnly}</small>
             </footer>
+            </>
+            ) : centerState === "empty" ? (
+              <p className="center-placeholder">{workbenchCopy.cards.incidentDraftEmpty}</p>
+            ) : centerState === "loading" ? (
+              <p className="center-placeholder working">Drafting Incident...</p>
+            ) : (
+              <p className="center-placeholder blocked">Draft generation encountered an issue.</p>
+            )}
           </section>
 
           <section className="workbench-card guided-demo-stepper-card" aria-labelledby="guided-demo-stepper-title">
             <div className="workbench-card-header guided-demo-stepper-header">
               <div>
-                <p className="eyebrow">Guided review path</p>
+                <p className="eyebrow">Guided path</p>
                 <h2 id="guided-demo-stepper-title">Guided demo path</h2>
               </div>
               <span className="guided-demo-stepper-chip">Choose source → review context → draft ticket → check KB → verify/report → optional QA/dev assistance</span>
             </div>
+            {centerState === "populated" ? (
+            <>
             <p className="guided-demo-stepper-intro">
               Follow the story without guessing. This is a compact, local-only guide for the operator flow; the human still reviews every change and performs ServiceNow actions manually.
             </p>
@@ -3988,6 +4380,14 @@ export function App({
             <small className="guided-demo-stepper-footer">
               AI drafts and fills allowed text fields only. Human reviews and submits in ServiceNow.
             </small>
+            </>
+            ) : centerState === "empty" ? (
+              <p className="center-placeholder">{workbenchCopy.cards.guidedDemoPathEmpty}</p>
+            ) : centerState === "loading" ? (
+              <p className="center-placeholder working">Preparing guided path...</p>
+            ) : (
+              <p className="center-placeholder blocked">Guided path preparation encountered an issue.</p>
+            )}
           </section>
 
           <section className="workbench-card kb-recommendations-card" aria-labelledby="kb-recommendations-title">
@@ -3999,6 +4399,8 @@ export function App({
               </div>
               <span>{kbMatches.length} local match{kbMatches.length === 1 ? "" : "es"}</span>
             </div>
+            {centerState === "populated" ? (
+            <>
             <div className="kb-recommendation-summary">
               <div>
                 <span>Recommended support group</span>
@@ -4030,6 +4432,14 @@ export function App({
                 </article>
               ))}
             </div>
+            </>
+            ) : centerState === "empty" ? (
+              <p className="center-placeholder">{workbenchCopy.cards.kbRecommendationsEmpty}</p>
+            ) : centerState === "loading" ? (
+              <p className="center-placeholder working">Checking KB recommendations...</p>
+            ) : (
+              <p className="center-placeholder blocked">KB recommendation lookup encountered an issue.</p>
+            )}
           </section>
 
           <section className="workbench-card monthly-excel-fill-card" aria-labelledby="monthly-excel-fill-title">
@@ -4041,6 +4451,8 @@ export function App({
               </div>
               <span>{monthlyExcelFillState === "queued" ? "Queued" : monthlyExcelFillState === "deferred" ? "Deferred" : "Pending"}</span>
             </div>
+            {centerState === "populated" ? (
+            <>
             <div className="monthly-excel-workbook-row">
               <div>
                 <span>Current month workbook</span>
@@ -4083,7 +4495,616 @@ export function App({
             <small className="monthly-excel-safety">
               No Microsoft Graph or Excel Web write is performed from this local demo. This replaces the old per-ticket export-first story with a monthly workbook fill decision.
             </small>
+            </>
+            ) : centerState === "empty" ? (
+              <p className="center-placeholder">{workbenchCopy.cards.monthlyExcelEmpty}</p>
+            ) : centerState === "loading" ? (
+              <p className="center-placeholder working">Preparing monthly queue...</p>
+            ) : (
+              <p className="center-placeholder blocked">Monthly queue preparation encountered an issue.</p>
+            )}
           </section>
+
+              <details className="release-package-details">
+                <summary className="release-package-summary" style={{"fontSize": "0.85rem", "fontWeight": 800, "padding": "14px 16px", "cursor": "pointer", "borderRadius": "8px", "background": "var(--accent-soft)", "border": "1px solid var(--panel-border)"}}>
+                  Release and package details
+                </summary>
+              <section className="workbench-card release-readiness-handoff-card" aria-labelledby="release-handoff-title">
+                <div className="workbench-card-header">
+                  <div>
+                    <p className="eyebrow">Release readiness</p>
+                    <h2 id="release-handoff-title">Open the current package first and verify it locally.</h2>
+                  </div>
+                  {packageMetadata?.path ? (
+                    <span className="handoff-latest-badge">Latest local package</span>
+                  ) : null}
+                  {currentPhase ? (
+                    <span className="handoff-current-chip">Current &middot; {currentPhase.toUpperCase()}</span>
+                  ) : null}
+                </div>
+                <div className="handoff-source-truth">
+                  <span className="handoff-section-label">Current package source</span>
+                  <code className="handoff-marker-line">
+                    {packageMetadata?.source === "packaged-metadata"
+                      ? `release-metadata.json → CURRENT=${packageMetadata.filename ?? 'N/A'}`
+                      : `dist/release/CURRENT.txt → CURRENT=${packageMetadata?.filename ?? 'N/A'}`
+                    }
+                    {packageMetadata?.source === "packaged-metadata" ? (
+                      <span className="handoff-source-badge" style={{ marginLeft: "6px", fontSize: "9px", background: "var(--accent-green)", color: "#fff", padding: "1px 5px", borderRadius: "3px", verticalAlign: "middle" }}>packaged metadata</span>
+                    ) : null}
+                    {packageMetadata?.source === "newest-zip-fallback" ? (
+                      <span className="handoff-source-badge" style={{ marginLeft: "6px", fontSize: "9px", background: "var(--accent-amber)", color: "#fff", padding: "1px 5px", borderRadius: "3px", verticalAlign: "middle" }}>zip fallback</span>
+                    ) : null}
+                  </code>
+                </div>
+                <div className="handoff-section-label">Current package path</div>
+                <div className="handoff-path-line">
+                 <code>{formatPackagePathForDisplay(packageMetadata?.path, packageMetadata?.ok, packageMetadata?.displayPath)}</code>
+                </div>
+                <div className="handoff-section-label">Current package summary</div>
+                <p className="handoff-summary-line">
+                  {packageMetadata?.filename ? (
+                    <>
+                      Current package: <strong>{packageMetadata.filename}</strong>
+                      {packageMetadata.sha256 ? <> | SHA256: <code>{packageMetadata.sha256}</code></> : null}
+                      {packageMetadata.mtime ? <> | mtime: {formatPackageMtimeForDisplay(packageMetadata.mtime)}</> : null}
+                      {packageMetadata.archivalAliases && packageMetadata.archivalAliases.length > 0 ? (
+                        <> | archival-only aliases: {formatAliasesForDisplay(packageMetadata.archivalAliases)}</>
+                      ) : null}
+                    </>
+                  ) : (
+                    packageMetadata?.ok === false
+                      ? "Current package metadata is unavailable."
+                      : "Current package metadata is still loading."
+                  )}
+                </p>
+                {packageMetadata?.archivalAliases && packageMetadata.archivalAliases.length > 0 ? (
+                  <div className="handoff-aliases-section">
+                    <span className="handoff-section-label">Archival-only aliases</span>
+                    <div className="handoff-alias-chips">
+                      {packageMetadata.archivalAliases.map((alias) => (
+                        <span key={alias} className="handoff-chip handoff-chip-archival">{alias}</span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="handoff-actions-row">
+                  <span className="handoff-actions-label">Actions</span>
+                  <button type="button" className="local-draft-button" disabled={!packageMetadata?.filename} title={!packageMetadata?.filename ? (packageMetadata?.ok === false ? "Current package metadata is unavailable." : "Current package metadata is still loading.") : undefined} onClick={() => {
+                    if (packageMetadata?.filename) {
+                      void navigator.clipboard.writeText(`CURRENT=${packageMetadata.filename}`);
+                    }
+                  }}>
+                    Copy CURRENT marker
+                  </button>
+                  <button type="button" className="local-draft-button" disabled={!packageMetadata?.path && !packageMetadata?.displayPath} title={!packageMetadata?.path && !packageMetadata?.displayPath ? (packageMetadata?.ok === false ? "Current package metadata is unavailable." : "Current package metadata is still loading.") : undefined} onClick={() => {
+                    if (packageMetadata?.displayPath) void navigator.clipboard.writeText(packageMetadata.displayPath);
+                    else if (packageMetadata?.path) void navigator.clipboard.writeText(packageMetadata.path);
+                  }}>
+                    Copy current package path
+                  </button>
+                  <button type="button" className="local-draft-button" disabled={!packageMetadata?.filename} title={!packageMetadata?.filename ? (packageMetadata?.ok === false ? "Current package metadata is unavailable." : "Current package metadata is still loading.") : undefined} onClick={() => {
+                    if (packageMetadata?.filename) {
+                      const summaryParts = [
+                        `Current package: ${packageMetadata.filename}`,
+                        packageMetadata.displayPath ?? `path: ${formatPackagePathForDisplay(packageMetadata.path, undefined, undefined)}`,
+                        packageMetadata.sha256 ? `SHA256: ${packageMetadata.sha256}` : null,
+                        packageMetadata.mtime ? `mtime: ${formatPackageMtimeForDisplay(packageMetadata.mtime)}` : null,
+                        packageMetadata.archivalAliases?.length ? `archival-only aliases: ${formatAliasesForDisplay(packageMetadata.archivalAliases)}` : null
+                      ].filter(Boolean).join(" | ");
+                      void navigator.clipboard.writeText(summaryParts);
+                    }
+                  }}>
+                    Copy current package summary
+                  </button>
+                  <button type="button" className="local-draft-button" disabled={!packageMetadata?.path} title={!packageMetadata?.path ? (packageMetadata?.ok === false ? "Current package metadata is unavailable." : "Current package metadata is still loading.") : undefined} onClick={() => {
+                    const api = getWorktreeApi();
+                    if (api) void api.openDistRelease();
+                  }}>
+                    Open package folder
+                  </button>
+                  <button type="button" className="local-draft-button" onClick={() => {
+                    const api = getWorktreeApi();
+                    if (api) void api.openFile('docs/test/windows-clean-machine-validation-2026-06-07.md');
+                  }}>
+                    Open checklist
+                  </button>
+                </div>
+                <div className="handoff-manual-checklist">
+                  <h3 className="handoff-checklist-title">Verification checklist</h3>
+                  <ol className="handoff-checklist-list">
+                    <li>Open the current package file listed above.</li>
+                    <li>Double-click the packaged Windows app to verify it launches.</li>
+                    <li>Run the Start QA Chromium readiness step from the runtime actions rail.</li>
+                    <li>Wait for CDP to show connected before considering Verify.</li>
+                    <li>If anything is stale, unavailable, or ambiguous, stop and check the package metadata.</li>
+                  </ol>
+                </div>
+              </section>
+              <section className="workbench-card p0-checklist-card" aria-labelledby="p0-checklist-title">
+                <div className="workbench-card-header">
+                  <div>
+                    <p className="eyebrow">PO re-acceptance checklist</p>
+                    <h2 id="p0-checklist-title">Use this checklist to re-validate all 8 PO criteria from PR #97.</h2>
+                  </div>
+                </div>
+                <p className="p0-checklist-safety-label">Local-only: Verify only. No live ServiceNow writes.</p>
+                <div className="p0-checklist-target">
+                  <span className="p0-check-section-label">Target package</span>
+                  <p>{currentPhase ? `${currentPhase.toUpperCase()} cumulative package` : "Current cumulative package"}</p>
+                </div>
+                <div className="p0-checklist-safety">
+                  <span className="p0-check-section-label">Safety</span>
+                  <ul>
+                    <li>Do not test live ServiceNow</li>
+                    <li>Do not fill fields</li>
+                    <li>Do not click Save / Submit / Update / Resolve / Close</li>
+                    <li>Use Verify only</li>
+                  </ul>
+                </div>
+                <table className="p0-checklist-table" aria-label="8 P0 criteria for re-validation">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Criterion</th>
+                      <th>Expected behavior</th>
+                      <th>Implemented in</th>
+                      <th>Verification step (Alan)</th>
+                      <th>Pass condition</th>
+                      <th>Pass/Fail</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>1</td>
+                      <td>Windows double-click launches app</td>
+                      <td>Double-clicking <code>ServiceNow Automation.exe</code> opens a window without crash</td>
+                      <td>AE (electron-builder packaging)</td>
+                      <td>Extract the current package ZIP on a clean Windows machine; double-click the .exe</td>
+                      <td>Window opens within 3–10s, title reads &quot;ServiceNow Automation&quot;</td>
+                      <td>☐</td>
+                    </tr>
+                    <tr>
+                      <td>2</td>
+                      <td>Startup failure shows sanitized diagnostics</td>
+                      <td>If startup is blocked, a visible overlay explains why in plain language — no raw stack traces</td>
+                      <td>AF1-A (App.tsx diagnostic overlay)</td>
+                      <td>Open a Powershell, delete (or rename) the <code>%LOCALAPPDATA%\\ServiceNowAutomation\\Runtime\\</code> folder, launch the app again</td>
+                      <td>Overlay shows &quot;Browser runtime not found&quot; with a next-step recommendation and a &quot;Copy diagnostic&quot; button</td>
+                      <td>☐</td>
+                    </tr>
+                    <tr>
+                      <td>3</td>
+                      <td>Start QA Chromium opens visible dedicated Chromium window</td>
+                      <td>Clicking &quot;Start QA Chromium&quot; opens a separate Chromium for Testing window (not hidden, not silent)</td>
+                      <td>AF1-B1 (precheck) + AF1-B2 (auto-provisioning)</td>
+                      <td>Run <code>prepare-chrome-for-testing.ps1</code> (runbook §4.4), then launch app and click &quot;Start QA Chromium&quot;</td>
+                      <td>A visible Chromium window opens; the CDP chip transitions from &quot;disconnected&quot; → &quot;connecting&quot; → &quot;connected&quot;</td>
+                      <td>☐</td>
+                    </tr>
+                    <tr>
+                      <td>4</td>
+                      <td>CDP readiness visible in app</td>
+                      <td>A chip or indicator in the runtime rail shows the CDP connection status</td>
+                      <td>AD3 (CDP chip) + AN (polish)</td>
+                      <td>After Start QA Chromium succeeds, look at the runtime rail</td>
+                      <td>Chip shows green &quot;connected&quot; state</td>
+                      <td>☐</td>
+                    </tr>
+                    <tr>
+                      <td>5</td>
+                      <td>Verify enables only after CDP readiness</td>
+                      <td>&quot;Verify current Incident&quot; button is disabled (grayed out) until CDP is &quot;connected&quot;</td>
+                      <td>AQ + AP (runtime gating logic)</td>
+                      <td>Before starting Chromium, check Verify button is disabled. After connected, check again.</td>
+                      <td>Before: disabled/gray. After: enabled/clickable.</td>
+                      <td>☐</td>
+                    </tr>
+                    <tr>
+                      <td>6</td>
+                      <td>Verify-only is read-only (no writes)</td>
+                      <td>Verify inspects the page but never fills fields, never submits, never calls Save/Update/Resolve/Close</td>
+                      <td>Runtime action contract (Verify action)</td>
+                      <td>Click Verify after CDP connects. Confirm no fields were filled, no navigation to ServiceNow URLs occurred, no Save/Submit buttons exist.</td>
+                      <td>Verification result shows read-only summary. No autofill, no navigation to real ServiceNow.</td>
+                      <td>☐</td>
+                    </tr>
+                    <tr>
+                      <td>7</td>
+                      <td>Three-column Operator Workbench</td>
+                      <td>The UI shows three columns: left (nav/history/settings), center (workbench/detail), right (runtime actions/status)</td>
+                      <td>AN1-AN7 (visual polish)</td>
+                      <td>After app launches, visually inspect the layout</td>
+                      <td>Three distinct column regions visible with column headers. Left = source/nav, center = source detail, right = runtime actions.</td>
+                      <td>☐</td>
+                    </tr>
+                    <tr>
+                      <td>8</td>
+                      <td>Packaged Windows artifact path is correct</td>
+                      <td>The handoff card shows a local Windows-accessible UNC path (dynamic, not hardcoded Ubuntu-Compact)</td>
+                      <td>AE7 (handoff card) + BD3 (dynamic UNC prefix)</td>
+                      <td>In the app, look at the release-readiness handoff card or the package-info section</td>
+                      <td>The path shown uses the correctly derived WSL distro name (not hardcoded). Path is <code>\\\\wsl.localhost\\\\&lt;distro&gt;\\\\...\\\\servicenow-automation-...-{currentPhase || "bh6"}-...-local.zip</code></td>
+                      <td>☐</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <details className="p0-checklist-detail">
+                  <summary>Runbook refresh diff (AE-era → current)</summary>
+                  <table className="p0-checklist-table p0-refresh-table" aria-label="Runbook refresh comparison">
+                    <thead>
+                      <tr>
+                        <th>Aspect</th>
+                        <th>AE-era (AD1 runbook, 9abd3eb)</th>
+                        <th>Current runbook</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>Package</td><td><code>ac4</code> / no diagnostic overlay</td><td>current <code>{currentPhase || "bh6"}</code> cumulative</td></tr>
+                      <tr><td>Startup diagnostics</td><td>Not covered</td><td>§4.3 — full diagnostic overlay verification (3 sub-steps + expected reasons table)</td></tr>
+                      <tr><td>Chromium provisioning</td><td>Optional, no script path</td><td>§4.4 — exact PowerShell commands, failure recovery</td></tr>
+                      <tr><td>CDP readiness</td><td>Not covered</td><td>§4.5 — chip states: disconnected → connecting → connected</td></tr>
+                      <tr><td>Verify gating</td><td>Not covered</td><td>§4.5 step 23 — Verify button enables only after CDP connected</td></tr>
+                      <tr><td>Three-column layout</td><td>Not referenced</td><td>§4.2 step 108 — &quot;three-column layout visible&quot;</td></tr>
+                      <tr><td>Verify read-only safety</td><td>Not covered</td><td>§4.6 step 25 — &quot;Confirm it is read-only&quot; + safety checklist</td></tr>
+                      <tr><td>Dynamic UNC path</td><td>Not referenced</td><td>§3 — dynamic <code>\\\\wsl.localhost\\Ubuntu-Compact\\...</code> path in runbook</td></tr>
+                    </tbody>
+                  </table>
+                </details>
+                <details className="p0-checklist-detail">
+                  <summary>BC7 closure statement</summary>
+                  <p>BC7 was <strong>BLOCKED</strong> with 2 test failures (safety-boundary copy assertion, release-readiness UNC path assertion) and the BC6 ZIP was never built because the gate halted. Both test failures were resolved in subsequent BD phases — by BD7, 455/455 tests pass. All BC implementation (Open checklist button wiring, runbook refresh) was present in the archival BG6 cumulative package. BC7 is <strong>SUPERSEDED</strong> by BE7.</p>
+                </details>
+                <div className="p0-checklist-reminders">
+                  <span className="p0-check-section-label">Reminders</span>
+                  <ul>
+                    <li><span role="img" aria-label="cross mark">❌</span> No live ServiceNow testing — all operations are local/mock</li>
+                    <li><span role="img" aria-label="cross mark">❌</span> No field filling, no Save/Submit/Update/Resolve/Close</li>
+                    <li><span role="img" aria-label="cross mark">❌</span> No real ServiceNow URLs, ticket IDs, sys_ids, or credentials in recorded results</li>
+                    <li><span role="img" aria-label="check mark">✅</span> Record only pass/fail per criterion, exact error text (sanitized), and any blockers</li>
+                  </ul>
+                </div>
+                <p className="p0-checklist-footer-note">Record only pass/fail per criterion and sanitized blockers.</p>
+              </section>
+              <section className="workbench-card repo-hygiene-card" aria-labelledby="repo-hygiene-title">
+                <div className="repo-hygiene-header">
+                  <p className="eyebrow">Local cleanup</p>
+                  <h2 id="repo-hygiene-title">Local cleanup</h2>
+                  <span>Local only</span>
+                </div>
+                <div className="repo-hygiene-columns">
+                  {/* Left column — scan feed / history */}
+                  <div>
+                    <div className="repo-hygiene-queue">
+                      {/* Current package anchor */}
+                      <div className="repo-hygiene-item" aria-current={packageMetadata?.ok ? "true" : undefined}>
+                        <span className={["repo-hygiene-state-chip", packageMetadata?.ok ? "current" : "pending"].filter(Boolean).join(" ")}>
+                          {packageMetadata?.ok ? `Current: ${currentPhase ?? "package"}` : "Loading..."}
+                        </span>
+                        <div className="repo-hygiene-item-body">
+                          <strong>Current package</strong>
+                          <p>{packageMetadata?.filename ?? (packageMetadata ? "No package found" : "Not scanned yet.")}</p>
+                        </div>
+                      </div>
+                      {/* Stale cleanup candidate */}
+                      <div className="repo-hygiene-item" aria-current={(hygieneScanResult?.staleArtifactCount ?? 0) > 0 ? "true" : undefined}>
+                        <span className={["repo-hygiene-state-chip", (hygieneScanResult?.staleArtifactCount ?? 0) > 0 ? "pending" : "verified"].filter(Boolean).join(" ")}>
+                          {(hygieneScanResult?.staleArtifactCount ?? 0) > 0 ? `${(hygieneScanResult as NonNullable<typeof hygieneScanResult>).staleArtifactCount} stale` : "No stale"}
+                        </span>
+                        <div className="repo-hygiene-item-body">
+                          <strong>Stale dist/release/ artifacts</strong>
+                          <p>{hygieneScanResult?.staleArtifactDetails ?? "Not scanned yet."}</p>
+                        </div>
+                      </div>
+                      {/* History summary */}
+                      <div className="repo-hygiene-item">
+                        <span className={["repo-hygiene-state-chip", hygieneScanResult ? "history" : "pending"].filter(Boolean).join(" ")}>
+                          {hygieneScanResult ? "Scanned" : "Pending"}
+                        </span>
+                        <div className="repo-hygiene-item-body">
+                          <strong>Last local scan</strong>
+                          <p>{hygieneScanResult ? `${(hygieneScanResult as NonNullable<typeof hygieneScanResult>).staleArtifactCount} stale files, ${(hygieneScanResult as NonNullable<typeof hygieneScanResult>).staleArtifactSizeMb} MB` : "No scan results yet."}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Center column — Current package / cleanup detail */}
+                  <div>
+                    {/* Current package detail */}
+                    {packageMetadata?.ok ? (
+                      <div className="repo-hygiene-evidence">
+                        <strong className="repo-hygiene-evidence-summary">
+                          Current package{currentPhase ? ` (${currentPhase})` : ""}
+                        </strong>
+                        <p className="repo-hygiene-evidence-desc">The current manual-validation package stays separate from archival items.</p>
+                        <div className="repo-hygiene-path-line">
+                          <code>{packageMetadata.path}</code>
+                        </div>
+                        <div className="repo-hygiene-path-meta">
+                          <span>{packageMetadata.filename}</span>
+                          {packageMetadata.size ? <span>{(packageMetadata.size / 1024 / 1024).toFixed(1)} MB</span> : null}
+                          {packageMetadata.sha256 ? <span className="repo-hygiene-sha">SHA256: {packageMetadata.sha256.substring(0, 12)}…</span> : null}
+                        </div>
+                        <small>This is the only package that should stay in the active release surface.</small>
+                      </div>
+                    ) : (
+                      <p className="repo-hygiene-scan-status">Run a local scan to populate current package state.</p>
+                    )}
+                    {/* Stale artifacts section — only shown when stale items exist */}
+                    {hygieneScanResult && hygieneScanResult.staleArtifactCount > 0 && (
+                      <div className="repo-hygiene-stale-block">
+                        <strong className="repo-hygiene-stale-title">Stale artifacts</strong>
+                        <p className="repo-hygiene-evidence-desc">Older packages are archival only.</p>
+                        <ul className="repo-hygiene-stale-group-list">
+                          {cleanupPreviewResult ? (
+                            Object.entries(
+                              cleanupPreviewResult.staleFiles.reduce<Record<string, { count: number; size: number }>>((acc, f) => {
+                                if (!acc[f.phase]) acc[f.phase] = { count: 0, size: 0 };
+                                acc[f.phase].count += 1;
+                                acc[f.phase].size += f.size;
+                                return acc;
+                              }, {})
+                            ).map(([phase, info]) => (
+                              <li key={phase} className="repo-hygiene-stale-group">
+                                <code>{phase}</code>
+                                <span>{info.count} file(s), {(info.size / 1024 / 1024).toFixed(1)} MB</span>
+                              </li>
+                            ))
+                          ) : (
+                            <li className="repo-hygiene-stale-group">
+                              <code>stale</code>
+                              <span>{hygieneScanResult.staleArtifactCount} file(s), {hygieneScanResult.staleArtifactSizeMb} MB</span>
+                            </li>
+                          )}
+                        </ul>
+                        <small>Archive destination: <code>dist/.release-archive/BJ-&lt;phase&gt;/</code></small>
+                      </div>
+                    )}
+                    {/* Cleanup preview block (read-only dry-run) */}
+                    {cleanupPreviewOpen && cleanupPreviewResult && (
+                      <div className="cleanup-preview-card">
+                        <h4 className="cleanup-preview-title">Cleanup preview (read-only)</h4>
+                        <p className="cleanup-preview-desc">
+                          This is a dry run. Nothing moves until you confirm.
+                        </p>
+                        <div className="cleanup-preview-stats">
+                          <span className="cleanup-preview-stat-count">{cleanupPreviewResult.totalFiles} file(s)</span>
+                          <span className="cleanup-preview-stat-size">{cleanupPreviewResult.totalSizeMb} MB total</span>
+                          <span className="cleanup-preview-stat-recoverable">Recoverable locally</span>
+                        </div>
+                        <details className="repo-hygiene-evidence-detail">
+                          <summary>Preview files by phase</summary>
+                          <ul>
+                            {Object.entries(
+                              cleanupPreviewResult.staleFiles.reduce<Record<string, { count: number; size: number }>>((acc, f) => {
+                                if (!acc[f.phase]) acc[f.phase] = { count: 0, size: 0 };
+                                acc[f.phase].count += 1;
+                                acc[f.phase].size += f.size;
+                                return acc;
+                              }, {})
+                            ).map(([phase, info]) => (
+                              <li key={phase}><code>{phase}</code> — {info.count} file(s), {(info.size / 1024 / 1024).toFixed(1)} MB</li>
+                            ))}
+                          </ul>
+                        </details>
+                        <small>Archive destination: <code>dist/.release-archive/BJ-&lt;phase&gt;/</code></small>
+                      </div>
+                    )}
+                    {/* Post-archive clean state */}
+                    {cleanupArchiveDone && (
+                      <div className="cleanup-archive-done-note">
+                        <p className="cleanup-archive-done-text">Archived locally.</p>
+                        <p className="cleanup-archive-rescan-text">Re-scanned after archive — <strong>No stale artifacts.</strong></p>
+                      </div>
+                    )}
+                  </div>
+                  {/* Right column — Local actions + safety boundary */}
+                  <div className="repo-hygiene-right-col">
+                    <div className="repo-hygiene-actions-row">
+                      {/* Refresh local scan */}
+                      <button type="button" className="local-draft-button" onClick={handleHygieneRefresh}>Refresh local scan</button>
+
+                      {/* Cleanup preview (read-only dry-run) */}
+                      <button
+                        type="button"
+                        className="local-draft-button"
+                        disabled={!hygieneScanResult || (hygieneScanResult.staleArtifactCount === 0) || cleanupArchiveDone}
+                        onClick={handleCleanupPreviewAction}
+                      >
+                        {cleanupPreviewResult && cleanupPreviewOpen ? "Hide preview" : "Cleanup preview"}
+                      </button>
+                      {!hygieneScanResult && (
+                        <p className="worktree-accept-action-disabled-reason">No stale items selected.</p>
+                      )}
+                      {hygieneScanResult && hygieneScanResult.staleArtifactCount === 0 && !cleanupArchiveDone && (
+                        <p className="worktree-accept-action-disabled-reason">No stale items selected.</p>
+                      )}
+                      {cleanupArchiveDone && (
+                        <p className="worktree-accept-action-disabled-reason">No stale artifacts found.</p>
+                      )}
+
+                      {/* Archive stale artifacts */}
+                      <button
+                        type="button"
+                        className="local-draft-button archive-stale-button"
+                        disabled={!cleanupPreviewResult || !cleanupPreviewOpen || cleanupArchiveInProgress || cleanupArchiveDone}
+                        onClick={handleConfirmArchiveOpen}
+                      >
+                        {cleanupArchiveInProgress ? "Archiving..." : cleanupArchiveDone ? "Archived" : "Archive stale artifacts"}
+                      </button>
+                      {!cleanupPreviewResult && !cleanupArchiveInProgress && !cleanupArchiveDone && (
+                        <p className="worktree-accept-action-disabled-reason">Run Cleanup preview first.</p>
+                      )}
+                      {cleanupPreviewResult && !cleanupPreviewOpen && !cleanupArchiveInProgress && !cleanupArchiveDone && (
+                        <p className="worktree-accept-action-disabled-reason">Run Cleanup preview first.</p>
+                      )}
+                      {cleanupArchiveInProgress && !cleanupArchiveDone && (
+                        <p className="worktree-accept-action-disabled-reason">Archiving stale artifacts…</p>
+                      )}
+                      {cleanupArchiveDone && (
+                        <p className="worktree-accept-action-disabled-reason">Archive already complete.</p>
+                      )}
+
+                      {/* Archive destination reminder */}
+                      <div className="repo-hygiene-archive-reminder">
+                        <small>Moves stale files locally into <code>dist/.release-archive/BJ-&lt;phase&gt;/</code></small>
+                      </div>
+                    </div>
+                    {cleanupArchiveDone && (
+                      <p className="hygiene-action-disabled-green">Archive complete. Re-scanned — no stale artifacts.</p>
+                    )}
+                    {/* Compact safety boundary */}
+                    <span className="repo-hygiene-boundary-chip">Local only · Recoverable</span>
+                  </div>
+                </div>
+                <div className="repo-hygiene-footer">
+                  <span className="repo-hygiene-boundary-chip">Local only</span>
+                  <span>No upload / PR / merge / tag / release. Stale files move locally to dist/.release-archive/BJ-&lt;phase&gt;/.</span>
+                </div>
+                {/* Confirmation dialog overlay — exact counts and recoverability per BJ2 spec */}
+                {confirmCleanupVisible && cleanupPreviewResult && (
+                  <div className="cleanup-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="archive-confirm-title">
+                    <div className="cleanup-confirm-card">
+                      <h3 id="archive-confirm-title">Archive stale artifacts?</h3>
+                      <p>Confirm archive of {cleanupPreviewResult.totalFiles} packages and files?</p>
+                      <p>This is local and recoverable. Nothing is deleted, uploaded, or sent to ServiceNow.</p>
+                      <p>The current package stays separate from archival items. Archive destination: <code>dist/.release-archive/BJ-&lt;phase&gt;/</code>.</p>
+                      <div className="cleanup-confirm-actions">
+                        <button type="button" className="local-draft-button archive-stale-button" onClick={handleConfirmArchive}>
+                          Archive stale artifacts
+                        </button>
+                        <button type="button" className="local-draft-button" onClick={handleCancelArchive}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
+              <section className="workbench-card worktree-acceptance-card" aria-labelledby="worktree-acceptance-title">
+                <div className="workbench-card-header">
+                  <div>
+                    <p className="eyebrow">Worktree review</p>
+                    <h2 id="worktree-acceptance-title">Worktree review</h2>
+                  </div>
+                  <span>{currentPhase ? `Local only · ${currentPhase} is current · Older aliases are archival only` : "Local only · Older aliases are archival only"}</span>
+                </div>
+                <div className="worktree-accept-state-row">
+                  <span className={["worktree-accept-state-chip", worktreeHasDirtyChanges ? "worktree-accept-state-dirty" : "worktree-accept-state-fresh"].filter(Boolean).join(" ")}>
+                    {worktreeHasDirtyChanges ? "Dirty" : "Fresh"}
+                  </span>
+                  <span className={["worktree-accept-state-chip", worktreeAccepted ? "worktree-accept-state-accepted" : ""].filter(Boolean).join(" ")}>
+                    {worktreeAccepted ? "Accepted" : worktreeReviewed ? "Reviewed" : "Not reviewed"}
+                  </span>
+                  {worktreeAccepted ? null : (
+                    <span className="worktree-accept-state-chip worktree-accept-state-stale">Archival only</span>
+                  )}
+                </div>
+                <div className="worktree-accept-path-line">
+                  <span className="worktree-accept-path-label">Current{currentPhase ? ` ${currentPhase}` : ""} package path:</span>
+                  <code>{packageMetadata?.path ?? (currentPhase ? `Loading current ${currentPhase} package path...` : "Loading current package path...")}</code>
+                </div>
+                <div className="worktree-accept-grid">
+                  {/* Left column — package feed / history */}
+                  <div className="worktree-accept-left">
+                    <div className="worktree-accept-queue">
+                      <div className="worktree-accept-queue-item" aria-current="true">
+                        <span className={["worktree-accept-state-chip", worktreeHasDirtyChanges ? "worktree-accept-state-dirty" : "worktree-accept-state-fresh"].filter(Boolean).join(" ")}>
+                          {worktreeHasDirtyChanges ? "Dirty" : "Fresh"}
+                        </span>
+                        <div className="worktree-accept-queue-body">
+                          <strong>Current{currentPhase ? `: ${currentPhase}` : ""} local Windows package</strong>
+                          <p>{worktreeHasDirtyChanges && !worktreeDiffReviewed ? "Dirty changes need review before acceptance." : worktreeHasDirtyChanges && worktreeDiffReviewed ? "Changes reviewed. Ready to mark reviewed." : "Fresh and verified."}</p>
+                        </div>
+                      </div>
+                      <div className="worktree-accept-queue-item">
+                        <span className="worktree-accept-state-chip worktree-accept-state-stale">Archival only</span>
+                        <div className="worktree-accept-queue-body">
+                          <strong>{formatAliasesForDisplay(packageMetadata?.archivalAliases)}</strong>
+                          <p>Older aliases are archival only. Do not use as the current package anchor.</p>
+                        </div>
+                      </div>
+                      <div className="worktree-accept-queue-item">
+                        <span className="worktree-accept-state-chip worktree-accept-state-history">History</span>
+                        <div className="worktree-accept-queue-body">
+                          <strong>Last validation round</strong>
+                          <p>{worktreeReviewed && worktreeAccepted ? "Reviewed and accepted locally." : worktreeAccepted ? "Accepted locally." : "No prior acceptance recorded."}</p>
+                          {validationRunHistory.length > 0 ? (
+                            <span className={["last-run-chip", `last-run-${(validationRunHistory[validationRunHistory.length - 1] as QaValidationRunEntry).status}`].filter(Boolean).join(" ")}>
+                              Last run: {(validationRunHistory[validationRunHistory.length - 1] as QaValidationRunEntry).status.toUpperCase()}
+                            </span>
+                          ) : (
+                            <>
+                              <span className="last-run-chip last-run-none">Last run: none yet</span>
+                              <p className="last-run-helper">No validation runs yet. Copy Summary will report 0 total, 0 ok, 0 blocked, 0 error, and last run: none yet.</p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Center column — detail + diff + checklist */}
+                  <div className="worktree-accept-center">
+                    <div className="worktree-accept-boundary-card">
+                      <p className="worktree-accept-boundary-label">Package path</p>
+                      <code style={{ fontSize: "10px", background: "#edece3", padding: "2px 6px", borderRadius: "4px", wordBreak: "break-all", lineHeight: "1.5", display: "block", marginTop: "2px" }}>{packageMetadata?.path ?? "Loading..."}</code>
+                      {packageMetadata?.filename && (
+                        <p style={{ fontSize: "10px", color: "var(--muted-text)", marginTop: "4px", lineHeight: "1.35" }}>{packageMetadata.filename} · {packageMetadata.size ? `${(packageMetadata.size / 1024 / 1024).toFixed(1)} MB` : ""}</p>
+                      )}
+                      <p style={{ fontSize: "10px", color: "var(--muted-text)", marginTop: "6px", lineHeight: "1.35", fontStyle: "italic" }}>Discovered from local release metadata. Older aliases are archival only.</p>
+                    </div>
+                    {/* Manual checklist preview */}
+                    <div className="worktree-accept-checklist" id="worktree-accept-checklist">
+                      <p className="worktree-accept-boundary-label">Manual validation checklist</p>
+                      <ol>
+                        <li>Confirm the current package{currentPhase ? ` is ${currentPhase}` : ""} and not an archival-only alias.</li>
+                        <li>Confirm the exact package path matches the current{currentPhase ? ` ${currentPhase}` : ""} path shown above.</li>
+                        <li>Click <strong>Review diff</strong> and verify the current local changes are visible.</li>
+                        <li>Click <strong>Copy package path</strong> and confirm the clipboard contains the exact{currentPhase ? ` ${currentPhase}` : ""} path.</li>
+                        <li>Click <strong>Open dist/release</strong> and verify the local package folder opens.</li>
+                        <li>Click <strong>Mark reviewed</strong> only after the diff has been inspected.</li>
+                        <li>Click <strong>Copy summary</strong> and confirm the summary includes the current{currentPhase ? ` ${currentPhase}` : ""} package and the reviewed state.</li>
+                        <li>Confirm older aliases remain archival only and are not presented as the current package.</li>
+                      </ol>
+                    </div>
+                  </div>
+                  {/* Right column — Actions + state */}
+                  <div className="worktree-accept-right">
+                    <div className="worktree-accept-actions">
+                      <button type="button" className="local-draft-button" onClick={handleReviewDiff}>Review diff</button>
+                      <button type="button" className="local-draft-button" disabled={!packageMetadata?.path} onClick={handleCopyPackagePath}>Copy package path</button>
+                      <button type="button" className="local-draft-button" disabled={!packageMetadata?.path} onClick={handleOpenDistReleaseAction}>Open dist/release</button>
+                      <button type="button" className="local-draft-button" disabled={(worktreeHasDirtyChanges && !worktreeDiffReviewed) || worktreeReviewed} onClick={handleMarkReviewed}>
+                        {worktreeReviewed ? "Reviewed" : "Mark reviewed"}
+                      </button>
+                      <button type="button" className="local-draft-button" disabled={!packageMetadata?.path} onClick={handleCopySummary}>Copy summary</button>
+                    </div>
+                    {packageMetadata && !packageMetadata.ok && (
+                      <p className="worktree-accept-action-disabled-reason">No package found.</p>
+                    )}
+                    {!packageMetadata && (
+                      <p className="worktree-accept-action-disabled-reason">Package metadata is still loading.</p>
+                    )}
+                    {worktreeHasDirtyChanges && !worktreeDiffReviewed && (
+                      <p className="worktree-accept-action-disabled-reason">Review the current diff first.</p>
+                    )}
+                    {worktreeReviewed && !justReviewed && (
+                      <p className="worktree-accept-action-disabled-reason">Already reviewed locally.</p>
+                    )}
+                    {justReviewed && (
+                      <p className="worktree-accept-confirmation">Reviewed and accepted locally.</p>
+                    )}
+                    {diffOpen && diffResult && (
+                      <details className="worktree-diff-details" open>
+                        <summary className="worktree-diff-summary">Git diff output</summary>
+                        <pre className="worktree-diff-content"><code>{diffResult}</code></pre>
+                      </details>
+                    )}
+                    <span className="worktree-accept-boundary-chip">Local only</span>
+                  </div>
+                </div>
+              </section>
+              </details>
             </div>
           ) : (
             <OperatorStaticPage
@@ -4105,9 +5126,11 @@ export function App({
             className="workbench-rail workbench-runtime-rail expanded"
             aria-labelledby="runtime-rail-title"
           >
+            <p className="eyebrow workbench-column-header" style={{fontSize: "10px", margin: "0 0 8px", letterSpacing: "0.06em", color: "var(--muted-text)"}}>RUNTIME</p>
             <QaOperatorRuntimePanel
               busyAction={operatorBusyAction}
               cdpEndpointReady={operatorCdpReady}
+              cdpState={cdpState}
               lastResponse={operatorLastResponse}
               mode={selectedEnvironmentMode}
               targetReady={targetConfigured}
@@ -4121,6 +5144,7 @@ export function App({
               status={operatorStatus}
               targetLabel={workbenchEnvironmentLabel}
               workbenchCopy={workbenchCopy}
+              validationRunHistory={validationRunHistory}
             />
             <HighSeverityMonitorSimulator
               acknowledged={highSeverityAcknowledged}
@@ -6388,6 +7412,10 @@ function getSdaOperatorApi(): SdaOperatorApi | undefined {
   return (globalThis as unknown as { sdaOperator?: SdaOperatorApi }).sdaOperator;
 }
 
+function getWorktreeApi(): WorktreeApi | undefined {
+  return (globalThis as unknown as { worktreeApi?: WorktreeApi }).worktreeApi;
+}
+
 function operatorActionLabel(action: OperatorAction): string {
   switch (action) {
     case "launch":
@@ -6408,6 +7436,21 @@ export function operatorActionDisplayAction(action: OperatorAction): string {
     case "autofill":
       return "Autofill";
   }
+}
+
+function runtimeEvidenceRelativeTime(timestamp: string): string {
+  // Parse "YYYY-MM-DD HH:mm:ss" format timestamp
+  const ts = new Date(timestamp.replace(" ", "T") + "Z").getTime();
+  if (isNaN(ts)) return timestamp;
+  const now = Date.now();
+  const diffMs = now - ts;
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
 }
 
 export function operatorSanitizeBlockedReason(reason: string): string {
@@ -6768,6 +7811,8 @@ function operatorRuntimeBlockedReasonDetails(value: string | undefined, fallback
       return "Could not find one unique approved Incident tab in the test browser. Keep exactly one current Incident form tab open, then retry Check current ticket page. No ServiceNow action was taken.";
     case "qa-runtime-required":
       return "The desktop runtime is locked to QA workspace controls. Choose QA workspace and restart the browser safety steps. No ServiceNow action was taken.";
+    case "dedicated-browser-runtime-missing":
+      return "Dedicated browser runtime not found. Run prepare-chrome-for-testing.ps1 from the scripts/windows folder, then restart the app. No ServiceNow action was taken.";
     default:
       return sanitizeOperatorDiagnosticText(value, fallback);
   }
@@ -6859,6 +7904,7 @@ function operatorActionCardFeedback(
 function QaOperatorRuntimePanel({
   busyAction,
   cdpEndpointReady,
+  cdpState,
   lastResponse,
   mode,
   targetReady,
@@ -6871,10 +7917,12 @@ function QaOperatorRuntimePanel({
   onVerify,
   status,
   targetLabel,
-  workbenchCopy
+  workbenchCopy,
+  validationRunHistory
 }: {
   busyAction: "launch" | "verify" | "autofill" | null;
   cdpEndpointReady: boolean;
+  cdpState: CdpState;
   lastResponse: OperatorRuntimeResponse | null;
   mode: WorkbenchEnvironmentMode;
   targetReady: boolean;
@@ -6888,11 +7936,15 @@ function QaOperatorRuntimePanel({
   status: OperatorActionStatus;
   targetLabel: string;
   workbenchCopy: OperatorWorkbenchCopy;
+  validationRunHistory: QaValidationRunEntry[];
 }) {
   const [whatChangedExpanded, setWhatChangedExpanded] = useState(false);
   const canUseRuntime = isQaWorkbenchMode(mode);
   const qaBoundCdpEndpointReady = canUseRuntime && cdpEndpointReady;
+  const qaBoundCdpState = canUseRuntime ? cdpState : "disconnected";
   const qaBoundVerifiedPageFingerprintReady = qaBoundCdpEndpointReady && verifiedPageFingerprintReady;
+  const startupBlocked = !cdpEndpointReady && !!lastResponse?.launch?.blockedReason;
+  const [showStartupDiagnostic, setShowStartupDiagnostic] = useState(startupBlocked);
   const launchDisabled = !canUseRuntime || !targetReady || busyAction !== null;
   const verifyDisabled = !canUseRuntime || !targetReady || !qaBoundCdpEndpointReady || busyAction !== null;
   const autofillDisabled = !canUseRuntime || !targetReady || !qaBoundCdpEndpointReady || busyAction !== null || !qaBoundVerifiedPageFingerprintReady;
@@ -6936,6 +7988,12 @@ function QaOperatorRuntimePanel({
     : qaBoundCdpEndpointReady
       ? workbenchCopy.runtime.statusCdpReady
       : workbenchCopy.runtime.statusWaiting;
+  const cdpStateLabel: Record<CdpState, string> = {
+    disconnected: workbenchCopy.runtime.browserDisconnected,
+    connecting: workbenchCopy.runtime.browserConnecting,
+    connected: workbenchCopy.runtime.browserConnected,
+    error: workbenchCopy.runtime.browserError
+  };
   const lastPlanCount = lastResponse?.defaultPlan?.plannedFields?.length ?? 0;
   const filledCount = lastResponse?.runtime?.filledFields?.length ?? 0;
   const evidenceText = lastResponse
@@ -6989,6 +8047,9 @@ function QaOperatorRuntimePanel({
         </div>
         <div className="runtime-panel-header-actions">
           <span className={`runtime-status-chip ${status.tone}`}>{runtimeStatusChip}</span>
+          <span className={`browser-status-chip ${qaBoundCdpState}`} aria-label={`Browser state: ${qaBoundCdpState}`}>
+            {cdpStateLabel[qaBoundCdpState]}
+          </span>
           <button
             aria-label={workbenchCopy.runtime.collapseRuntime}
             className="runtime-rail-collapse-button"
@@ -6999,6 +8060,17 @@ function QaOperatorRuntimePanel({
           </button>
         </div>
       </header>
+
+      {showStartupDiagnostic && startupBlocked ? (
+        <StartupDiagnosticBanner
+          blockedDescription={lastResponse?.launch?.blockedDescription}
+          blockedReason={lastResponse?.launch?.blockedReason ?? ""}
+          runtimeLogPath={lastResponse?.launch?.runtimeLogPath}
+          workbenchCopy={workbenchCopy}
+          onDismiss={() => setShowStartupDiagnostic(false)}
+          onLaunchBrowser={onLaunchBrowser}
+        />
+      ) : null}
 
       <div className="runtime-action-list" aria-label={workbenchCopy.runtime.title}>
         {actionCards.map((action) => (
@@ -7032,6 +8104,41 @@ function QaOperatorRuntimePanel({
         ))}
       </div>
 
+      <section className="runtime-evidence-panel" aria-labelledby="runtime-evidence-title">
+        <header className="runtime-evidence-header">
+          <h3 id="runtime-evidence-title">Runtime Evidence</h3>
+        </header>
+        {validationRunHistory.length === 0 ? (
+          <p className="runtime-evidence-empty">
+            No runtime actions yet. Choose a source and start QA Chromium.
+          </p>
+        ) : (
+          <div className="runtime-evidence-list">
+            {validationRunHistory.slice(-12).reverse().map((entry) => (
+              <details key={entry.id} className="runtime-evidence-entry">
+                <summary>
+                  <span className={`runtime-evidence-chip status-${entry.status}`}>{entry.status.toUpperCase()}</span>
+                  <span className="runtime-evidence-relative-time" title={entry.timestamp}>
+                    {runtimeEvidenceRelativeTime(entry.timestamp)}
+                  </span>
+                  <span className="runtime-evidence-action">{operatorActionDisplayAction(entry.action)}</span>
+                  <span className="runtime-evidence-summary">{entry.sanitizedSummary}</span>
+                </summary>
+                <div className="runtime-evidence-detail">
+                  {entry.plannedFieldCount !== undefined && (
+                    <p className="runtime-evidence-detail-field">Planned fields: {entry.plannedFieldCount}</p>
+                  )}
+                  {entry.filledFieldCount !== undefined && (
+                    <p className="runtime-evidence-detail-field">Filled fields: {entry.filledFieldCount}</p>
+                  )}
+                  <p className="runtime-evidence-exact-time">{entry.timestamp}</p>
+                </div>
+              </details>
+            ))}
+          </div>
+        )}
+      </section>
+
       <section className="runtime-status-card" aria-labelledby="runtime-status-title">
         <div>
           <p className="eyebrow">{workbenchCopy.runtime.sanitizedMode}</p>
@@ -7050,17 +8157,35 @@ function QaOperatorRuntimePanel({
         <p>{runtimeStatusDescription}</p>
         <strong className="runtime-status-label">{status.label}</strong>
         <p className="runtime-status-detail">{status.details}</p>
-        <small>{evidenceText}</small>
         <button className="runtime-reset-button" type="button" onClick={onResetRuntime}>
           {workbenchCopy.runtime.resetRuntimeState}
         </button>
         <small>{workbenchCopy.runtime.resetRuntimeStateHelper}</small>
       </section>
 
-      <section className="runtime-safety-note" aria-labelledby="runtime-safety-title">
+      <section className="runtime-recent-evidence" aria-labelledby="runtime-evidence-title">
+        <h3 id="runtime-evidence-title">{workbenchCopy.runtime.recentEvidenceTitle}</h3>
+        <p>{evidenceText}</p>
+      </section>
+
+      <section className="runtime-env-controls" aria-labelledby="runtime-env-controls-title">
+        <h3 id="runtime-env-controls-title">{workbenchCopy.runtime.environmentControlsTitle}</h3>
+        <dl>
+          <div>
+            <dt>{workbenchCopy.runtime.sanitizedMode}</dt>
+            <dd>{targetLabel}</dd>
+          </div>
+          <div>
+            <dt>{workbenchCopy.runtime.cdpLabel}</dt>
+            <dd>{qaBoundCdpEndpointReady ? workbenchCopy.runtime.cdpReady : workbenchCopy.runtime.cdpWaiting}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="runtime-safety-note" aria-labelledby="runtime-safety-boundary-title">
         <WorkbenchIcon name="shield" />
         <div>
-          <h3 id="runtime-safety-title">{workbenchCopy.runtime.safetyTitle}</h3>
+          <h3 id="runtime-safety-boundary-title">{workbenchCopy.runtime.safetyBoundaryTitle}</h3>
           <p>{workbenchCopy.runtime.safetyNote}</p>
         </div>
       </section>
@@ -7097,6 +8222,233 @@ function QaOperatorRuntimePanel({
           </div>
         )}
       </section>
+    </section>
+  );
+}
+
+function StartupDiagnosticBanner({
+  blockedDescription,
+  blockedReason,
+  runtimeLogPath,
+  workbenchCopy,
+  onDismiss,
+  onLaunchBrowser
+}: {
+  blockedDescription?: string;
+  blockedReason: string;
+  runtimeLogPath?: string;
+  workbenchCopy: OperatorWorkbenchCopy;
+  onDismiss: () => void;
+  onLaunchBrowser?: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [provisionState, setProvisionState] = useState<"idle" | "confirming" | "provisioning" | "done" | "error">("idle");
+  const [provisionMessage, setProvisionMessage] = useState("");
+  const [provisionPercent, setProvisionPercent] = useState(0);
+  const [provisionError, setProvisionError] = useState("");
+
+  const sanitizedReason = operatorSanitizeBlockedReason(blockedReason);
+  const sanitizedLogPath = runtimeLogPath
+    ? sanitizeOperatorRuntimeLogPath(runtimeLogPath)
+    : undefined;
+
+  const isRuntimeMissing = blockedReason === "dedicated-browser-runtime-missing" || blockedReason === "RuntimeNotFound";
+
+  const nextStep = isRuntimeMissing
+    ? "Run prepare-chrome-for-testing.ps1 from the scripts/windows folder, then restart the app."
+    : "Check the startup log for details, resolve the issue, then restart the app.";
+
+  const diagnosticText = [
+    "Startup blocked",
+    `Reason: ${operatorSafeDisplayText(sanitizedReason)}`,
+    `Next step: ${nextStep}`,
+    sanitizedLogPath ? `Log path: ${sanitizedLogPath}` : null
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  async function handleCopyDiagnostic() {
+    try {
+      const ok = await copyTextToBrowserClipboard(diagnosticText);
+      if (ok) setCopied(true);
+    } catch {
+      // silent
+    }
+  }
+
+  function handleStartAutoProvision() {
+    setProvisionState("confirming");
+  }
+
+  function handleCancelAutoProvision() {
+    setProvisionState("idle");
+  }
+
+  async function handleConfirmAutoProvision() {
+    setProvisionState("provisioning");
+    setProvisionMessage("Starting download...");
+    setProvisionPercent(0);
+
+    const api = getSdaOperatorApi();
+    if (!api) {
+      setProvisionState("error");
+      setProvisionError("Desktop backend unavailable");
+      return;
+    }
+
+    // Listen for progress events
+    function onProgress(_event: unknown, update: unknown) {
+      const u = update as { stage?: string; percent?: number; message?: string };
+      if (u.stage === "done") {
+        setProvisionState("done");
+        setProvisionMessage(u.message ?? "Done");
+        // Auto-retry launch after successful provisioning
+        setProvisionPercent(100);
+        setTimeout(() => {
+          onLaunchBrowser?.();
+        }, 300);
+      } else if (u.stage === "error") {
+        setProvisionState("error");
+        setProvisionError(u.message ?? "Provisioning failed");
+      } else if (u.stage === "fetching-metadata") {
+        setProvisionMessage(u.message ?? "Fetching version info...");
+      } else if (u.stage === "downloading") {
+        setProvisionMessage(u.message ?? "Downloading...");
+        if (u.percent !== undefined) setProvisionPercent(u.percent);
+      } else if (u.stage === "extracting") {
+        setProvisionMessage(u.message ?? "Extracting...");
+      }
+    }
+
+    api.onProvisionProgress(onProgress);
+
+    try {
+      const result = await api.provisionChromiumRuntime();
+      if (!result.ok) {
+        setProvisionState("error");
+        setProvisionError(result.error ?? "Provisioning failed");
+      }
+      // If result.ok but we didn't get a "done" progress, transition anyway
+      if (result.ok) {
+        // done state already handled by onProgress callback above
+      }
+    } catch (error) {
+      setProvisionState("error");
+      setProvisionError(error instanceof Error ? error.message : "Provisioning failed");
+    } finally {
+      api.offProvisionProgress(onProgress);
+    }
+  }
+
+  return (
+    <section className="startup-diagnostic-banner" role="alert" aria-labelledby="startup-diagnostic-heading">
+      <div className="startup-diagnostic-header">
+        <WorkbenchIcon name="shield" />
+        <h3 id="startup-diagnostic-heading">Startup blocked</h3>
+      </div>
+      <p className="startup-diagnostic-reason">{sanitizedReason}</p>
+      {blockedDescription ? <p className="startup-diagnostic-description">{blockedDescription}</p> : null}
+
+      {/* Auto-provisioning: confirmation dialog */}
+      {isRuntimeMissing && provisionState === "confirming" ? (
+        <div className="auto-provision-confirm">
+          <p className="auto-provision-confirm-text">
+            This will download the latest stable Chrome for Testing (approx 150 MB) from the official Google
+            metadata endpoint and install it at the tool-owned runtime path. No ServiceNow action will be taken.
+          </p>
+          <div className="auto-provision-confirm-actions">
+            <button
+              className="auto-provision-confirm-yes"
+              type="button"
+              onClick={handleConfirmAutoProvision}
+            >
+              Download and install
+            </button>
+            <button
+              className="auto-provision-confirm-no"
+              type="button"
+              onClick={handleCancelAutoProvision}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Auto-provisioning: progress indicator */}
+      {isRuntimeMissing && provisionState === "provisioning" ? (
+        <div className="auto-provision-progress">
+          <p className="auto-provision-progress-text">{provisionMessage}</p>
+          {provisionPercent > 0 && provisionPercent < 100 ? (
+            <div className="auto-provision-progress-bar-wrapper">
+              <div
+                className="auto-provision-progress-bar"
+                style={{ width: `${provisionPercent}%` }}
+                role="progressbar"
+                aria-valuenow={provisionPercent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              />
+            </div>
+          ) : null}
+          <p className="auto-provision-progress-percent">{provisionPercent}%</p>
+        </div>
+      ) : null}
+
+      {/* Auto-provisioning: done */}
+      {isRuntimeMissing && provisionState === "done" ? (
+        <div className="auto-provision-done">
+          <p>Chrome for Testing installed successfully. Restarting browser launch...</p>
+        </div>
+      ) : null}
+
+      {/* Auto-provisioning: error */}
+      {isRuntimeMissing && provisionState === "error" ? (
+        <div className="auto-provision-error">
+          <p>Auto-provisioning failed: {provisionError}</p>
+          <button
+            className="auto-provision-retry-button"
+            type="button"
+            onClick={() => setProvisionState("idle")}
+          >
+            Try again
+          </button>
+        </div>
+      ) : null}
+
+      <p className="startup-diagnostic-nextstep">
+        <strong>Next step:</strong> {nextStep}
+      </p>
+      {sanitizedLogPath ? (
+        <p className="startup-diagnostic-logpath">
+          <strong>Startup log:</strong> {sanitizedLogPath}
+        </p>
+      ) : null}
+      <div className="startup-diagnostic-actions">
+        {isRuntimeMissing && provisionState === "idle" ? (
+          <button
+            className="startup-diagnostic-auto-provision-button"
+            type="button"
+            onClick={handleStartAutoProvision}
+          >
+            Download Chrome for Testing automatically
+          </button>
+        ) : null}
+        <button
+          className="startup-diagnostic-copy-button"
+          type="button"
+          onClick={handleCopyDiagnostic}
+        >
+          {copied ? "Copied" : "Copy diagnostic"}
+        </button>
+        <button
+          className="startup-diagnostic-dismiss-button"
+          type="button"
+          onClick={onDismiss}
+        >
+          Dismiss
+        </button>
+      </div>
     </section>
   );
 }
@@ -7420,6 +8772,49 @@ function languageShortLabel(language: LanguageCode): string {
 
 function formatSourceTime(receivedAt: string): string {
   return receivedAt.split(" ").at(1) ?? receivedAt;
+}
+
+function formatPackagePathForDisplay(path: string | undefined, ok?: boolean, displayPath?: string): string {
+  if (displayPath) return displayPath;
+  if (!path) {
+    if (ok === false) return "Current package path is unavailable.";
+    return "Current package path is still loading.";
+  }
+
+  const distroName = resolveWslDistroName() ?? "WSL";
+  return `\\\\wsl.localhost\\${distroName}${path.replace(/\//g, "\\")}`;
+}
+
+function formatPackageMtimeForDisplay(mtime?: number): string {
+  if (typeof mtime !== "number" || Number.isNaN(mtime)) {
+    return "Loading current package mtime...";
+  }
+
+  const date = new Date(mtime * 1000);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())} CST`;
+}
+
+/**
+ * Formats an array of archival alias phase strings into a human-readable list.
+ * Handles Oxford-comma-style formatting:
+ * - ["AQ6"] → "AQ6"
+ * - ["AQ6", "AK"] → "AQ6 and AK"
+ * - ["AQ6", "AK", "RC1"] → "AQ6, AK, and RC1"
+ * - undefined or [] → "No archival aliases found in local release metadata."
+ */
+function formatAliasesForDisplay(aliases?: string[]): string {
+  if (!aliases || aliases.length === 0) {
+    return "No archival aliases found in local release metadata.";
+  }
+  if (aliases.length === 1) {
+    return aliases[0];
+  }
+  if (aliases.length === 2) {
+    return `${aliases[0]} and ${aliases[1]}`;
+  }
+  const head = aliases.slice(0, -1).join(", ");
+  return `${head}, and ${aliases[aliases.length - 1]}`;
 }
 
 function operatorShortSourceTitle(subject: string): string {
