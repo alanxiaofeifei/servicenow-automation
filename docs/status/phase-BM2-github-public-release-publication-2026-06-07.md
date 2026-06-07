@@ -14,7 +14,7 @@ GitHub writes performed in BM2 only, after BL6 and BM1 parent gates completed an
 
 | Item | Value |
 |---|---|
-| PR | https://github.com/alanxiaofeifei/servicenow-automation/pull/141 |
+| PR | #141 (URL redacted; verified via `gh pr view 141`) |
 | PR title | `v0.1.0 public release — Windows Operator Preview` |
 | Source branch | `next/post-release-operator-cockpit-ab-20260606` |
 | Base branch | `main` |
@@ -31,7 +31,7 @@ GitHub writes performed in BM2 only, after BL6 and BM1 parent gates completed an
 | Tag type | annotated Git tag |
 | Tag object | `ea57d37f4dfea7881c9cb5db471e2ff927080a31` |
 | Tagged commit | `4626cf41b2e20ae91c11e0a4add2989726b8386d` |
-| Release URL | https://github.com/alanxiaofeifei/servicenow-automation/releases/tag/v0.1.0 |
+| Release reference | Tag `v0.1.0` (URL redacted; verified via `gh release view v0.1.0`) |
 | Release title | `ServiceNow Automation v0.1.0 — Windows Operator Preview` |
 | Release state | non-draft, non-prerelease |
 | Published at | 2026-06-07T16:40:45Z |
@@ -44,10 +44,10 @@ GitHub writes performed in BM2 only, after BL6 and BM1 parent gates completed an
 | `servicenow-automation-windows-v0.1.0-public-20260607.zip` | 118,610,088 bytes | `e0fdbbd69060e87ebbda96ed95c9bfbf4d40807e53f3b861777e78ad6f6fe692` |
 | `servicenow-automation-windows-v0.1.0-public-20260607.zip.sha256` | 123 bytes | `7e954302287fa5493efa4ff3db39ea8fbd1a57c8964a4b186f4e1cadff11d905` |
 
-Asset URLs read back from GitHub Release:
+Asset names read back from GitHub Release (download URLs redacted):
 
-- https://github.com/alanxiaofeifei/servicenow-automation/releases/download/v0.1.0/servicenow-automation-windows-v0.1.0-public-20260607.zip
-- https://github.com/alanxiaofeifei/servicenow-automation/releases/download/v0.1.0/servicenow-automation-windows-v0.1.0-public-20260607.zip.sha256
+- `servicenow-automation-windows-v0.1.0-public-20260607.zip`
+- `servicenow-automation-windows-v0.1.0-public-20260607.zip.sha256`
 
 ## Local gates and package verification
 
