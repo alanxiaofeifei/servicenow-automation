@@ -1,0 +1,1026 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ServiceNow Automation Workbench — Intro Demo</title>
+    <style>
+      @font-face {
+        font-family: "SNA Body";
+        src: url("assets/fonts/DejaVuSans.ttf") format("truetype");
+        font-weight: 400;
+      }
+
+      @font-face {
+        font-family: "SNA Display";
+        src: url("assets/fonts/DejaVuSans-Bold.ttf") format("truetype");
+        font-weight: 900;
+      }
+
+      @font-face {
+        font-family: "SNA Mono";
+        src: url("assets/fonts/DejaVuSansMono.ttf") format("truetype");
+        font-weight: 700;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: #071014;
+        color: #f5f7f4;
+        font-family: "SNA Body", Arial, sans-serif;
+        overflow: hidden;
+      }
+
+      #sna-intro {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #071014;
+        isolation: isolate;
+      }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        overflow: hidden;
+        background-color: #071014;
+        padding: 86px 112px;
+      }
+
+      .scene::before {
+        content: "";
+        position: absolute;
+        inset: -2px;
+        background:
+          radial-gradient(circle at 18% 20%, rgba(121, 255, 225, 0.16), rgba(121, 255, 225, 0) 30%),
+          radial-gradient(circle at 84% 14%, rgba(224, 255, 79, 0.14), rgba(224, 255, 79, 0) 28%),
+          radial-gradient(circle at 68% 86%, rgba(255, 184, 107, 0.12), rgba(255, 184, 107, 0) 34%);
+        z-index: 0;
+      }
+
+      .scene::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(rgba(245, 247, 244, 0.035) 1px, rgba(245, 247, 244, 0) 1px),
+          linear-gradient(90deg, rgba(245, 247, 244, 0.035) 1px, rgba(245, 247, 244, 0) 1px);
+        background-size: 64px 64px;
+        mask-image: radial-gradient(circle at 50% 50%, #000 0%, rgba(0, 0, 0, 0.7) 46%, rgba(0, 0, 0, 0) 78%);
+        z-index: 0;
+      }
+
+      .grain {
+        position: absolute;
+        inset: 0;
+        opacity: 0.18;
+        mix-blend-mode: overlay;
+        background-image:
+          repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0 1px, rgba(0,0,0,0) 1px 3px),
+          repeating-linear-gradient(90deg, rgba(255,255,255,0.035) 0 1px, rgba(0,0,0,0) 1px 5px);
+        z-index: 2;
+        pointer-events: none;
+      }
+
+      .scene-content {
+        position: relative;
+        z-index: 3;
+        width: 100%;
+        height: 100%;
+        display: flex;
+      }
+
+      .topline {
+        position: absolute;
+        top: 50px;
+        left: 112px;
+        right: 112px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        z-index: 5;
+        font-family: "SNA Mono", monospace;
+        color: rgba(245, 247, 244, 0.72);
+        font-size: 20px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .topline .dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #e0ff4f;
+        box-shadow: 0 0 26px rgba(224, 255, 79, 0.88);
+        display: inline-block;
+        margin-right: 14px;
+      }
+
+      .eyebrow {
+        font-family: "SNA Mono", monospace;
+        font-size: 24px;
+        line-height: 1;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #79ffe1;
+        margin: 0 0 26px;
+      }
+
+      .mega {
+        font-family: "SNA Display", "SNA Body", sans-serif;
+        font-size: 126px;
+        line-height: 0.92;
+        font-weight: 900;
+        letter-spacing: -0.045em;
+        margin: 0;
+        max-width: 1180px;
+        text-transform: uppercase;
+      }
+
+      .mega .accent,
+      .accent {
+        color: #e0ff4f;
+      }
+
+      .subline {
+        margin: 34px 0 0;
+        max-width: 920px;
+        font-size: 34px;
+        line-height: 1.34;
+        color: #c9d5d7;
+        font-weight: 350;
+      }
+
+      .label {
+        font-family: "SNA Mono", monospace;
+        color: #a8b4b8;
+        font-size: 18px;
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 22px;
+        border: 2px solid rgba(224, 255, 79, 0.5);
+        border-radius: 999px;
+        background: rgba(224, 255, 79, 0.08);
+        color: #e0ff4f;
+        font-family: "SNA Mono", monospace;
+        font-size: 20px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .orb {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(20px);
+        z-index: 1;
+        opacity: 0.82;
+        data-layout-ignore: true;
+      }
+
+      .orb-a {
+        width: 360px;
+        height: 360px;
+        left: -100px;
+        top: 650px;
+        background: rgba(121, 255, 225, 0.24);
+      }
+
+      .orb-b {
+        width: 420px;
+        height: 420px;
+        right: -120px;
+        top: 42px;
+        background: rgba(224, 255, 79, 0.18);
+      }
+
+      .orb-c {
+        width: 320px;
+        height: 320px;
+        right: 380px;
+        bottom: -120px;
+        background: rgba(255, 77, 109, 0.14);
+      }
+
+      .frame-mark {
+        position: absolute;
+        z-index: 5;
+        border: 2px solid rgba(245, 247, 244, 0.22);
+        width: 94px;
+        height: 94px;
+      }
+
+      .frame-mark.tl { top: 82px; left: 92px; border-right: none; border-bottom: none; }
+      .frame-mark.br { right: 92px; bottom: 82px; border-left: none; border-top: none; }
+
+      .scene-1 .scene-content {
+        align-items: center;
+        justify-content: space-between;
+        gap: 62px;
+      }
+
+      .title-stack {
+        width: 58%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+
+      .launch-panel {
+        width: 620px;
+        min-height: 650px;
+        border-radius: 44px;
+        border: 2px solid rgba(245, 247, 244, 0.18);
+        background: linear-gradient(145deg, rgba(16, 25, 35, 0.98), rgba(24, 36, 50, 0.78));
+        box-shadow: 0 40px 120px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255,255,255,0.18);
+        padding: 46px;
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+        transform: perspective(1200px) rotateY(-9deg) rotateX(3deg);
+      }
+
+      .panel-title {
+        font-family: "SNA Mono", monospace;
+        font-size: 22px;
+        letter-spacing: 0.08em;
+        color: #79ffe1;
+        text-transform: uppercase;
+      }
+
+      .panel-card {
+        border: 2px solid rgba(245, 247, 244, 0.16);
+        border-radius: 28px;
+        background: rgba(7, 16, 20, 0.74);
+        padding: 28px;
+      }
+
+      .panel-card strong {
+        display: block;
+        font-size: 36px;
+        line-height: 1.08;
+        margin-bottom: 12px;
+      }
+
+      .panel-card span {
+        color: #a8b4b8;
+        font-size: 24px;
+        line-height: 1.32;
+      }
+
+      .meter {
+        height: 18px;
+        border-radius: 999px;
+        background: rgba(245, 247, 244, 0.12);
+        overflow: hidden;
+      }
+
+      .meter > i {
+        display: block;
+        height: 100%;
+        width: 72%;
+        background: linear-gradient(90deg, #79ffe1, #e0ff4f);
+        border-radius: inherit;
+      }
+
+      .sources-lane {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 28px;
+        width: 100%;
+        align-self: center;
+      }
+
+      .source-card,
+      .workflow-card,
+      .safety-card,
+      .future-card {
+        border: 2px solid rgba(245, 247, 244, 0.16);
+        border-radius: 30px;
+        background: rgba(16, 25, 35, 0.86);
+        box-shadow: 0 32px 80px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255,255,255,0.14);
+      }
+
+      .source-card {
+        min-height: 230px;
+        padding: 30px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .source-card h3,
+      .workflow-card h3,
+      .safety-card h3,
+      .future-card h3 {
+        margin: 0;
+        font-size: 34px;
+        line-height: 1.05;
+      }
+
+      .source-card p,
+      .workflow-card p,
+      .safety-card p,
+      .future-card p {
+        margin: 16px 0 0;
+        color: #a8b4b8;
+        font-size: 23px;
+        line-height: 1.28;
+      }
+
+      .arrow-line {
+        height: 6px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(121,255,225,0.2), #79ffe1, #e0ff4f);
+        width: 100%;
+        transform-origin: left center;
+      }
+
+      .summary-card {
+        margin-top: 46px;
+        display: grid;
+        grid-template-columns: 1.05fr 1fr;
+        gap: 34px;
+        align-items: stretch;
+      }
+
+      .clean-card {
+        padding: 42px;
+        border-radius: 36px;
+        border: 2px solid rgba(224, 255, 79, 0.42);
+        background: rgba(224, 255, 79, 0.08);
+      }
+
+      .clean-card h3 {
+        margin: 0;
+        font-size: 62px;
+        line-height: 0.98;
+        letter-spacing: -0.04em;
+      }
+
+      .clean-card p {
+        font-size: 28px;
+        line-height: 1.33;
+        color: #dbe5de;
+      }
+
+      .mini-list {
+        display: grid;
+        gap: 18px;
+      }
+
+      .mini-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 18px 22px;
+        border-radius: 22px;
+        background: rgba(245, 247, 244, 0.06);
+        border: 1px solid rgba(245, 247, 244, 0.12);
+        font-size: 22px;
+      }
+
+      .mini-row b {
+        font-family: "SNA Mono", monospace;
+        color: #79ffe1;
+      }
+
+      .screenshot-stage {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        grid-template-columns: 0.92fr 1.08fr;
+        gap: 52px;
+        align-items: center;
+      }
+
+      .device {
+        position: relative;
+        border-radius: 34px;
+        padding: 18px;
+        background: linear-gradient(145deg, rgba(245,247,244,0.22), rgba(245,247,244,0.04));
+        box-shadow: 0 54px 140px rgba(0,0,0,0.5);
+        transform: perspective(1400px) rotateY(7deg) rotateX(2deg);
+      }
+
+      .device::before {
+        content: "";
+        display: block;
+        height: 32px;
+        border-radius: 20px 20px 0 0;
+        background:
+          radial-gradient(circle at 22px 16px, #ff5f57 0 6px, rgba(255,95,87,0) 7px),
+          radial-gradient(circle at 48px 16px, #ffbd2e 0 6px, rgba(255,189,46,0) 7px),
+          radial-gradient(circle at 74px 16px, #28c840 0 6px, rgba(40,200,64,0) 7px),
+          rgba(16, 25, 35, 0.96);
+      }
+
+      .device img {
+        display: block;
+        width: 100%;
+        border-radius: 0 0 22px 22px;
+        border: 1px solid rgba(245,247,244,0.16);
+      }
+
+      .callout-stack {
+        display: grid;
+        gap: 24px;
+      }
+
+      .callout {
+        display: grid;
+        grid-template-columns: 92px 1fr;
+        gap: 24px;
+        align-items: center;
+        padding: 28px;
+        border-radius: 30px;
+        border: 2px solid rgba(245, 247, 244, 0.16);
+        background: rgba(16, 25, 35, 0.86);
+      }
+
+      .num {
+        width: 92px;
+        height: 92px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        border: 2px solid rgba(224,255,79,0.58);
+        color: #e0ff4f;
+        font-family: "SNA Mono", monospace;
+        font-size: 32px;
+      }
+
+      .callout h3 {
+        margin: 0;
+        font-size: 42px;
+        line-height: 1.04;
+      }
+
+      .callout p {
+        margin: 10px 0 0;
+        color: #a8b4b8;
+        font-size: 24px;
+        line-height: 1.28;
+      }
+
+      .kb-grid {
+        display: grid;
+        grid-template-columns: 0.92fr 1.08fr;
+        gap: 42px;
+        align-items: stretch;
+        width: 100%;
+      }
+
+      .evidence-panel {
+        display: grid;
+        gap: 22px;
+      }
+
+      .kb-card {
+        padding: 30px;
+        border-radius: 30px;
+        border: 2px solid rgba(121, 255, 225, 0.36);
+        background: rgba(121, 255, 225, 0.075);
+      }
+
+      .kb-card h3 {
+        margin: 0 0 18px;
+        font-size: 38px;
+      }
+
+      .kb-card p {
+        margin: 0;
+        color: #d6e0e1;
+        font-size: 25px;
+        line-height: 1.34;
+      }
+
+      .confidence {
+        font-family: "SNA Display", sans-serif;
+        font-size: 156px;
+        line-height: 0.9;
+        letter-spacing: -0.05em;
+        color: #e0ff4f;
+      }
+
+      .safety-grid {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 30px;
+        align-items: stretch;
+      }
+
+      .safety-card {
+        padding: 34px;
+        min-height: 520px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .safety-card.green { border-color: rgba(121,255,225,0.42); }
+      .safety-card.amber { border-color: rgba(255,184,107,0.5); }
+      .safety-card.red { border-color: rgba(255,77,109,0.55); }
+
+      .safety-card .big {
+        font-size: 72px;
+        font-family: "SNA Display", sans-serif;
+        font-weight: 900;
+        line-height: 0.9;
+        letter-spacing: -0.04em;
+      }
+
+      .checklist {
+        display: grid;
+        gap: 14px;
+        font-size: 22px;
+        color: #c9d5d7;
+      }
+
+      .checklist span {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+      }
+
+      .excel-layout {
+        display: grid;
+        grid-template-columns: 0.88fr 0.92fr 0.78fr;
+        gap: 28px;
+        width: 100%;
+        align-items: center;
+      }
+
+      .workbook-stack {
+        position: relative;
+        height: 670px;
+      }
+
+      .workbook {
+        position: absolute;
+        width: 500px;
+        min-height: 330px;
+        padding: 30px;
+        border-radius: 34px;
+        border: 2px solid rgba(245,247,244,0.16);
+        background: rgba(16, 25, 35, 0.92);
+        box-shadow: 0 36px 110px rgba(0,0,0,0.34);
+      }
+
+      .workbook.previous {
+        left: 80px;
+        top: 54px;
+        opacity: 0.74;
+        transform: rotate(4deg) scale(0.9);
+      }
+
+      .workbook.current {
+        left: 0;
+        top: 230px;
+        border-color: rgba(224,255,79,0.48);
+        transform: rotate(-2deg);
+      }
+
+      .workbook h3 {
+        margin: 0 0 22px;
+        font-size: 36px;
+      }
+
+      .sheet-row {
+        display: grid;
+        grid-template-columns: 74px 1fr 90px;
+        gap: 10px;
+        padding: 12px 0;
+        border-top: 1px solid rgba(245,247,244,0.14);
+        font-family: "SNA Mono", monospace;
+        color: #c9d5d7;
+        font-size: 18px;
+      }
+
+      .queue-actions {
+        display: grid;
+        gap: 24px;
+      }
+
+      .action-card {
+        padding: 26px;
+        border-radius: 30px;
+        border: 2px solid rgba(224,255,79,0.46);
+        background: rgba(224,255,79,0.08);
+      }
+
+      .action-card.secondary {
+        border-color: rgba(245,247,244,0.16);
+        background: rgba(245,247,244,0.055);
+      }
+
+      .action-card h3 {
+        margin: 0;
+        font-size: 34px;
+      }
+
+      .action-card p {
+        margin: 10px 0 0;
+        font-size: 22px;
+        line-height: 1.3;
+        color: #c9d5d7;
+      }
+
+      .future-grid {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 0.86fr 1.14fr;
+        gap: 42px;
+        align-items: center;
+      }
+
+      .release-badge {
+        width: 660px;
+        min-height: 610px;
+        border-radius: 50px;
+        border: 2px solid rgba(224,255,79,0.48);
+        background:
+          radial-gradient(circle at 50% 20%, rgba(224,255,79,0.16), rgba(224,255,79,0) 36%),
+          rgba(16, 25, 35, 0.88);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: flex-start;
+        padding: 62px;
+        box-shadow: 0 50px 150px rgba(0,0,0,0.42);
+      }
+
+      .release-badge .version {
+        font-family: "SNA Display", sans-serif;
+        font-size: 138px;
+        line-height: 0.84;
+        font-weight: 900;
+        letter-spacing: -0.06em;
+        color: #e0ff4f;
+      }
+
+      .release-badge p {
+        margin: 34px 0 0;
+        font-size: 34px;
+        color: #d6e0e1;
+        line-height: 1.28;
+      }
+
+      .future-list {
+        display: grid;
+        gap: 22px;
+      }
+
+      .future-card {
+        padding: 30px 34px;
+        display: grid;
+        grid-template-columns: 78px 1fr;
+        gap: 24px;
+        align-items: center;
+      }
+
+      .future-card .icon {
+        width: 78px;
+        height: 78px;
+        border-radius: 22px;
+        display: grid;
+        place-items: center;
+        background: rgba(121,255,225,0.12);
+        border: 2px solid rgba(121,255,225,0.36);
+        color: #79ffe1;
+        font-size: 34px;
+        font-family: "SNA Mono", monospace;
+      }
+
+      .cta-layout {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 54px;
+        align-items: center;
+      }
+
+      .url-card {
+        padding: 46px;
+        border-radius: 34px;
+        border: 2px solid rgba(245,247,244,0.16);
+        background: rgba(16, 25, 35, 0.92);
+        font-family: "SNA Mono", monospace;
+        font-size: 28px;
+        line-height: 1.5;
+        color: #d6e0e1;
+        box-shadow: 0 40px 120px rgba(0,0,0,0.36);
+        display: grid;
+        gap: 28px;
+      }
+
+      .url-entry {
+        display: grid;
+        gap: 8px;
+      }
+
+      .url-card .green {
+        color: #e0ff4f;
+      }
+
+      .footer-note {
+        margin-top: 30px;
+        color: #a8b4b8;
+        font-size: 25px;
+        line-height: 1.38;
+      }
+
+      .transition-wipe {
+        position: absolute;
+        inset: 0;
+        z-index: 50;
+        background: #e0ff4f;
+        transform: translateX(-110%);
+        opacity: 0;
+      }
+
+      .transition-wipe::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(7,16,20,0), rgba(7,16,20,0.54), rgba(7,16,20,0));
+        mix-blend-mode: multiply;
+      }
+
+      .scan-flash {
+        position: absolute;
+        inset: 0;
+        z-index: 49;
+        opacity: 0;
+        background:
+          repeating-linear-gradient(0deg, rgba(245,247,244,0.16) 0 2px, rgba(245,247,244,0) 2px 9px),
+          radial-gradient(circle at 50% 50%, rgba(121,255,225,0.24), rgba(121,255,225,0) 55%);
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="sna-intro" data-composition-id="sna-intro" data-start="0" data-width="1920" data-height="1080" data-duration="66">
+      <audio id="music" data-start="0" data-duration="66" data-track-index="5" data-volume="0.42" src="assets/sna-bg-music.mp3"></audio>
+
+      <div class="orb orb-a" data-layout-ignore></div>
+      <div class="orb orb-b" data-layout-ignore></div>
+      <div class="orb orb-c" data-layout-ignore></div>
+      <div class="grain" data-layout-ignore></div>
+      <div class="frame-mark tl" data-layout-ignore></div>
+      <div class="frame-mark br" data-layout-ignore></div>
+
+      <section id="scene-1" class="scene scene-1">
+        <div class="topline"><span><i class="dot"></i>Public test preview</span><span>v0.1.0</span></div>
+        <div class="scene-content">
+          <div class="title-stack">
+            <p class="eyebrow s1-e1">Service Desk Workflow Cockpit</p>
+            <h1 class="mega s1-e2">ServiceNow Automation <span class="accent">Workbench</span></h1>
+            <p class="subline s1-e3">A local-first desktop preview for turning messy support intake into cleaner incident drafts, guided review, and safer handoff.</p>
+            <div class="pill s1-e4">No live writes · Human review first</div>
+          </div>
+          <aside class="launch-panel s1-e5">
+            <div class="panel-title">Release signal</div>
+            <div class="panel-card">
+              <strong>Public preview, not production automation.</strong>
+              <span>Built to demonstrate workflow clarity before touching real ServiceNow or Excel systems.</span>
+            </div>
+            <div class="panel-card">
+              <strong>335 tests passed</strong>
+              <span>Build, typecheck, test, privacy scan, ZIP checksum and anonymous release access verified.</span>
+            </div>
+            <div class="meter"><i></i></div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="scene-2" class="scene scene-2">
+        <div class="topline"><span><i class="dot"></i>Intake to context</span><span>local mock flow</span></div>
+        <div class="scene-content" style="flex-direction: column; justify-content: center;">
+          <p class="eyebrow s2-e1">Start where service desk work actually begins</p>
+          <h2 class="mega s2-e2" style="max-width: 1420px; font-size: 104px;">From fragmented intake to a clean operational summary.</h2>
+          <div class="sources-lane">
+            <article class="source-card s2-card"><span class="label">Source</span><h3>Email</h3><p>Unstructured user explanation</p></article>
+            <article class="source-card s2-card"><span class="label">Source</span><h3>Teams</h3><p>Chat notes and missing context</p></article>
+            <article class="source-card s2-card"><span class="label">Source</span><h3>Phone</h3><p>Manual notes after a call</p></article>
+            <article class="source-card s2-card"><span class="label">Source</span><h3>Manual</h3><p>Operator edits before review</p></article>
+          </div>
+          <div class="arrow-line s2-e3"></div>
+          <div class="summary-card">
+            <div class="clean-card s2-e4"><h3>Cleaned summary</h3><p>Symptoms, impact, affected tools, troubleshooting evidence, and the next human decision in one readable block.</p></div>
+            <div class="mini-list">
+              <div class="mini-row s2-row"><span>Deduplicate repeated notes</span><b>DONE</b></div>
+              <div class="mini-row s2-row"><span>Separate evidence from assumptions</span><b>DONE</b></div>
+              <div class="mini-row s2-row"><span>Keep sensitive details out of public artifacts</span><b>ON</b></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-3" class="scene scene-3">
+        <div class="topline"><span><i class="dot"></i>Draft before action</span><span>operator stays in control</span></div>
+        <div class="scene-content screenshot-stage">
+          <div>
+            <p class="eyebrow s3-e1">The result appears before the guided path</p>
+            <h2 class="mega s3-e2" style="font-size: 94px; max-width: 760px;">Incident draft first. Review second.</h2>
+            <p class="subline s3-e3">The most important output is not buried at the bottom. It is placed directly after the cleaned summary so the operator can inspect it immediately.</p>
+          </div>
+          <div class="device s3-e4"><img src="assets/workbench-en.png" alt="ServiceNow Automation Workbench English UI screenshot" /></div>
+        </div>
+      </section>
+
+      <section id="scene-4" class="scene scene-4">
+        <div class="topline"><span><i class="dot"></i>Knowledge routing</span><span>local / fake / demo only</span></div>
+        <div class="scene-content kb-grid">
+          <div style="display:flex; flex-direction:column; justify-content:center;">
+            <p class="eyebrow s4-e1">Local KB recommendations</p>
+            <h2 class="mega s4-e2" style="font-size: 98px; max-width: 760px;">Evidence you can read, not a hidden completed status.</h2>
+            <p class="subline s4-e3">Readable recommendation cards show confidence, matched evidence, support group, and routing reason.</p>
+          </div>
+          <div class="evidence-panel">
+            <article class="kb-card s4-card"><span class="label">Match confidence</span><div class="confidence">87%</div></article>
+            <article class="kb-card s4-card"><h3>Matched evidence</h3><p>VPN fails after MFA prompt · user impact confirmed · Windows endpoint context available.</p></article>
+            <article class="kb-card s4-card"><h3>Recommended support group</h3><p>End User Computing / Identity Access — with a short routing reason and handling steps.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-5" class="scene scene-5">
+        <div class="topline"><span><i class="dot"></i>Safety model</span><span>green · amber · red</span></div>
+        <div class="scene-content" style="flex-direction:column; justify-content:center; gap:40px;">
+          <p class="eyebrow s5-e1">Human-in-the-loop by design</p>
+          <h2 class="mega s5-e2" style="font-size: 96px; max-width: 1380px;">Automation helps prepare the work. It does not silently submit it.</h2>
+          <div class="safety-grid">
+            <article class="safety-card green s5-card"><div><span class="label">Green zone</span><div class="big">LOCAL</div></div><div class="checklist"><span>✓ mock data</span><span>✓ tests and build</span><span>✓ local package dry-run</span></div></article>
+            <article class="safety-card amber s5-card"><div><span class="label">Amber gate</span><div class="big">REVIEW</div></div><div class="checklist"><span>✓ QA acceptance</span><span>✓ privacy scan</span><span>✓ release decision</span></div></article>
+            <article class="safety-card red s5-card"><div><span class="label">Red zone</span><div class="big" style="color:#ff4d6d;">NO LIVE WRITE</div></div><div class="checklist"><span>✕ Save / Submit / Update</span><span>✕ real ServiceNow login</span><span>✕ Graph or Excel Web writes</span></div></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-6" class="scene scene-6">
+        <div class="topline"><span><i class="dot"></i>Monthly handoff</span><span>dry-run queue</span></div>
+        <div class="scene-content excel-layout">
+          <div>
+            <p class="eyebrow s6-e1">After a ticket is opened</p>
+            <h2 class="mega s6-e2" style="font-size: 78px; max-width: 650px;">Queue the monthly Excel update without claiming an online write already happened.</h2>
+            <p class="subline s6-e3" style="font-size: 27px; max-width: 650px;">Choose fill now or defer into a pending queue. No Graph or Excel Web writeback.</p>
+          </div>
+          <div class="workbook-stack">
+            <article class="workbook previous s6-book"><h3>Previous month workbook</h3><div class="sheet-row"><span>INC</span><span>Resolved</span><span>Closed</span></div><div class="sheet-row"><span>REQ</span><span>Deferred</span><span>OK</span></div></article>
+            <article class="workbook current s6-book"><h3>Current month workbook</h3><div class="sheet-row"><span>INC</span><span>Pending fill</span><span>Now?</span></div><div class="sheet-row"><span>RITM</span><span>Waiting review</span><span>Later</span></div><div class="sheet-row"><span>SCTASK</span><span>Local dry-run</span><span>Safe</span></div></article>
+          </div>
+          <div class="queue-actions">
+            <article class="action-card s6-action"><h3>Fill this ticket into monthly Excel</h3><p>Operator-visible action for the current ticket record.</p></article>
+            <article class="action-card secondary s6-action"><h3>Do later / pending queue</h3><p>Keeps the monthly workflow honest without Microsoft Graph or Excel Web writeback.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-7" class="scene scene-7">
+        <div class="topline"><span><i class="dot"></i>Public preview today</span><span>future path</span></div>
+        <div class="scene-content future-grid">
+          <div class="release-badge s7-e1"><span class="label">GitHub public release</span><div class="version">v0.1.0</div><p>Downloadable Windows test preview with bilingual README, release notes, screenshots, and verified public assets.</p></div>
+          <div class="future-list">
+            <p class="eyebrow s7-e2">Development vision</p>
+            <article class="future-card s7-card"><div class="icon">01</div><div><h3>Safer assisted autofill</h3><p>Browser-assisted field preparation only after explicit approval.</p></div></article>
+            <article class="future-card s7-card"><div class="icon">02</div><div><h3>Better knowledge routing</h3><p>More transparent evidence, confidence, and escalation reasoning.</p></div></article>
+            <article class="future-card s7-card"><div class="icon">03</div><div><h3>Release-grade handoff</h3><p>Clear packages, checksums, test steps, and privacy gates for each build.</p></div></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-8" class="scene scene-8">
+        <div class="topline"><span><i class="dot"></i>Download and inspect</span><span>github.com</span></div>
+        <div class="scene-content cta-layout">
+          <div>
+            <p class="eyebrow s8-e1">ServiceNow Automation Workbench</p>
+            <h2 class="mega s8-e2" style="font-size: 118px; max-width: 900px;">Test the preview. Review the boundaries. Follow the build.</h2>
+            <p class="footer-note s8-e3">This is a public test preview, built with local demo data and human approval gates. It is not production ServiceNow automation.</p>
+          </div>
+          <div class="url-card s8-e4">
+            <div class="url-entry"><span class="green">Repository</span><span>github.com/alanxiaofeifei/servicenow-automation</span></div>
+            <div class="url-entry"><span class="green">Release</span><span>/releases/tag/v0.1.0</span></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="scan-flash" data-layout-ignore></div>
+      <div class="transition-wipe" data-layout-ignore></div>
+
+      <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+      <script>
+        window.__timelines = window.__timelines || {};
+        const tl = gsap.timeline({ paused: true });
+        const scenes = ["#scene-1", "#scene-2", "#scene-3", "#scene-4", "#scene-5", "#scene-6", "#scene-7", "#scene-8"];
+        const starts = [0, 7, 15, 25, 34, 43, 52, 61];
+        const wipe = ".transition-wipe";
+        const flash = ".scan-flash";
+
+        tl.set(scenes, { opacity: 0 }, 0);
+        tl.set("#scene-1", { opacity: 1 }, 0);
+
+        // Ambient motion is seekable and finite.
+        tl.to(".orb-a", { x: 88, y: -44, scale: 1.12, duration: 7.5, yoyo: true, repeat: 8, ease: "sine.inOut" }, 0);
+        tl.to(".orb-b", { x: -70, y: 64, scale: 0.92, duration: 9, yoyo: true, repeat: 7, ease: "sine.inOut" }, 0.4);
+        tl.to(".orb-c", { x: 58, y: -34, scale: 1.18, duration: 8.4, yoyo: true, repeat: 7, ease: "sine.inOut" }, 0.8);
+        tl.to(".grain", { opacity: 0.28, duration: 3.2, yoyo: true, repeat: 20, ease: "sine.inOut" }, 0);
+
+        function transitionAt(time, prev, next, color) {
+          tl.set(wipe, { opacity: 1, xPercent: -110, backgroundColor: color }, time - 0.48);
+          tl.to(wipe, { xPercent: 0, duration: 0.34, ease: "power4.in" }, time - 0.48);
+          tl.to(flash, { opacity: 0.72, duration: 0.08, ease: "power1.out" }, time - 0.08);
+          tl.set(prev, { opacity: 0 }, time - 0.02);
+          tl.set(next, { opacity: 1 }, time - 0.02);
+          tl.to(flash, { opacity: 0, duration: 0.28, ease: "power2.out" }, time + 0.02);
+          tl.to(wipe, { xPercent: 110, duration: 0.46, ease: "expo.out" }, time + 0.02);
+          tl.set(wipe, { opacity: 0 }, time + 0.58);
+        }
+
+        for (let i = 1; i < scenes.length; i += 1) {
+          const colors = ["#e0ff4f", "#79ffe1", "#ffb86b", "#e0ff4f", "#ff4d6d", "#79ffe1", "#e0ff4f"];
+          transitionAt(starts[i], scenes[i - 1], scenes[i], colors[(i - 1) % colors.length]);
+        }
+
+        function enter(selector, fromVars, toVars, at) {
+          tl.fromTo(selector, fromVars, { ...toVars, immediateRender: false }, at);
+        }
+
+        // Scene 1
+        enter(".s1-e1", { opacity: 0, y: 24, filter: "blur(12px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.54, ease: "power3.out" }, 0.25);
+        enter(".s1-e2", { opacity: 0, x: -84, letterSpacing: "-0.12em" }, { opacity: 1, x: 0, letterSpacing: "-0.045em", duration: 0.86, ease: "expo.out" }, 0.42);
+        enter(".s1-e3", { opacity: 0, y: 42 }, { opacity: 1, y: 0, duration: 0.58, ease: "power2.out" }, 0.86);
+        enter(".s1-e4", { opacity: 0, scale: 0.84, x: -28 }, { opacity: 1, scale: 1, x: 0, duration: 0.46, ease: "back.out(1.8)" }, 1.18);
+        enter(".s1-e5", { opacity: 0, x: 120, rotationY: -22, filter: "blur(8px)" }, { opacity: 1, x: 0, rotationY: -9, filter: "blur(0px)", duration: 0.86, ease: "power4.out" }, 0.78);
+        tl.fromTo(".meter > i", { width: "0%" }, { width: "72%", duration: 1.1, ease: "power2.inOut", immediateRender: false }, 1.75);
+
+        // Scene 2
+        enter(".s2-e1", { opacity: 0, y: 28 }, { opacity: 1, y: 0, duration: 0.52, ease: "power3.out" }, 7.28);
+        enter(".s2-e2", { opacity: 0, x: -72, filter: "blur(10px)" }, { opacity: 1, x: 0, filter: "blur(0px)", duration: 0.78, ease: "expo.out" }, 7.42);
+        enter(".s2-card", { opacity: 0, y: 80, scale: 0.92 }, { opacity: 1, y: 0, scale: 1, duration: 0.55, stagger: 0.08, ease: "back.out(1.5)" }, 8.18);
+        enter(".s2-e3", { scaleX: 0, opacity: 0 }, { scaleX: 1, opacity: 1, duration: 0.72, ease: "power2.inOut" }, 9.25);
+        enter(".s2-e4", { opacity: 0, x: -68, filter: "blur(8px)" }, { opacity: 1, x: 0, filter: "blur(0px)", duration: 0.68, ease: "power4.out" }, 9.72);
+        enter(".s2-row", { opacity: 0, x: 80 }, { opacity: 1, x: 0, duration: 0.46, stagger: 0.1, ease: "power2.out" }, 10.05);
+
+        // Scene 3
+        enter(".s3-e1", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: "sine.out" }, 15.26);
+        enter(".s3-e2", { opacity: 0, x: -72, scale: 0.96 }, { opacity: 1, x: 0, scale: 1, duration: 0.72, ease: "expo.out" }, 15.42);
+        enter(".s3-e3", { opacity: 0, y: 38 }, { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, 15.92);
+        enter(".s3-e4", { opacity: 0, x: 140, rotationY: 18, filter: "blur(8px)" }, { opacity: 1, x: 0, rotationY: 7, filter: "blur(0px)", duration: 0.9, ease: "power4.out" }, 15.62);
+        tl.to(".s3-e4 img", { scale: 1.035, duration: 8.8, ease: "sine.inOut" }, 16.1);
+
+        // Scene 4
+        enter(".s4-e1", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 25.24);
+        enter(".s4-e2", { opacity: 0, x: -80, filter: "blur(12px)" }, { opacity: 1, x: 0, filter: "blur(0px)", duration: 0.74, ease: "expo.out" }, 25.38);
+        enter(".s4-e3", { opacity: 0, y: 44 }, { opacity: 1, y: 0, duration: 0.54, ease: "power2.out" }, 25.9);
+        enter(".s4-card", { opacity: 0, x: 96, scale: 0.95 }, { opacity: 1, x: 0, scale: 1, duration: 0.58, stagger: 0.13, ease: "back.out(1.4)" }, 25.62);
+        tl.fromTo(".confidence", { textShadow: "0 0 0 rgba(224,255,79,0)" }, { textShadow: "0 0 38px rgba(224,255,79,0.5)", duration: 1.0, yoyo: true, repeat: 5, ease: "sine.inOut", immediateRender: false }, 27.0);
+
+        // Scene 5
+        enter(".s5-e1", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.46, ease: "power2.out" }, 34.24);
+        enter(".s5-e2", { opacity: 0, x: -78, letterSpacing: "-0.1em" }, { opacity: 1, x: 0, letterSpacing: "-0.045em", duration: 0.72, ease: "expo.out" }, 34.38);
+        enter(".s5-card", { opacity: 0, y: 70, rotationX: -8 }, { opacity: 1, y: 0, rotationX: 0, duration: 0.65, stagger: 0.12, ease: "back.out(1.2)" }, 35.05);
+        tl.to(".safety-card.red", { boxShadow: "0 0 80px rgba(255,77,109,0.18)", duration: 1.0, yoyo: true, repeat: 4, ease: "sine.inOut" }, 36.4);
+
+        // Scene 6
+        enter(".s6-e1", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.46, ease: "power3.out" }, 43.22);
+        enter(".s6-e2", { opacity: 0, x: -70, filter: "blur(10px)" }, { opacity: 1, x: 0, filter: "blur(0px)", duration: 0.72, ease: "expo.out" }, 43.38);
+        enter(".s6-e3", { opacity: 0, y: 42 }, { opacity: 1, y: 0, duration: 0.54, ease: "power2.out" }, 43.9);
+        enter(".s6-book", { opacity: 0, y: 120, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: 0.72, stagger: 0.12, ease: "back.out(1.25)" }, 43.7);
+        enter(".s6-action", { opacity: 0, x: 92 }, { opacity: 1, x: 0, duration: 0.54, stagger: 0.14, ease: "power3.out" }, 45.0);
+
+        // Scene 7
+        enter(".s7-e1", { opacity: 0, scale: 0.84, rotation: -2 }, { opacity: 1, scale: 1, rotation: 0, duration: 0.74, ease: "back.out(1.4)" }, 52.26);
+        enter(".s7-e2", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.46, ease: "power2.out" }, 52.65);
+        enter(".s7-card", { opacity: 0, x: 110, scale: 0.96 }, { opacity: 1, x: 0, scale: 1, duration: 0.56, stagger: 0.12, ease: "power4.out" }, 52.88);
+        tl.to(".release-badge", { boxShadow: "0 0 120px rgba(224,255,79,0.2)", duration: 1.2, yoyo: true, repeat: 5, ease: "sine.inOut" }, 53.2);
+
+        // Scene 8
+        enter(".s8-e1", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 61.25);
+        enter(".s8-e2", { opacity: 0, x: -96, filter: "blur(10px)" }, { opacity: 1, x: 0, filter: "blur(0px)", duration: 0.82, ease: "expo.out" }, 61.38);
+        enter(".s8-e3", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.55, ease: "power2.out" }, 62.0);
+        enter(".s8-e4", { opacity: 0, x: 120, scale: 0.95 }, { opacity: 1, x: 0, scale: 1, duration: 0.7, ease: "back.out(1.35)" }, 61.82);
+        tl.to("#scene-8", { opacity: 0, duration: 1.2, ease: "sine.inOut" }, 64.8);
+
+        window.__timelines["sna-intro"] = tl;
+      </script>
+    </div>
+  </body>
+</html>

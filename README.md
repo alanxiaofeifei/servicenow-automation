@@ -6,6 +6,10 @@
 
 ![ServiceNow Automation Workbench — English](docs/assets/ui/servicenow-automation-workbench-en.png)
 
+[![ServiceNow Automation Workbench — intro/demo video](docs/assets/video/servicenow-automation-v0.1.0-intro-demo-thumb.jpg)](docs/assets/video/servicenow-automation-v0.1.0-intro-demo.mp4)
+
+**Intro/demo video:** [Watch the 66-second no-voice product reel with background music](docs/assets/video/servicenow-automation-v0.1.0-intro-demo.mp4).
+
 ![ServiceNow Automation Workbench — 简体中文](docs/assets/ui/servicenow-automation-workbench-zh-cn.png)
 
 ## English
@@ -24,6 +28,7 @@ Public release:
 
 - Repository: <https://github.com/alanxiaofeifei/servicenow-automation>
 - Release v0.1.0: <https://github.com/alanxiaofeifei/servicenow-automation/releases/tag/v0.1.0>
+- Intro/demo video: <https://github.com/alanxiaofeifei/servicenow-automation/blob/main/docs/assets/video/servicenow-automation-v0.1.0-intro-demo.mp4>
 - Windows ZIP: <https://github.com/alanxiaofeifei/servicenow-automation/releases/download/v0.1.0/servicenow-automation-windows-v0.1.0-public-20260607.zip>
 - SHA256: `e0fdbbd69060e87ebbda96ed95c9bfbf4d40807e53f3b861777e78ad6f6fe692`
 
@@ -125,6 +130,7 @@ Do not commit or paste real customer data, real ticket IDs, real browser session
 
 - GitHub 仓库：<https://github.com/alanxiaofeifei/servicenow-automation>
 - v0.1.0 Release：<https://github.com/alanxiaofeifei/servicenow-automation/releases/tag/v0.1.0>
+- 项目介绍/演示视频：<https://github.com/alanxiaofeifei/servicenow-automation/blob/main/docs/assets/video/servicenow-automation-v0.1.0-intro-demo.mp4>
 - Windows ZIP：<https://github.com/alanxiaofeifei/servicenow-automation/releases/download/v0.1.0/servicenow-automation-windows-v0.1.0-public-20260607.zip>
 - SHA256：`e0fdbbd69060e87ebbda96ed95c9bfbf4d40807e53f3b861777e78ad6f6fe692`
 
